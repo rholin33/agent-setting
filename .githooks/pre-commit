@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+
+"$ROOT/scripts/sync-local-config.sh"
+git -C "$ROOT" add -- AGENTS.md ccb/ccb.config hooks rules skills
+
+if ! git -C "$ROOT" diff --cached --check; then
+  printf '%s\n' 'Pre-commit check failed: staged configuration contains whitespace errors.' >&2
+  exit 1
+fi

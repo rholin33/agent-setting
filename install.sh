@@ -27,6 +27,11 @@ install -m 0644 "$ROOT/AGENTS.md" "$CODEX_HOME/AGENTS.md"
 install -m 0644 "$ROOT/hooks.json" "$CODEX_HOME/hooks.json"
 install -m 0600 "$ROOT/ccb/ccb.config" "$CCB_HOME/ccb.config"
 
+if git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  git -C "$ROOT" config core.hooksPath .githooks
+  echo "Enabled repository pre-commit sync hook"
+fi
+
 echo "Installed Codex global config into $CODEX_HOME"
 echo "Installed CCB config into $CCB_HOME"
 echo "Restart Codex to load new or changed skills and hooks."

@@ -12,8 +12,8 @@ from datetime import datetime
 from pathlib import Path
 
 REMOTE_URL = "https://github.com/rholin33/codex-setting.git"
-MANAGED_TOP_LEVEL_FILES = ("AGENTS.md", "hooks.json")
-MANAGED_DIRECTORIES = ("rules", "skills", "hooks")
+MANAGED_TOP_LEVEL_FILES = ("AGENTS.md",)
+MANAGED_DIRECTORIES = ("hooks", "rules", "skills")
 CCB_CONFIG_RELATIVE_PATH = Path("ccb/ccb.config")
 TEXT_EXTENSIONS = {
     ".md",
@@ -94,8 +94,8 @@ def get_relative_path(base_path: Path, path: Path) -> Path:
 def get_managed_remote_files() -> list[Path]:
     pathspecs = [
         *MANAGED_TOP_LEVEL_FILES,
-        *MANAGED_DIRECTORIES,
         str(CCB_CONFIG_RELATIVE_PATH),
+        *MANAGED_DIRECTORIES,
     ]
     output = run_git(["-C", str(REMOTE_REPO), "ls-files", "--", *pathspecs])
     files: list[Path] = []
