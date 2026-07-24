@@ -348,11 +348,28 @@ def merge_managed_files() -> None:
     write_log(f"sync finished; changed files: {changed_count}")
 
 
+def _debounce(seconds: int = 86400) -> bool:
+    """Return True if we should skip (ran recently)."""
+    lock_file = SYNC_ROOT / ".last_run"
+    try:
+        if lock_file.is_file():
+            elapsed = datetime.now().timestamp() - lock_file.stat().st_mtime
+            if elapsed < seconds:
+                return True
+        lock_file.touch()
+        return False
+    except OSError:
+        return False
+
+
 def main() -> int:
     try:
         ensure_directory(SYNC_ROOT)
         ensure_directory(BACKUP_ROOT)
         ensure_directory(MERGE_ROOT)
+
+        if _debounce():
+            return 0
 
         if not shutil.which("git"):
             write_log("git not found; skipped")

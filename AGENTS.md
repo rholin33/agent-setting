@@ -62,22 +62,32 @@ When a project has CCB mounted agents, read `.ccb/ccb.config` first and route by
 
 If you are running as the CCB `master` role (`agentroles.ccb_self`), do not do concrete business implementation, testing, design, or review work yourself by default. Act as dispatcher/coordinator only: clarify the task, choose the correct lane, delegate, and then summarize or chain follow-up work.
 
-- `master` / `loader`: CCB config, runtime, recovery, orchestration
+- `master`: CCB config and orchestration
+- `loader`: long-lived runtime, reloads, and recovery
 - `archi`: architecture, boundaries, refactor direction, tradeoff analysis
-- `coder1` / `coder2`: implementation, bug fixes, focused refactors, tests
+- `coder1` / `coder2`: implementation, focused refactors, and regression tests proving their own changes
 - `designer`: UI/UX, visual design, interaction direction
-- `reviewer` / `test`: code review, regression review, independent verification
+- `reviewer`: code and regression review
+- `test`: standalone testing, live integration, acceptance, and independent verification
+
+For every `loader` response, end with a concise runtime status block listing each currently started project process, its access address or port, PID, and current status. Include health-check results when available; state any unavailable address or health check as a blocker. This status block must be the final content of the response.
 
 Default rule:
 
 - CCB maintenance goes to `master`
+- Runtime start/stop/restart/reload, live process or container changes, PID/port mutation, and recovery go exclusively to `loader`
 - architecture questions go to `archi`
 - code changes go to `coder1` / `coder2`
 - design work goes to `designer`
 - review tasks go to `reviewer`
-- testing, validation, and acceptance checks go to `test`
+- implementation-local regression checks stay with the implementing coder
+- standalone testing, validation, acceptance, browser/E2E, and live-provider checks go to `test`
 
 Mixed tasks should be split by lane when useful. If the user asks `master` to do a business task directly, `master` should translate that request into delegated work unless the user explicitly wants coordination-only advice.
+
+Route by the user's primary objective, not the command name: coders may prove their active changes, but must delegate when verification is the requested deliverable.
+
+Non-loader agents may inspect runtime state and run ephemeral test processes, but must delegate every long-lived runtime mutation to `loader`. A necessary restart does not grant execution authority. Build artifacts may be prepared by coders, but applying them to a running service belongs to `loader`. If a non-loader accidentally changes runtime state, stop and hand recovery to `loader`; do not attempt a manual fallback.
 
 ## CCB Configuration Sync
 
