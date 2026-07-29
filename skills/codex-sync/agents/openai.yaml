@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex Sync"
+  short_description: "Merge local Codex settings and push safely"
+  default_prompt: "Use $codex-sync to merge local Codex settings with the remote repository and push verified changes."
