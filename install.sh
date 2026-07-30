@@ -7,6 +7,13 @@ CCB_HOME="${CCB_HOME:-$HOME/.ccb}"
 
 mkdir -p "$CODEX_HOME/skills" "$CODEX_HOME/rules" "$CODEX_HOME/hooks" "$CCB_HOME"
 
+if command -v ccb >/dev/null 2>&1 && [[ -d "$ROOT/roles" ]]; then
+  while IFS= read -r -d '' role_manifest; do
+    role_source="$(dirname "$role_manifest")"
+    ccb roles install --path "$role_source" --skip-tools
+  done < <(find "$ROOT/roles" -mindepth 2 -maxdepth 2 -name role.toml -print0)
+fi
+
 rsync -a \
   --exclude '.DS_Store' \
   --exclude '__pycache__/' \

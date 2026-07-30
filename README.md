@@ -11,6 +11,7 @@ This repository stores portable Codex global configuration that is safe to sync 
 - `hooks/`: user-level Codex lifecycle hooks.
 - `ccb/ccb.config`: portable CCB agent and window configuration.
 - `ccb/roles.json`: Role packages required by the portable CCB configuration.
+- `roles/`: portable local CCB Role sources installed from a path during sync.
 - `scripts/sync-local-config.sh`: exports the local global configuration into this repository.
 - `.githooks/pre-commit`: refreshes and stages the managed configuration before every commit.
 - `install.sh`: installs this repository into `$CODEX_HOME`, defaulting to `~/.codex`.
@@ -36,7 +37,7 @@ The export excludes system skills, OS metadata, Python caches, coverage database
 
 The `SessionStart` hook pulls this repository and synchronizes only the boundary above into the local machine. It treats `ccb/ccb.config` as remote-authoritative and installs it into `${CCB_HOME:-~/.ccb}/ccb.config`, backing up a different local copy first and preserving user-only file permissions. `AGENTS.md`, `hooks/`, `rules/`, and `skills/` use a three-way merge against the last remote snapshot; conflicts keep the local file and save the remote copy under the sync backup directory.
 
-The hook installs Role packages declared in `ccb/roles.json` with `--skip-tools`. Successful installations are recorded per device; unavailable or timed-out packages are logged and retried on later sessions without blocking Codex startup.
+The hook installs any portable local Role source under `roles/` by path, then installs catalog Role packages declared in `ccb/roles.json`, all with `--skip-tools`. Successful catalog installations are recorded per device; unavailable or timed-out packages are logged and retried on later sessions without blocking Codex startup.
 
 The hook does not commit or push to GitHub. It does not reload or restart CCB. A running CCB project keeps its mounted service graph until the operator applies a supported reload or starts CCB again. Generated `.ccb/agents/` directories are never synchronized.
 

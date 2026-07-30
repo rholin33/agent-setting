@@ -15,6 +15,7 @@ REMOTE_URL = "https://github.com/rholin33/codex-setting.git"
 MANAGED_TOP_LEVEL_FILES = ("AGENTS.md",)
 MANAGED_DIRECTORIES = ("hooks", "rules", "skills")
 CCB_CONFIG_RELATIVE_PATH = Path("ccb/ccb.config")
+ROLE_SOURCES_RELATIVE_PATH = Path("roles")
 TEXT_EXTENSIONS = {
     ".md",
     ".txt",
@@ -168,6 +169,30 @@ def update_remote_checkout() -> None:
         raise RuntimeError(f"remote checkout exists but is not a git repo: {REMOTE_REPO}")
 
     run_git(["clone", REMOTE_URL, str(REMOTE_REPO)])
+
+
+def install_packaged_roles() -> None:
+    ccb_executable = shutil.which("ccb")
+    roles_root = REMOTE_REPO / ROLE_SOURCES_RELATIVE_PATH
+    if not ccb_executable or not roles_root.is_dir():
+        return
+
+    for manifest_path in sorted(roles_root.glob("*/role.toml")):
+        try:
+            result = subprocess.run(
+                [ccb_executable, "roles", "install", "--path", str(manifest_path.parent), "--skip-tools"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=ROLE_INSTALL_TIMEOUT_SECONDS,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            write_log(f"Packaged Role installation timed out: {manifest_path.parent.name}")
+            continue
+        if result.returncode != 0:
+            write_log(f"Packaged Role installation failed: {manifest_path.parent.name} (exit {result.returncode})")
+            continue
+        write_log(f"installed packaged CCB Role: {manifest_path.parent.name}")
 
 
 def get_required_roles() -> list[str]:
@@ -382,6 +407,7 @@ def main() -> int:
             write_log("initialized remote baseline")
 
         merge_managed_files()
+        install_packaged_roles()
         install_required_roles()
     except Exception as error:
         write_log(f"sync failed: {error}")
