@@ -6,7 +6,7 @@ The following skills from `https://github.com/bd-dxg/skills` are installed globa
 
 - `code-review-expert`: structured code review focused on architecture, SOLID, security, and removable code.
 - `gencom`: generate a project-style commit message from the current Git diff.
-- `grill-me`: ask iterative questions about a plan or design until open decisions are resolved.
+- `grill-with-docs`: ask iterative questions about a plan or design while creating ADRs and a glossary; invoke explicitly because model invocation is disabled.
 - `naming`: generate concise natural English file names from Chinese descriptions.
 - `planning-with-files`: organize complex work through file-based plans, findings, and progress records.
 
@@ -26,7 +26,32 @@ The following skills from `https://github.com/nextlevelbuilder/ui-ux-pro-max-ski
 
 Use these skills when the user explicitly names them or when the task clearly matches their purpose.
 
-## Superpowers 本地覆写
+## Additional Installed Skills
+
+The following skill directories also currently exist under `~/.codex/skills`:
+
+### Codex System Skills
+
+- `imagegen`: generate or edit raster images when bitmap assets are more appropriate than SVG, CSS, or code-native visuals.
+- `openai-docs`: use current official OpenAI and Codex documentation, model guidance, and API references.
+- `plugin-creator`: create and update Codex plugins, manifests, optional plugin structure, and personal marketplace entries.
+- `skill-creator`: create or update skills with effective descriptions, workflows, progressive disclosure, and validation.
+- `skill-installer`: list and install Codex skills from curated sources or GitHub repositories.
+
+### Other Installed Skills
+
+- `ask`: send requests to CCB agents with `ask`; use only when CCB delegation is appropriate.
+- `cad-fill-dimension-report`: fill only the dimension-report worksheet of an Excel signing or FAI report from DWG-derived dimension specifications.
+- `ccb-clear`: clear CCB-managed agent conversation context; use for explicit `$ccb-clear` or `$ccb_clear` requests.
+- `codex-sync`: synchronize portable Codex and CCB configuration with the configured remote repository; use only for explicit sync requests.
+- `context7-cli`: use the `ctx7` CLI to fetch current library documentation, manage skills, and configure Context7.
+- `easypm`: manage EasyPM sessions, projects, work items, labour logs, progress records, and related Git hooks.
+- `find-docs`: retrieve current documentation, API references, and examples for libraries, frameworks, SDKs, CLIs, and cloud services.
+- `md-doc`: create or update a Markdown feature document for standalone features, workflows, modules, or cross-layer changes.
+- `reconnect`: enable or disable tmux-bound disconnect recovery for the current Codex thread; use only for `$reconnect on` or `$reconnect off`.
+
+The authoritative workflow for every skill is its own `SKILL.md`. This inventory reflects the current local installation and should be updated when skill directories are added or removed.
+
 
 - 轻量任务不进入完整 brainstorming / writing-plans / using-git-worktrees / subagent-driven-development 链路。
 - 轻量任务定义：单文件或小范围修改、明确 bug 修复、配置调整、文案修改、小测试补充。

@@ -10,11 +10,16 @@ import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
-REMOTE_URL = "https://github.com/rholin33/codex-setting.git"
-MANAGED_TOP_LEVEL_FILES = ("AGENTS.md",)
-MANAGED_DIRECTORIES = ("hooks", "rules", "skills")
+REMOTE_URL = "https://github.com/rholin33/agent-setting.git"
+CODEX_CONFIG_DIR = Path("codex")
+PI_CONFIG_DIR = Path("pi")
 CCB_CONFIG_RELATIVE_PATH = Path("ccb/ccb.config")
+CODEX_MANAGED_FILES = ("AGENTS.md",)
+CODEX_MANAGED_DIRECTORIES = ("hooks", "rules", "skills")
+PI_MANAGED_FILES = ("AGENTS.md", "settings.json")
+PI_MANAGED_DIRECTORIES = ("skills",)
 ROLE_SOURCES_RELATIVE_PATH = Path("roles")
 TEXT_EXTENSIONS = {
     ".md",
@@ -43,6 +48,13 @@ def get_codex_home() -> Path:
     return Path.home() / ".codex"
 
 
+def get_pi_home() -> Path:
+    configured_home = os.environ.get("PI_CODING_AGENT_DIR")
+    if configured_home:
+        return Path(configured_home).expanduser()
+    return Path.home() / ".pi" / "agent"
+
+
 def get_ccb_home() -> Path:
     configured_home = os.environ.get("CCB_HOME")
     if configured_home:
@@ -51,15 +63,18 @@ def get_ccb_home() -> Path:
 
 
 CODEX_HOME = get_codex_home()
+PI_HOME = get_pi_home()
 CCB_HOME = get_ccb_home()
 SYNC_ROOT = CODEX_HOME / ".sync" / "codex-setting"
 REMOTE_REPO = SYNC_ROOT / "remote"
 LAST_REMOTE = SYNC_ROOT / "last-remote"
 BACKUP_ROOT = SYNC_ROOT / "backups"
 MERGE_ROOT = SYNC_ROOT / "merge-work"
-LOG_PATH = CODEX_HOME / "log" / "codex-setting-sync.log"
+LOG_PATH = CODEX_HOME / "log" / "agent-setting-sync.log"
 ROLE_INSTALL_STATE_PATH = SYNC_ROOT / "installed-roles.json"
 ROLE_INSTALL_TIMEOUT_SECONDS = 30
+PI_PACKAGE_INSTALL_TIMEOUT_SECONDS = 45
+PI_SETTINGS_RELATIVE_PATH = PI_CONFIG_DIR / "settings.json"
 
 
 def ensure_directory(path: Path) -> None:
@@ -92,13 +107,18 @@ def get_relative_path(base_path: Path, path: Path) -> Path:
     return path.resolve().relative_to(base_path.resolve())
 
 
-def get_managed_remote_files() -> list[Path]:
-    pathspecs = [
-        *MANAGED_TOP_LEVEL_FILES,
+def get_managed_remote_pathspecs() -> list[str]:
+    return [
+        *[str(CODEX_CONFIG_DIR / name) for name in CODEX_MANAGED_FILES],
+        *[str(CODEX_CONFIG_DIR / name) for name in CODEX_MANAGED_DIRECTORIES],
+        *[str(PI_CONFIG_DIR / name) for name in PI_MANAGED_FILES],
+        *[str(PI_CONFIG_DIR / name) for name in PI_MANAGED_DIRECTORIES],
         str(CCB_CONFIG_RELATIVE_PATH),
-        *MANAGED_DIRECTORIES,
     ]
-    output = run_git(["-C", str(REMOTE_REPO), "ls-files", "--", *pathspecs])
+
+
+def get_managed_remote_files() -> list[Path]:
+    output = run_git(["-C", str(REMOTE_REPO), "ls-files", "--", *get_managed_remote_pathspecs()])
     files: list[Path] = []
     for line in output.splitlines():
         if not line.strip():
@@ -109,15 +129,22 @@ def get_managed_remote_files() -> list[Path]:
     return files
 
 
-def copy_with_parents(source: Path, destination: Path) -> None:
-    ensure_directory(destination.parent)
-    shutil.copy2(source, destination)
-
-
 def get_local_managed_path(relative_path: Path) -> Path:
     if relative_path == CCB_CONFIG_RELATIVE_PATH:
         return CCB_HOME / "ccb.config"
-    return CODEX_HOME / relative_path
+
+    if relative_path.parts and relative_path.parts[0] == CODEX_CONFIG_DIR.name:
+        return CODEX_HOME.joinpath(*relative_path.parts[1:])
+
+    if relative_path.parts and relative_path.parts[0] == PI_CONFIG_DIR.name:
+        return PI_HOME.joinpath(*relative_path.parts[1:])
+
+    raise ValueError(f"unsupported managed path: {relative_path}")
+
+
+def copy_with_parents(source: Path, destination: Path) -> None:
+    ensure_directory(destination.parent)
+    shutil.copy2(source, destination)
 
 
 def copy_remote_to_local(relative_path: Path, remote_path: Path) -> None:
@@ -169,6 +196,26 @@ def update_remote_checkout() -> None:
         raise RuntimeError(f"remote checkout exists but is not a git repo: {REMOTE_REPO}")
 
     run_git(["clone", REMOTE_URL, str(REMOTE_REPO)])
+
+
+def validate_remote_layout() -> None:
+    required_paths = [
+        REMOTE_REPO / CODEX_CONFIG_DIR / "AGENTS.md",
+        REMOTE_REPO / CODEX_CONFIG_DIR / "hooks",
+        REMOTE_REPO / CODEX_CONFIG_DIR / "rules",
+        REMOTE_REPO / CODEX_CONFIG_DIR / "skills",
+        REMOTE_REPO / PI_CONFIG_DIR / "AGENTS.md",
+        REMOTE_REPO / PI_CONFIG_DIR / "settings.json",
+        REMOTE_REPO / PI_CONFIG_DIR / "skills",
+    ]
+    missing = [str(path.relative_to(REMOTE_REPO)) for path in required_paths if not path.exists()]
+    if missing:
+        raise RuntimeError(f"remote configuration is incomplete; missing: {', '.join(missing)}")
+
+    if not any((REMOTE_REPO / PI_CONFIG_DIR / "skills").rglob("SKILL.md")):
+        raise RuntimeError("remote pi/skills has no SKILL.md")
+
+    load_pi_settings(REMOTE_REPO / PI_CONFIG_DIR / "settings.json")
 
 
 def install_packaged_roles() -> None:
@@ -309,6 +356,196 @@ def merge_text_file(
         return True
 
 
+def load_json_object(path: Path) -> dict[str, Any]:
+    with path.open(encoding="utf-8") as settings_file:
+        settings = json.load(settings_file)
+    if not isinstance(settings, dict):
+        raise ValueError(f"{path} must contain a JSON object")
+    return settings
+
+
+def get_pi_package_sources(settings: dict[str, Any], path: Path) -> list[str]:
+    packages = settings.get("packages", [])
+    if not isinstance(packages, list):
+        raise ValueError(f"{path}: packages must be an array")
+
+    sources: list[str] = []
+    for index, package in enumerate(packages):
+        if isinstance(package, str) and package:
+            source = package
+        elif isinstance(package, dict) and isinstance(package.get("source"), str) and package["source"]:
+            source = package["source"]
+        else:
+            raise ValueError(f"{path}: packages[{index}] must be a source string or object")
+        if source not in sources:
+            sources.append(source)
+    return sources
+
+
+def load_pi_settings(path: Path) -> dict[str, Any]:
+    settings = load_json_object(path)
+    get_pi_package_sources(settings, path)
+    return settings
+
+
+def merge_pi_settings_file(
+    relative_path: Path,
+    local_path: Path,
+    base_path: Path,
+    remote_path: Path,
+    backup_directory: Path,
+) -> bool:
+    remote_settings = load_pi_settings(remote_path)
+
+    if not local_path.exists():
+        copy_remote_to_local(relative_path, remote_path)
+        write_log(f"copied missing remote pi settings: {relative_path}")
+        return True
+
+    try:
+        local_settings = load_pi_settings(local_path)
+    except (OSError, json.JSONDecodeError, ValueError) as error:
+        backup_local_file(relative_path, backup_directory)
+        copy_remote_to_local(relative_path, remote_path)
+        write_log(f"replaced invalid local pi settings ({error}): {relative_path}")
+        return True
+
+    if hash_file(local_path) == hash_file(remote_path):
+        return False
+
+    if not base_path.is_file():
+        write_log(f"kept local pi settings because no baseline exists: {relative_path}")
+        return False
+
+    try:
+        base_settings = load_pi_settings(base_path)
+    except (OSError, json.JSONDecodeError, ValueError):
+        base_settings = {}
+
+    merged: dict[str, Any] = {}
+    sentinel = object()
+    keys = set(base_settings) | set(local_settings) | set(remote_settings)
+    remote_owned_keys = {"packages", "skills", "extensions", "prompts", "themes"}
+
+    for key in keys:
+        base_value = base_settings.get(key, sentinel)
+        local_value = local_settings.get(key, sentinel)
+        remote_value = remote_settings.get(key, sentinel)
+
+        if local_value == base_value:
+            chosen = remote_value
+        elif remote_value == base_value or local_value == remote_value:
+            chosen = local_value
+        elif key in remote_owned_keys:
+            chosen = remote_value
+            write_log(f"kept remote pi resource setting on conflict: {relative_path}#{key}")
+        else:
+            chosen = local_value
+            write_log(f"kept local pi setting on conflict: {relative_path}#{key}")
+
+        if chosen is not sentinel:
+            merged[key] = chosen
+
+    if merged == local_settings:
+        return False
+
+    backup_local_file(relative_path, backup_directory)
+    ensure_directory(local_path.parent)
+    local_path.write_text(json.dumps(merged, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    write_log(f"merged pi settings: {relative_path}")
+    return True
+
+
+def validate_local_pi_configuration() -> list[str]:
+    required_paths = [PI_HOME / "AGENTS.md", PI_HOME / "settings.json", PI_HOME / "skills"]
+    missing = [str(path) for path in required_paths if not path.exists()]
+    if missing:
+        raise RuntimeError(f"local pi configuration is incomplete; missing: {', '.join(missing)}")
+
+    if not any((PI_HOME / "skills").rglob("SKILL.md")):
+        raise RuntimeError(f"local pi skills directory has no SKILL.md: {PI_HOME / 'skills'}")
+
+    settings = load_pi_settings(PI_HOME / "settings.json")
+    return get_pi_package_sources(settings, PI_HOME / "settings.json")
+
+
+def get_pi_installed_status(pi_executable: str) -> dict[str, bool]:
+    environment = os.environ.copy()
+    environment["PI_CODING_AGENT_DIR"] = str(PI_HOME)
+    result = subprocess.run(
+        [pi_executable, "list"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=environment,
+        timeout=PI_PACKAGE_INSTALL_TIMEOUT_SECONDS,
+        check=False,
+    )
+    if result.returncode != 0:
+        write_log(f"pi list failed (exit {result.returncode}); will attempt package installation")
+        return {}
+
+    status: dict[str, bool] = {}
+    current_source: str | None = None
+    for line in result.stdout.splitlines():
+        value = line.strip()
+        if value.startswith(("npm:", "git:", "http://", "https://", "ssh://")):
+            current_source = value.removesuffix(" (filtered)")
+            status[current_source] = False
+            continue
+        if current_source and value.startswith("/"):
+            status[current_source] = Path(value).is_dir()
+    return status
+
+
+def install_pi_extensions() -> None:
+    try:
+        package_sources = validate_local_pi_configuration()
+    except (OSError, json.JSONDecodeError, ValueError, RuntimeError) as error:
+        write_log(f"skipped pi extension installation: {error}")
+        return
+
+    pi_executable = shutil.which("pi")
+    if not pi_executable:
+        write_log("pi not found; skipped pi extension installation")
+        return
+
+    try:
+        installed_status = get_pi_installed_status(pi_executable)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        write_log(f"could not inspect pi extensions: {error}")
+        installed_status = {}
+
+    environment = os.environ.copy()
+    environment["PI_CODING_AGENT_DIR"] = str(PI_HOME)
+    for source in package_sources:
+        if installed_status.get(source, False):
+            continue
+
+        try:
+            result = subprocess.run(
+                [pi_executable, "install", source],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                env=environment,
+                timeout=PI_PACKAGE_INSTALL_TIMEOUT_SECONDS,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            write_log(f"pi extension installation timed out: {source}")
+            continue
+
+        if result.returncode != 0:
+            write_log(f"pi extension installation failed: {source} (exit {result.returncode})")
+            continue
+        write_log(f"installed pi extension: {source}")
+
+
 def merge_managed_files() -> None:
     backup_directory = BACKUP_ROOT / datetime.now().strftime("%Y%m%d-%H%M%S")
     changed_count = 0
@@ -320,6 +557,11 @@ def merge_managed_files() -> None:
 
         if local_path.is_dir():
             write_log(f"kept local directory because remote path is file: {relative_path}")
+            continue
+
+        if relative_path == PI_SETTINGS_RELATIVE_PATH:
+            if merge_pi_settings_file(relative_path, local_path, base_path, remote_file, backup_directory):
+                changed_count += 1
             continue
 
         if not local_path.exists():
@@ -401,14 +643,16 @@ def main() -> int:
             return 0
 
         update_remote_checkout()
+        validate_remote_layout()
 
-        if not (LAST_REMOTE / "AGENTS.md").is_file():
+        if not (LAST_REMOTE / CODEX_CONFIG_DIR / "AGENTS.md").is_file():
             copy_remote_snapshot(LAST_REMOTE)
             write_log("initialized remote baseline")
 
         merge_managed_files()
         install_packaged_roles()
         install_required_roles()
+        install_pi_extensions()
     except Exception as error:
         write_log(f"sync failed: {error}")
     return 0

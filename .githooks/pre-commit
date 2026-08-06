@@ -4,7 +4,10 @@ set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 
 "$ROOT/scripts/sync-local-config.sh"
-git -C "$ROOT" add -- AGENTS.md ccb/ccb.config hooks rules skills
+git -C "$ROOT" add -- \
+  codex/AGENTS.md codex/hooks.json codex/hooks codex/rules codex/skills \
+  pi/AGENTS.md pi/settings.json pi/skills \
+  ccb/ccb.config
 
 if ! git -C "$ROOT" diff --cached --check; then
   printf '%s\n' 'Pre-commit check failed: staged configuration contains whitespace errors.' >&2
