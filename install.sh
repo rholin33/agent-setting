@@ -47,6 +47,9 @@ install -m 0644 "$ROOT/codex/hooks.json" "$CODEX_HOME/hooks.json"
 install -m 0644 "$ROOT/pi/AGENTS.md" "$PI_HOME/AGENTS.md"
 install -m 0644 "$ROOT/pi/settings.json" "$PI_HOME/settings.json"
 install -m 0600 "$ROOT/ccb/ccb.config" "$CCB_HOME/ccb.config"
+if [[ -f "$ROOT/ccb/apply-pi-extension-reuse-patch.py" ]]; then
+  python3 "$ROOT/ccb/apply-pi-extension-reuse-patch.py"
+fi
 
 if command -v pi >/dev/null 2>&1; then
   while IFS= read -r package_source; do
