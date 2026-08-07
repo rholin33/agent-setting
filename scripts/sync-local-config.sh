@@ -92,9 +92,7 @@ rsync -a --delete \
   --exclude '.coverage' \
   "$PI_HOME/skills/" "$PI_ROOT/skills/"
 
-rsync -a \
-  --exclude '.DS_Store' \
-  "$PI_HOME/bin/" "$PI_ROOT/bin/"
+install -m 0755 "$PI_HOME/bin/pi" "$PI_ROOT/bin/pi"
 
 install -m 0644 "$CODEX_HOME/AGENTS.md" "$CODEX_ROOT/AGENTS.md"
 install -m 0644 "$PI_HOME/AGENTS.md" "$PI_ROOT/AGENTS.md"
