@@ -19,7 +19,7 @@ CCB_CONFIG_RELATIVE_PATH = Path("ccb/ccb.config")
 CODEX_MANAGED_FILES = ("AGENTS.md",)
 CODEX_MANAGED_DIRECTORIES = ("hooks", "rules", "skills")
 PI_MANAGED_FILES = ("AGENTS.md", "settings.json")
-PI_MANAGED_DIRECTORIES = ("skills",)
+PI_MANAGED_DIRECTORIES = ("skills", "bin")
 ROLE_SOURCES_RELATIVE_PATH = Path("roles")
 TEXT_EXTENSIONS = {
     ".md",
@@ -207,6 +207,7 @@ def validate_remote_layout() -> None:
         REMOTE_REPO / PI_CONFIG_DIR / "AGENTS.md",
         REMOTE_REPO / PI_CONFIG_DIR / "settings.json",
         REMOTE_REPO / PI_CONFIG_DIR / "skills",
+        REMOTE_REPO / PI_CONFIG_DIR / "bin" / "pi",
     ]
     missing = [str(path.relative_to(REMOTE_REPO)) for path in required_paths if not path.exists()]
     if missing:
@@ -457,7 +458,7 @@ def merge_pi_settings_file(
 
 
 def validate_local_pi_configuration() -> list[str]:
-    required_paths = [PI_HOME / "AGENTS.md", PI_HOME / "settings.json", PI_HOME / "skills"]
+    required_paths = [PI_HOME / "AGENTS.md", PI_HOME / "settings.json", PI_HOME / "skills", PI_HOME / "bin" / "pi"]
     missing = [str(path) for path in required_paths if not path.exists()]
     if missing:
         raise RuntimeError(f"local pi configuration is incomplete; missing: {', '.join(missing)}")

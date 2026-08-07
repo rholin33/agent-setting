@@ -1,0 +1,65 @@
+#!/bin/sh
+set -eu
+
+self_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+self_path="$self_dir/$(basename -- "$0")"
+global_agent_dir=$(CDPATH= cd -- "$self_dir/.." && pwd)
+global_agents="$global_agent_dir/AGENTS.md"
+
+real_pi=""
+old_ifs=$IFS
+IFS=:
+for entry in ${PATH:-}; do
+    [ -n "$entry" ] || entry=.
+    candidate="$entry/pi"
+    [ "$candidate" = "$self_path" ] && continue
+    if [ -x "$candidate" ]; then
+        real_pi="$candidate"
+        break
+    fi
+done
+IFS=$old_ifs
+
+if [ -z "$real_pi" ]; then
+    printf '%s\n' 'ccb Pi wrapper could not find the real pi executable' >&2
+    exit 127
+fi
+
+bridge_global_agents() {
+    target_dir=$1
+    target="$target_dir/AGENTS.md"
+
+    [ -f "$global_agents" ] || {
+        printf 'ccb Pi requires global instructions: %s\n' "$global_agents" >&2
+        exit 78
+    }
+    grep -Fq '## CCB Role Identity' "$global_agents" || {
+        printf '%s\n' 'ccb Pi global AGENTS.md is missing the CCB role identity contract' >&2
+        exit 78
+    }
+    mkdir -p "$target_dir"
+    if [ -L "$target" ]; then
+        if [ "$(readlink "$target")" = "$global_agents" ]; then
+            return
+        fi
+    fi
+    if [ -e "$target" ] || [ -L "$target" ]; then
+        backup="$target_dir/.ccb-global-pi-agents-backup"
+        suffix=0
+        while [ -e "$backup" ] || [ -L "$backup" ]; do
+            suffix=$((suffix + 1))
+            backup="$target_dir/.ccb-global-pi-agents-backup.$suffix"
+        done
+        mv "$target" "$backup"
+    fi
+    ln -s "$global_agents" "$target"
+}
+
+if [ -n "${PI_CODING_AGENT_DIR:-}" ]; then
+    case "$PI_CODING_AGENT_DIR" in
+        "$global_agent_dir") ;;
+        *) bridge_global_agents "$PI_CODING_AGENT_DIR" ;;
+    esac
+fi
+
+exec "$real_pi" "$@"

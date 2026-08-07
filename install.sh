@@ -11,6 +11,7 @@ mkdir -p \
   "$CODEX_HOME/rules" \
   "$CODEX_HOME/hooks" \
   "$PI_HOME/skills" \
+  "$PI_HOME/bin" \
   "$CCB_HOME"
 
 if command -v ccb >/dev/null 2>&1 && [[ -d "$ROOT/roles" ]]; then
@@ -41,6 +42,10 @@ rsync -a \
   --exclude '__pycache__/' \
   --exclude '*.pyc' \
   "$ROOT/pi/skills/" "$PI_HOME/skills/"
+
+rsync -a \
+  --exclude '.DS_Store' \
+  "$ROOT/pi/bin/" "$PI_HOME/bin/"
 
 install -m 0644 "$ROOT/codex/AGENTS.md" "$CODEX_HOME/AGENTS.md"
 install -m 0644 "$ROOT/codex/hooks.json" "$CODEX_HOME/hooks.json"

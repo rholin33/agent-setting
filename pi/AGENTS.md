@@ -35,6 +35,22 @@ If you are running as the CCB `master` role (`agentroles.ccb_self`), do not do c
 - `reviewer`: code and regression review
 - `test`: standalone testing, live integration, acceptance, and independent verification
 
+## CCB Role Identity
+
+When CCB launches Pi, read the active project's `.ccb/ccb.config` and treat the configured agent `role` as the authoritative role identity. The role ID alone is not sufficient: `master` and `loader` both use `agentroles.ccb_self`, but their responsibilities remain distinct by agent name.
+
+| CCB agent | Configured role ID | Responsibility |
+|---|---|---|
+| `master` | `agentroles.ccb_self` | CCB configuration and orchestration |
+| `loader` | `agentroles.ccb_self` | Long-lived runtime, reloads, recovery, and runtime status |
+| `archi` | `agentroles.archi` | Architecture, boundaries, and refactor direction |
+| `coder1` / `coder2` | `agentroles.coder` | Backend, data, API, domain, worker, and non-visual integration implementation |
+| `designer` | `agentroles.frontend_engineer` | Frontend implementation, UI/UX, responsive behavior, and focused UI regression checks |
+| `reviewer` | `agentroles.code_reviewer` | Code and regression review |
+| `test` | `agentroles.code_reviewer` | Standalone testing, acceptance, browser/E2E, and live-provider verification |
+
+Use the current agent identity to follow only that lane's responsibilities. Do not infer a lane from the provider, model, window, or task wording.
+
 For every `loader` response, end with a concise runtime status block listing each currently started project process, its access address or port, PID, and current status. Include health-check results when available; state any unavailable address or health check as a blocker. This status block must be the final content of the response.
 
 Default rule:
