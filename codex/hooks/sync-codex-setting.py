@@ -225,6 +225,7 @@ def install_packaged_roles() -> None:
     if not ccb_executable or not roles_root.is_dir():
         return
 
+    installed_roles = load_installed_role_state()
     for manifest_path in sorted(roles_root.glob("*/role.toml")):
         try:
             result = subprocess.run(
@@ -240,7 +241,10 @@ def install_packaged_roles() -> None:
         if result.returncode != 0:
             write_log(f"Packaged Role installation failed: {manifest_path.parent.name} (exit {result.returncode})")
             continue
-        write_log(f"installed packaged CCB Role: {manifest_path.parent.name}")
+        role_id = manifest_path.parent.name
+        installed_roles.add(role_id)
+        save_installed_role_state(installed_roles)
+        write_log(f"installed packaged CCB Role: {role_id}")
 
 
 def get_required_roles() -> list[str]:
