@@ -43,7 +43,7 @@ The following skill directories also currently exist under `~/.codex/skills`:
 - `ask`: send requests to CCB agents with `ask`; use only when CCB delegation is appropriate.
 - `cad-fill-dimension-report`: fill only the dimension-report worksheet of an Excel signing or FAI report from DWG-derived dimension specifications.
 - `ccb-clear`: clear CCB-managed agent conversation context; use for explicit `$ccb-clear` or `$ccb_clear` requests.
-- `codex-sync`: synchronize portable Codex and CCB configuration with the configured remote repository; use only for explicit sync requests.
+- `agent-setting-sync`: synchronize portable Codex, Pi, and CCB configuration with the configured remote repository; use only for explicit sync requests. `$codex-sync` is the legacy alias.
 - `context7-cli`: use the `ctx7` CLI to fetch current library documentation, manage skills, and configure Context7.
 - `easypm`: manage EasyPM sessions, projects, work items, labour logs, progress records, and related Git hooks.
 - `find-docs`: retrieve current documentation, API references, and examples for libraries, frameworks, SDKs, CLIs, and cloud services.

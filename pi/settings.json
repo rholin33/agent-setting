@@ -8,7 +8,6 @@
     "npm:@cortexkit/pi-magic-context",
     "npm:@narumitw/pi-statusline",
     "npm:pi-tool-display",
-    "npm:@gotgenes/pi-subagents",
     "npm:@narumitw/pi-plan-mode"
   ],
   "skills": [

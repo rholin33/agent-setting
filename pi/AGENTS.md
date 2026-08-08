@@ -23,9 +23,21 @@ Ask for confirmation before:
 
 ## CCB Agent Routing Rules
 
-When a project has CCB mounted agents, read `.ccb/ccb.config` first and route by role instead of defaulting to a coder.
+These rules are conditional. For a Pi process, they activate only after the CCB-managed gate in **Pi-Specific CCB Delegation** passes; the presence of CCB configuration or mounted agents in the project is not sufficient. A directly launched Pi session must skip CCB dispatch and CCB role-identity constraints. For a non-Pi agent actually launched by CCB, follow the applicable CCB role rules below.
 
-If you are running as the CCB `master` role (`agentroles.ccb_self`), do not do concrete business implementation, testing, design, or review work yourself by default. Act as dispatcher/coordinator only: clarify the task, choose the correct lane, delegate, and then summarize or chain follow-up work.
+When an eligible CCB-managed process has CCB mounted agents, read `.ccb/ccb.config` first and route by role instead of defaulting to a coder.
+
+### Pi-Specific CCB Delegation
+
+These rules apply only when the current Pi process was actually launched and is currently managed by CCB. Treat a Pi process as CCB-managed only when all of these launch-provided markers are present and non-empty: `CCB_CALLER_ACTOR`, `CCB_CALLER_RUNTIME_DIR`, and `CCB_SESSION_ID`. Do not infer CCB management from `.ccb/ccb.config`, `~/.ccb`, the project directory, tmux, installed CCB files, agent names, or the generic `PI_CODING_AGENT` marker. If these markers are absent, this is an ordinary Pi session: do not apply CCB role-routing, CCB `ask` dispatch, CCB master/loader delegation, or CCB-specific status requirements.
+
+For a Pi process that passes the CCB-managed gate:
+
+- When Pi needs to invoke another CCB role, it must dispatch the task through the corresponding CCB skill, such as `ask`, after following that skill's instructions.
+- Pi must not use the generic `subagent` mechanism as a substitute for dispatching a CCB role, because that bypasses the role's CCB context and visible execution process.
+- Pi may still use `subagent` for work that is not a CCB role dispatch.
+
+For an eligible CCB-managed Pi session running as the CCB `master` role (`agentroles.ccb_self`), do not do concrete business implementation, testing, design, or review work yourself by default. Act as dispatcher/coordinator only: clarify the task, choose the correct lane, delegate, and then summarize or chain follow-up work.
 
 - `master`: CCB config and orchestration
 - `loader`: long-lived runtime, reloads, and recovery
@@ -37,7 +49,7 @@ If you are running as the CCB `master` role (`agentroles.ccb_self`), do not do c
 
 ## CCB Role Identity
 
-When CCB launches Pi, read the active project's `.ccb/ccb.config` and treat the configured agent `role` as the authoritative role identity. The role ID alone is not sufficient: `master` and `loader` both use `agentroles.ccb_self`, but their responsibilities remain distinct by agent name.
+For an eligible CCB-managed Pi session, read the active project's `.ccb/ccb.config` and treat the configured agent `role` as the authoritative role identity. The role ID alone is not sufficient: `master` and `loader` both use `agentroles.ccb_self`, but their responsibilities remain distinct by agent name. A directly launched Pi session has no CCB role identity, even when a project CCB config is present.
 
 | CCB agent | Configured role ID | Responsibility |
 |---|---|---|

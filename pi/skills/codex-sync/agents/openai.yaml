@@ -1,4 +1,4 @@
 interface:
-  display_name: "Codex Sync"
-  short_description: "Merge local Codex settings and push safely"
-  default_prompt: "Use $codex-sync to merge local Codex settings with the remote repository and push verified changes."
+  display_name: "Legacy Agent Settings Sync Alias"
+  short_description: "Use the renamed agent settings sync skill"
+  default_prompt: "Use $agent-setting-sync to merge local Codex, Pi, and CCB settings with agent-setting and push verified changes."

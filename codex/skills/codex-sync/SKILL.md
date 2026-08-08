@@ -1,9 +1,11 @@
 ---
 name: codex-sync
-description: Synchronize portable local Codex, Pi, and CCB configuration with https://github.com/rholin33/agent-setting using a pull, merge, review, commit, and push workflow. Use when the user explicitly asks to merge local agent settings with that remote repository and publish the verified result. Exclude credentials, runtime state, system skills, and unrelated files.
+description: Legacy alias for agent-setting-sync. Use $agent-setting-sync for the current portable Codex, Pi, and CCB synchronization workflow with https://github.com/rholin33/agent-setting.
 ---
 
-# Agent Settings Sync
+# Legacy Alias
+
+Use `$agent-setting-sync` for the current workflow. This alias remains installed so existing `$codex-sync` requests can be migrated without losing the remote-layout, Pi, and CCB synchronization instructions.
 
 Synchronize only the portable configuration managed by `agent-setting`. Preserve unrelated local changes, stop on ambiguous conflicts or sensitive-file changes, and never force-push.
 

@@ -1,4 +1,4 @@
 interface:
-  display_name: "Legacy Agent Settings Sync Alias"
-  short_description: "Use the renamed agent settings sync skill"
+  display_name: "Agent Settings Sync"
+  short_description: "Sync Codex, Pi, and CCB settings safely"
   default_prompt: "Use $agent-setting-sync to merge local Codex, Pi, and CCB settings with agent-setting and push verified changes."
