@@ -3,7 +3,7 @@
     "codex-local": {
       "baseUrl": "https://gptpro.live/v1",
       "api": "openai-responses",
-      "apiKey": "!node -e \"const fs=require('fs'); const os=require('os'); const path=require('path'); const x=JSON.parse(fs.readFileSync(path.join(os.homedir(), '.codex', 'auth.json'), 'utf8')); process.stdout.write(x.OPENAI_API_KEY || '');\"",
+      "apiKey": "!node -e \"const fs=require('fs'); const os=require('os'); const path=require('path'); const x=JSON.parse(fs.readFileSync(path.join(os.userInfo().homedir, '.codex', 'auth.json'), 'utf8')); process.stdout.write(x.OPENAI_API_KEY || '');\"",
       "models": [
         {
           "id": "gpt-5.6-terra",
