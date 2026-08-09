@@ -27,6 +27,7 @@ The local global configuration is the source for these repository paths:
 | `${CODEX_HOME:-~/.codex}/skills/` | `codex/skills/` | Non-system Codex skills |
 | `${PI_CODING_AGENT_DIR:-~/.pi/agent}/AGENTS.md` | `pi/AGENTS.md` | Pi global instructions |
 | `${PI_CODING_AGENT_DIR:-~/.pi/agent}/settings.json` | `pi/settings.json` | Pi settings and extension package sources |
+| `${PI_CODING_AGENT_DIR:-~/.pi/agent}/models.json` | `pi/models.json` | Pi custom provider and model definitions without credentials |
 | `${PI_CODING_AGENT_DIR:-~/.pi/agent}/skills/` | `pi/skills/` | Selected Pi skills |
 | `${CCB_HOME:-~/.ccb}/ccb.config` | `ccb/ccb.config` | Portable CCB configuration |
 
@@ -38,7 +39,7 @@ Codex system skills under `codex/skills/.system/` are excluded from export. Pi p
 
 The Codex `SessionStart` hook pulls the remote repository and synchronizes both configuration trees and the CCB config. It uses a three-way merge against the last remote snapshot for text files. Pi settings receive a JSON-aware merge: resource keys such as `packages` and `skills` follow the remote configuration when both sides changed, while unrelated local preference keys remain local on conflict.
 
-The hook validates the remote `codex/` and `pi/` layouts before applying them. If Pi is missing `AGENTS.md`, `settings.json`, or a non-empty `skills/` directory, the sync records a failure and does not install Pi extensions. Missing or unavailable Pi packages are logged and retried on a later startup without blocking Codex startup.
+The hook validates the remote `codex/` and `pi/` layouts before applying them. If Pi is missing `AGENTS.md`, `settings.json`, `models.json`, or a non-empty `skills/` directory, the sync records a failure and does not install Pi extensions. Missing or unavailable Pi packages are logged and retried on a later startup without blocking Codex startup.
 
 The hook installs CCB Role sources and catalog Roles with `--skip-tools` when available. It never commits, pushes, reloads, or restarts CCB or Pi automatically.
 
