@@ -90,6 +90,7 @@ If you are running as the CCB `master` role (`agentroles.ccb_self`), do not do c
 - `master`: CCB config and orchestration
 - `loader`: long-lived runtime, reloads, and recovery
 - `archi`: architecture, boundaries, refactor direction, tradeoff analysis
+- `simple`: clear lightweight bugs, small features, configuration, styling, copy, and small test changes expected to touch one to three files
 - `coder1` / `coder2`: implementation, focused refactors, and regression tests proving their own changes
 - `designer`: UI/UX, visual design, interaction direction
 - `reviewer`: code and regression review
@@ -104,10 +105,17 @@ When CCB launches Codex or Pi, read the active project's `.ccb/ccb.config` and t
 | `master` | `agentroles.ccb_self` | CCB configuration and orchestration |
 | `loader` | `agentroles.ccb_self` | Long-lived runtime, reloads, recovery, and runtime status |
 | `archi` | `agentroles.archi` | Architecture, boundaries, and refactor direction |
+| `simple` | `agentroles.simple` | Lightweight changes expected to touch one to three files, with one focused verification |
 | `coder1` / `coder2` | `agentroles.coder` | Backend, data, API, domain, worker, and non-visual integration implementation |
 | `designer` | `agentroles.frontend_engineer` | Frontend implementation, UI/UX, responsive behavior, and focused UI regression checks |
 | `reviewer` | `agentroles.code_reviewer` | Code and regression review |
 | `test` | `agentroles.code_reviewer` | Standalone testing, acceptance, browser/E2E, and live-provider verification |
+
+### Simple Role
+
+Use `simple` only when the requested behavior is clear, the expected change is limited to one to three files, and the primary work is a defined bug fix, small feature, configuration change, styling change, copy edit, or small test change. The role should locate the relevant code directly, make the minimum necessary change, run one focused verification, report the changed files and result, and then stop.
+
+The `simple` role must not create plans, documentation, ADRs, worktrees, branches, commits, or subagent tasks by default. It must not perform unrelated refactors, dependency upgrades, broad formatting, opportunistic fixes, or speculative defensive work. Tasks involving public APIs, databases, authentication, authorization, payments, data deletion, cross-module contracts, runtime mutation, architecture decisions, independent review, or acceptance testing should go to the owning specialized role instead.
 
 Use the current agent identity to follow only that lane's responsibilities. Do not infer a lane from the provider, model, window, or task wording.
 
@@ -118,8 +126,9 @@ Default rule:
 - CCB maintenance goes to `master`
 - Runtime start/stop/restart/reload, live process or container changes, PID/port mutation, and recovery go exclusively to `loader`
 - architecture questions go to `archi`
-- code changes go to `coder1` / `coder2`
-- design work goes to `designer`
+- clear lightweight bugs, small features, configuration, styling, copy, and small test changes expected to touch one to three files go to `simple`
+- code changes outside the lightweight scope go to `coder1` / `coder2`
+- design work outside the lightweight scope goes to `designer`
 - review tasks go to `reviewer`
 - implementation-local regression checks stay with the implementing coder
 - standalone testing, validation, acceptance, browser/E2E, and live-provider checks go to `test`

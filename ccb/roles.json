@@ -5,6 +5,7 @@
     "agentroles.archi",
     "agentroles.coder",
     "agentroles.frontend_engineer",
-    "agentroles.code_reviewer"
+    "agentroles.code_reviewer",
+    "agentroles.simple"
   ]
 }
