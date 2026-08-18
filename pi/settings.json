@@ -1,16 +1,16 @@
 {
-  "lastChangelogVersion": "0.83.0",
   "theme": "dark",
-  "defaultProvider": "codex-local",
-  "defaultModel": "gpt-5.6-terra",
   "defaultThinkingLevel": "xhigh",
+  "skills": [
+    "skills"
+  ],
+  "defaultModel": "gpt-5.6-sol",
   "packages": [
     "npm:@cortexkit/pi-magic-context",
     "npm:@narumitw/pi-statusline",
     "npm:pi-tool-display",
     "npm:@narumitw/pi-plan-mode"
   ],
-  "skills": [
-    "skills"
-  ]
+  "defaultProvider": "custom",
+  "lastChangelogVersion": "0.83.0"
 }

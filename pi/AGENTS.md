@@ -2,6 +2,8 @@
 
 ## Task Scope
 
+- 聊天对话的回复使用简体中文；代码、标识符、文件路径、命令、日志和用户明确要求保留的原文不翻译。
+
 - Lightweight tasks do not require a full brainstorming, writing-plans, worktree, or subagent-driven-development workflow.
 - Lightweight tasks include single-file or small-scope changes, clear bug fixes, configuration changes, copy changes, and small test additions.
 - For lightweight tasks, analyze the code and implement directly. Ask at most one question when a key uncertainty blocks the work.

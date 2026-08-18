@@ -1,0 +1,4 @@
+interface:
+  display_name: "CCB Pi Context Compression"
+  short_description: "Safely compact one CCB Pi session"
+  default_prompt: "Use $ccb-pi-context-compression to safely compact one named CCB Pi session while preserving its full history."

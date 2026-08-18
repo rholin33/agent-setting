@@ -28,7 +28,6 @@ Managed Pi paths are stored under `pi/` and map to `$PI_CODING_AGENT_DIR`:
 
 - `pi/AGENTS.md`
 - `pi/settings.json`
-- `pi/models.json`
 - `pi/skills/`
 - `pi/bin/pi`
 
@@ -64,7 +63,7 @@ Do not sync or stage `auth.json`, `config.toml`, history, databases, logs, sessi
    git diff --check
    git diff --stat
    git diff -- codex/AGENTS.md codex/hooks codex/rules codex/skills \
-     pi/AGENTS.md pi/settings.json pi/models.json pi/skills pi/bin ccb/ccb.config
+     pi/AGENTS.md pi/settings.json pi/skills pi/bin ccb/ccb.config
    ```
 
    Confirm every changed path is portable configuration. Stop if a credential, runtime file, unrelated file, or unexpected deletion appears. Resolve conflicts deliberately; do not use `git reset --hard`, `git checkout --`, or `git push --force`.
@@ -74,7 +73,7 @@ Do not sync or stage `auth.json`, `config.toml`, history, databases, logs, sessi
    ```bash
    git add -- \
      codex/AGENTS.md codex/hooks codex/rules codex/skills \
-     pi/AGENTS.md pi/settings.json pi/models.json pi/skills pi/bin ccb/ccb.config
+     pi/AGENTS.md pi/settings.json pi/skills pi/bin ccb/ccb.config
    git diff --cached --check
    git diff --cached
    git commit -m "chore: sync agent settings"

@@ -1,5 +1,7 @@
 # Global Codex Instructions
 
+- 聊天对话的回复使用简体中文；代码、标识符、文件路径、命令、日志和用户明确要求保留的原文不翻译。
+
 ## Installed Skills From bd-dxg/skills
 
 The following skills from `https://github.com/bd-dxg/skills` are installed globally under `~/.codex/skills`:
@@ -82,6 +84,18 @@ Original Claude Code examples from the repository are archived in:
 - `~/.codex/bd-dxg-skills/mcp.json`
 
 ## CCB Agent Routing Rules
+
+### CCB Session Identity Gate
+
+CCB 路由只能基于当前进程的启动身份，不能基于项目目录或后台运行态推断。只有同时满足以下条件时，当前会话才算 CCB-launched：
+
+- 当前进程环境包含 `CCB_SESSION_ID`、`CCB_CALLER_ACTOR`、`CCB_CALLER_PROJECT_ID` 和 `CCB_CALLER_PROJECT_ROOT`；
+- `CCB_CALLER_PROJECT_ROOT` 与当前项目根目录一致；
+- 当前项目 `.ccb/.<agent>-session` 中的 `ccb_session_id`、`agent_name` 和项目根目录与上述身份一致。
+
+以下证据单独存在时都不能证明当前会话由 CCB 启动：`.ccb/` 目录、`.ccb/ccb.config`、运行中的 `ccbd`、tmux pane、agent session 文件、`ccb` 命令可用，或项目曾经由 CCB 挂载。
+
+如果身份门禁未通过，必须按普通 Codex 会话处理：不得调用 `ccb ask`、`ccb clear`、`ccb compact`、`ccb restart`、`ccb reload`、`ccb kill`，不得向 CCB agent 委派任务，也不得把 CCB 的角色规则套用到当前会话。需要操作 CCB 时，先向用户明确说明身份未验证并请求确认；不能把“项目已挂载”当作确认。
 
 When a project has CCB mounted agents, read `.ccb/ccb.config` first and route by role instead of defaulting to a coder.
 
