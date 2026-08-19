@@ -1,11 +1,16 @@
 ---
 name: agent-setting-sync
-description: Synchronize portable local Codex, Pi, and CCB configuration with https://github.com/rholin33/agent-setting using a pull, merge, review, commit, and push workflow. Use when the user explicitly invokes $agent-setting-sync, asks to synchronize the agent-setting repository, or uses the legacy $codex-sync name. Exclude credentials, runtime state, system skills, and unrelated files.
+description: Synchronize portable local Codex, Pi, and CCB configuration with https://github.com/rholin33/agent-setting using a pull, merge, review, commit, and push workflow. Supports an explicit `force` mode that updates the current machine from the validated remote configuration. Use when the user explicitly invokes $agent-setting-sync, asks to synchronize the agent-setting repository, or uses the legacy $codex-sync name. Exclude credentials, runtime state, system skills, and unrelated files.
 ---
 
 # Agent Settings Sync
 
 Synchronize only the portable configuration managed by `agent-setting`. Preserve unrelated local changes, stop on ambiguous conflicts or sensitive-file changes, and never force-push.
+
+## Modes
+
+- Default: merge the remote configuration into the live local configuration, export reviewed local changes back into the checkout, commit, and push.
+- `force`: make the validated remote configuration authoritative for the current machine. Invoke the sync hook with `--force`; it skips the debounce window, backs up every overwritten local managed file under `$CODEX_HOME/.sync/codex-setting/backups/`, and does not export, commit, or push. It does not delete local files that are absent from the remote.
 
 ## Scope
 
@@ -49,6 +54,14 @@ Do not sync or stage `auth.json`, `config.toml`, history, databases, logs, sessi
    ```
 
    Read `$CODEX_HOME/log/agent-setting-sync.log` afterward. Treat a logged sync failure, incomplete remote or local Pi layout, invalid Pi settings, or an unresolved merge as a stop condition. The hook validates `codex/` and `pi/`, performs three-way text merges, performs a JSON-aware merge of Pi resource settings, treats `ccb/ccb.config` as remote-authoritative, saves backups, installs packaged/catalog CCB Roles with `--skip-tools`, and installs missing Pi extensions. It never commits, pushes, reloads, or restarts services automatically.
+
+   For an explicit `force` request, run:
+
+   ```bash
+   python3 "$CODEX_HOME/hooks/sync-codex-setting.py" --force
+   ```
+
+   In `force` mode, stop after reviewing the sync log and backup directory. Do not run the export, commit, or push steps below; the purpose is to update the current machine from the remote configuration.
 5. Export the live local managed files into the checkout:
 
    ```bash

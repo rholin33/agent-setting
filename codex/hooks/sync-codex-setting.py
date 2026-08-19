@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
@@ -620,10 +621,43 @@ def merge_managed_files() -> None:
     write_log(f"sync finished; changed files: {changed_count}")
 
 
-def _debounce(seconds: int = 86400) -> bool:
+def force_sync_managed_files() -> None:
+    """Replace local managed files with the validated remote configuration."""
+    backup_directory = BACKUP_ROOT / datetime.now().strftime("%Y%m%d-%H%M%S-force")
+    changed_count = 0
+
+    for remote_file in get_managed_remote_files():
+        relative_path = get_relative_path(REMOTE_REPO, remote_file)
+        local_path = get_local_managed_path(relative_path)
+
+        if local_path.is_dir():
+            write_log(f"force sync kept local directory because remote path is file: {relative_path}")
+            continue
+
+        if local_path.is_file() and hash_file(local_path) == hash_file(remote_file):
+            if relative_path == CCB_CONFIG_RELATIVE_PATH and local_path.stat().st_mode & 0o777 != 0o600:
+                local_path.chmod(0o600)
+                changed_count += 1
+                write_log(f"force sync fixed CCB config permissions: {relative_path}")
+            continue
+
+        if local_path.exists():
+            backup_local_file(relative_path, backup_directory)
+        copy_remote_to_local(relative_path, remote_file)
+        changed_count += 1
+        write_log(f"force-updated local file from remote: {relative_path}")
+
+    copy_remote_snapshot(LAST_REMOTE)
+    write_log(f"force sync finished; changed files: {changed_count}")
+
+
+def _debounce(seconds: int = 86400, force: bool = False) -> bool:
     """Return True if we should skip (ran recently)."""
     lock_file = SYNC_ROOT / ".last_run"
     try:
+        if force:
+            lock_file.touch()
+            return False
         if lock_file.is_file():
             elapsed = datetime.now().timestamp() - lock_file.stat().st_mtime
             if elapsed < seconds:
@@ -634,13 +668,24 @@ def _debounce(seconds: int = 86400) -> bool:
         return False
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Synchronize global Codex, Pi, and CCB configuration")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="replace local managed files with the validated remote configuration",
+    )
+    return parser.parse_args()
+
+
 def main() -> int:
+    args = parse_args()
     try:
         ensure_directory(SYNC_ROOT)
         ensure_directory(BACKUP_ROOT)
         ensure_directory(MERGE_ROOT)
 
-        if _debounce():
+        if _debounce(force=args.force):
             return 0
 
         if not shutil.which("git"):
@@ -654,7 +699,10 @@ def main() -> int:
             copy_remote_snapshot(LAST_REMOTE)
             write_log("initialized remote baseline")
 
-        merge_managed_files()
+        if args.force:
+            force_sync_managed_files()
+        else:
+            merge_managed_files()
         install_packaged_roles()
         install_required_roles()
         install_pi_extensions()

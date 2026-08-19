@@ -5,7 +5,7 @@ description: Legacy alias for agent-setting-sync. Use $agent-setting-sync for th
 
 # Legacy Alias
 
-Use `$agent-setting-sync` for the current workflow. This alias remains installed so existing `$codex-sync` requests can be migrated without losing the remote-layout, Pi, and CCB synchronization instructions.
+Use `$agent-setting-sync` for the current workflow. Pass `force` through to that skill when the current machine must be updated from the validated remote configuration. This alias remains installed so existing `$codex-sync` requests can be migrated without losing the remote-layout, Pi, and CCB synchronization instructions.
 
 Synchronize only the portable configuration managed by `agent-setting`. Preserve unrelated local changes, stop on ambiguous conflicts or sensitive-file changes, and never force-push.
 
