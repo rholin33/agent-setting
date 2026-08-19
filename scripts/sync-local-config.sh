@@ -37,7 +37,6 @@ require_directory "$PI_HOME/bin"
 require_file "$PI_HOME/bin/pi"
 require_file "$PI_HOME/AGENTS.md"
 require_file "$PI_HOME/settings.json"
-require_file "$PI_HOME/models.json"
 require_file "$CCB_HOME/ccb.config"
 
 python3 - "$PI_HOME/settings.json" <<'PY'
@@ -98,10 +97,9 @@ install -m 0755 "$PI_HOME/bin/pi" "$PI_ROOT/bin/pi"
 install -m 0644 "$CODEX_HOME/AGENTS.md" "$CODEX_ROOT/AGENTS.md"
 install -m 0644 "$PI_HOME/AGENTS.md" "$PI_ROOT/AGENTS.md"
 install -m 0644 "$PI_HOME/settings.json" "$PI_ROOT/settings.json"
-install -m 0644 "$PI_HOME/models.json" "$PI_ROOT/models.json"
 install -m 0600 "$CCB_HOME/ccb.config" "$ROOT/ccb/ccb.config"
 
 printf '%s\n' 'Exported local global configuration:'
 printf '%s\n' '  codex/AGENTS.md codex/hooks/ codex/rules/ codex/skills/'
-printf '%s\n' '  pi/AGENTS.md pi/settings.json pi/models.json pi/skills/ pi/bin/pi'
+printf '%s\n' '  pi/AGENTS.md pi/settings.json pi/skills/ pi/bin/pi'
 printf '%s\n' '  ccb/ccb.config'
