@@ -18,7 +18,7 @@ PI_CONFIG_DIR = Path("pi")
 CCB_CONFIG_RELATIVE_PATH = Path("ccb/ccb.config")
 CODEX_MANAGED_FILES = ("AGENTS.md",)
 CODEX_MANAGED_DIRECTORIES = ("hooks", "rules", "skills")
-PI_MANAGED_FILES = ("AGENTS.md", "settings.json", "models.json")
+PI_MANAGED_FILES = ("AGENTS.md", "settings.json")
 PI_MANAGED_DIRECTORIES = ("skills", "bin")
 ROLE_SOURCES_RELATIVE_PATH = Path("roles")
 TEXT_EXTENSIONS = {
@@ -206,7 +206,6 @@ def validate_remote_layout() -> None:
         REMOTE_REPO / CODEX_CONFIG_DIR / "skills",
         REMOTE_REPO / PI_CONFIG_DIR / "AGENTS.md",
         REMOTE_REPO / PI_CONFIG_DIR / "settings.json",
-        REMOTE_REPO / PI_CONFIG_DIR / "models.json",
         REMOTE_REPO / PI_CONFIG_DIR / "skills",
         REMOTE_REPO / PI_CONFIG_DIR / "bin" / "pi",
     ]
@@ -218,7 +217,6 @@ def validate_remote_layout() -> None:
         raise RuntimeError("remote pi/skills has no SKILL.md")
 
     load_pi_settings(REMOTE_REPO / PI_CONFIG_DIR / "settings.json")
-    load_json_object(REMOTE_REPO / PI_CONFIG_DIR / "models.json")
 
 
 def install_packaged_roles() -> None:
@@ -464,7 +462,7 @@ def merge_pi_settings_file(
 
 
 def validate_local_pi_configuration() -> list[str]:
-    required_paths = [PI_HOME / "AGENTS.md", PI_HOME / "settings.json", PI_HOME / "models.json", PI_HOME / "skills", PI_HOME / "bin" / "pi"]
+    required_paths = [PI_HOME / "AGENTS.md", PI_HOME / "settings.json", PI_HOME / "skills", PI_HOME / "bin" / "pi"]
     missing = [str(path) for path in required_paths if not path.exists()]
     if missing:
         raise RuntimeError(f"local pi configuration is incomplete; missing: {', '.join(missing)}")
@@ -473,7 +471,6 @@ def validate_local_pi_configuration() -> list[str]:
         raise RuntimeError(f"local pi skills directory has no SKILL.md: {PI_HOME / 'skills'}")
 
     settings = load_pi_settings(PI_HOME / "settings.json")
-    load_json_object(PI_HOME / "models.json")
     return get_pi_package_sources(settings, PI_HOME / "settings.json")
 
 
