@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -17,6 +18,8 @@ REMOTE_URL = "https://github.com/rholin33/agent-setting.git"
 CODEX_CONFIG_DIR = Path("codex")
 PI_CONFIG_DIR = Path("pi")
 CCB_CONFIG_RELATIVE_PATH = Path("ccb/ccb.config")
+PROJECT_CCB_CONFIG_ROOT = Path("ccb/projects")
+PROJECT_ROOT_ENV = "AGENT_SETTING_PROJECT_ROOT"
 CODEX_MANAGED_FILES = ("AGENTS.md",)
 CODEX_MANAGED_DIRECTORIES = ("hooks", "rules", "skills")
 PI_MANAGED_FILES = ("AGENTS.md", "settings.json")
@@ -61,6 +64,37 @@ def get_ccb_home() -> Path:
     if configured_home:
         return Path(configured_home).expanduser()
     return Path.home() / ".ccb"
+
+
+def get_project_root() -> Path:
+    configured_root = os.environ.get(PROJECT_ROOT_ENV)
+    if configured_root:
+        return Path(configured_root).expanduser().resolve()
+    return Path.cwd().resolve()
+
+
+def get_project_key() -> str:
+    project_root = get_project_root()
+    identity_path = project_root / ".ccb" / "project.identity.json"
+    try:
+        with identity_path.open(encoding="utf-8") as identity_file:
+            identity = json.load(identity_file)
+        project_slug = identity.get("project_slug")
+        if isinstance(project_slug, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", project_slug):
+            return project_slug
+    except (OSError, json.JSONDecodeError, ValueError):
+        pass
+
+    project_name = re.sub(r"[^A-Za-z0-9._-]+", "-", project_root.name).strip("-._") or "project"
+    project_digest = hashlib.sha256(str(project_root).encode("utf-8")).hexdigest()[:16]
+    return f"{project_name}-{project_digest}"
+
+
+def get_project_ccb_relative_path() -> Path | None:
+    project_config = get_project_root() / ".ccb" / "ccb.config"
+    if not project_config.parent.is_dir() or project_config.resolve() == (CCB_HOME / "ccb.config").resolve():
+        return None
+    return PROJECT_CCB_CONFIG_ROOT / get_project_key() / "ccb.config"
 
 
 CODEX_HOME = get_codex_home()
@@ -109,13 +143,17 @@ def get_relative_path(base_path: Path, path: Path) -> Path:
 
 
 def get_managed_remote_pathspecs() -> list[str]:
-    return [
+    pathspecs = [
         *[str(CODEX_CONFIG_DIR / name) for name in CODEX_MANAGED_FILES],
         *[str(CODEX_CONFIG_DIR / name) for name in CODEX_MANAGED_DIRECTORIES],
         *[str(PI_CONFIG_DIR / name) for name in PI_MANAGED_FILES],
         *[str(PI_CONFIG_DIR / name) for name in PI_MANAGED_DIRECTORIES],
         str(CCB_CONFIG_RELATIVE_PATH),
     ]
+    project_ccb_path = get_project_ccb_relative_path()
+    if project_ccb_path is not None:
+        pathspecs.append(str(project_ccb_path))
+    return pathspecs
 
 
 def get_managed_remote_files() -> list[Path]:
@@ -134,6 +172,9 @@ def get_local_managed_path(relative_path: Path) -> Path:
     if relative_path == CCB_CONFIG_RELATIVE_PATH:
         return CCB_HOME / "ccb.config"
 
+    if relative_path == get_project_ccb_relative_path():
+        return get_project_root() / ".ccb" / "ccb.config"
+
     if relative_path.parts and relative_path.parts[0] == CODEX_CONFIG_DIR.name:
         return CODEX_HOME.joinpath(*relative_path.parts[1:])
 
@@ -151,8 +192,12 @@ def copy_with_parents(source: Path, destination: Path) -> None:
 def copy_remote_to_local(relative_path: Path, remote_path: Path) -> None:
     local_path = get_local_managed_path(relative_path)
     copy_with_parents(remote_path, local_path)
-    if relative_path == CCB_CONFIG_RELATIVE_PATH:
+    if is_ccb_config_path(relative_path):
         local_path.chmod(0o600)
+
+
+def is_ccb_config_path(relative_path: Path) -> bool:
+    return relative_path == CCB_CONFIG_RELATIVE_PATH or relative_path == get_project_ccb_relative_path()
 
 
 def backup_local_file(relative_path: Path, backup_directory: Path) -> None:
@@ -576,7 +621,7 @@ def merge_managed_files() -> None:
             write_log(f"copied missing remote file: {relative_path}")
             continue
 
-        if relative_path == CCB_CONFIG_RELATIVE_PATH:
+        if is_ccb_config_path(relative_path):
             if hash_file(local_path) != hash_file(remote_file):
                 backup_local_file(relative_path, backup_directory)
                 copy_remote_to_local(relative_path, remote_file)
@@ -635,7 +680,7 @@ def force_sync_managed_files() -> None:
             continue
 
         if local_path.is_file() and hash_file(local_path) == hash_file(remote_file):
-            if relative_path == CCB_CONFIG_RELATIVE_PATH and local_path.stat().st_mode & 0o777 != 0o600:
+            if is_ccb_config_path(relative_path) and local_path.stat().st_mode & 0o777 != 0o600:
                 local_path.chmod(0o600)
                 changed_count += 1
                 write_log(f"force sync fixed CCB config permissions: {relative_path}")

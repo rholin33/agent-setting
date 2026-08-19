@@ -9,6 +9,10 @@ git -C "$ROOT" add -- \
   pi/AGENTS.md pi/settings.json pi/skills \
   ccb/ccb.config ccb/apply-pi-extension-reuse-patch.py
 
+if [[ -d "$ROOT/ccb/projects" ]]; then
+  git -C "$ROOT" add -- ccb/projects
+fi
+
 if ! git -C "$ROOT" diff --cached --check; then
   printf '%s\n' 'Pre-commit check failed: staged configuration contains whitespace errors.' >&2
   exit 1

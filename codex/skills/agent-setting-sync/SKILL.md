@@ -1,6 +1,6 @@
 ---
 name: agent-setting-sync
-description: Synchronize portable local Codex, Pi, and CCB configuration with https://github.com/rholin33/agent-setting using a pull, merge, review, commit, and push workflow. Supports an explicit `force` mode that updates the current machine from the validated remote configuration. Use when the user explicitly invokes $agent-setting-sync, asks to synchronize the agent-setting repository, or uses the legacy $codex-sync name. Exclude credentials, runtime state, system skills, and unrelated files.
+description: Synchronize portable local Codex, Pi, and CCB configuration with https://github.com/rholin33/agent-setting using a pull, merge, review, commit, and push workflow. Supports an explicit `force` mode that updates the current machine from the validated remote configuration, including an optional project-local `.ccb/ccb.config`. Use when the user explicitly invokes $agent-setting-sync, asks to synchronize the agent-setting repository, or uses the legacy $codex-sync name. Exclude credentials, runtime state, system skills, and unrelated files.
 ---
 
 # Agent Settings Sync
@@ -10,7 +10,7 @@ Synchronize only the portable configuration managed by `agent-setting`. Preserve
 ## Modes
 
 - Default: merge the remote configuration into the live local configuration, export reviewed local changes back into the checkout, commit, and push.
-- `force`: make the validated remote configuration authoritative for the current machine. Invoke the sync hook with `--force`; it skips the debounce window, backs up every overwritten local managed file under `$CODEX_HOME/.sync/codex-setting/backups/`, and does not export, commit, or push. It does not delete local files that are absent from the remote.
+- `force`: make the validated remote configuration authoritative for the current machine. Invoke the sync hook with `--force`; it skips the debounce window, backs up every overwritten local managed file under `$CODEX_HOME/.sync/codex-setting/backups/`, and does not export, commit, or push. When the current execution directory has a `.ccb/` directory, the project-local `.ccb/ccb.config` is included alongside the global CCB config. It does not delete local files that are absent from the remote.
 
 ## Scope
 
@@ -36,7 +36,9 @@ Managed Pi paths are stored under `pi/` and map to `$PI_CODING_AGENT_DIR`:
 - `pi/skills/`
 - `pi/bin/pi`
 
-The managed CCB path is `$CCB_HOME/ccb.config`, exported as `ccb/ccb.config`.
+The managed global CCB path is `$CCB_HOME/ccb.config`, exported as `ccb/ccb.config`.
+
+When the current execution directory contains `.ccb/`, its `.ccb/ccb.config` is also managed. It is stored in the remote as `ccb/projects/<project-key>/ccb.config`, where `<project-key>` comes from `.ccb/project.identity.json`'s validated `project_slug`, or a deterministic directory-name/path-hash fallback. The project identity file and the rest of `.ccb/` runtime state are never synchronized.
 
 `codex/hooks.json`, `ccb/roles.json`, `roles/`, `scripts/`, and `install.sh` are repository-owned bootstrap files. Review them separately and stage them only when their changes are intentional; they are not produced by the local export.
 
@@ -53,7 +55,7 @@ Do not sync or stage `auth.json`, `config.toml`, history, databases, logs, sessi
    python3 "$CODEX_HOME/hooks/sync-codex-setting.py"
    ```
 
-   Read `$CODEX_HOME/log/agent-setting-sync.log` afterward. Treat a logged sync failure, incomplete remote or local Pi layout, invalid Pi settings, or an unresolved merge as a stop condition. The hook validates `codex/` and `pi/`, performs three-way text merges, performs a JSON-aware merge of Pi resource settings, treats `ccb/ccb.config` as remote-authoritative, saves backups, installs packaged/catalog CCB Roles with `--skip-tools`, and installs missing Pi extensions. It never commits, pushes, reloads, or restarts services automatically.
+   Read `$CODEX_HOME/log/agent-setting-sync.log` afterward. Treat a logged sync failure, incomplete remote or local Pi layout, invalid Pi settings, or an unresolved merge as a stop condition. The hook validates `codex/` and `pi/`, performs three-way text merges, performs a JSON-aware merge of Pi resource settings, treats global and discovered project CCB configs as remote-authoritative, saves backups, installs packaged/catalog CCB Roles with `--skip-tools`, and installs missing Pi extensions. It never commits, pushes, reloads, or restarts services automatically.
 
    For an explicit `force` request, run:
 
@@ -62,13 +64,14 @@ Do not sync or stage `auth.json`, `config.toml`, history, databases, logs, sessi
    ```
 
    In `force` mode, stop after reviewing the sync log and backup directory. Do not run the export, commit, or push steps below; the purpose is to update the current machine from the remote configuration.
-5. Export the live local managed files into the checkout:
+5. Export the live local managed files into the checkout. Capture the original current execution directory before changing into the remote checkout and pass it as `AGENT_SETTING_PROJECT_ROOT`:
 
    ```bash
-   ./scripts/sync-local-config.sh
+   PROJECT_ROOT="$(pwd -P)"
+   AGENT_SETTING_PROJECT_ROOT="$PROJECT_ROOT" ./scripts/sync-local-config.sh
    ```
 
-   The export maps Codex files to `codex/`, Pi files to `pi/`, and `$CCB_HOME/ccb.config` to `ccb/ccb.config`; it excludes system skills, caches, and runtime state. Do not use a broad home-directory copy or delete remote files outside the managed allowlist.
+   The export maps Codex files to `codex/`, Pi files to `pi/`, `$CCB_HOME/ccb.config` to `ccb/ccb.config`, and an existing `$PROJECT_ROOT/.ccb/ccb.config` to its `ccb/projects/<project-key>/ccb.config` path. It excludes system skills, caches, project identity, and runtime state. Do not use a broad home-directory copy or delete remote files outside the managed allowlist.
 6. Review before staging:
 
    ```bash
@@ -76,7 +79,7 @@ Do not sync or stage `auth.json`, `config.toml`, history, databases, logs, sessi
    git diff --check
    git diff --stat
    git diff -- codex/AGENTS.md codex/hooks codex/rules codex/skills \
-     pi/AGENTS.md pi/settings.json pi/skills pi/bin ccb/ccb.config
+     pi/AGENTS.md pi/settings.json pi/skills pi/bin ccb/ccb.config ccb/projects
    ```
 
    Confirm every changed path is portable configuration. Stop if a credential, runtime file, unrelated file, or unexpected deletion appears. Resolve conflicts deliberately; do not use `git reset --hard`, `git checkout --`, or `git push --force`.
@@ -86,7 +89,7 @@ Do not sync or stage `auth.json`, `config.toml`, history, databases, logs, sessi
    ```bash
    git add -- \
      codex/AGENTS.md codex/hooks codex/rules codex/skills \
-     pi/AGENTS.md pi/settings.json pi/skills pi/bin ccb/ccb.config
+     pi/AGENTS.md pi/settings.json pi/skills pi/bin ccb/ccb.config ccb/projects
    git diff --cached --check
    git diff --cached
    git commit -m "chore: sync agent settings"

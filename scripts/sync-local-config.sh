@@ -5,8 +5,15 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 PI_HOME="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
 CCB_HOME="${CCB_HOME:-$HOME/.ccb}"
+PROJECT_ROOT="${AGENT_SETTING_PROJECT_ROOT:-$PWD}"
 CODEX_ROOT="$ROOT/codex"
 PI_ROOT="$ROOT/pi"
+PROJECT_CCB_DIR="$PROJECT_ROOT/.ccb"
+PROJECT_CCB_CONFIG="$PROJECT_CCB_DIR/ccb.config"
+project_ccb_is_global=false
+if [[ -e "$PROJECT_CCB_CONFIG" && -e "$CCB_HOME/ccb.config" && "$PROJECT_CCB_CONFIG" -ef "$CCB_HOME/ccb.config" ]]; then
+  project_ccb_is_global=true
+fi
 
 require_directory() {
   if [[ ! -d "$1" ]]; then
@@ -25,6 +32,34 @@ require_file() {
 if ! command -v rsync >/dev/null 2>&1; then
   printf '%s\n' 'rsync is required to export local Codex and Pi configuration' >&2
   exit 1
+fi
+
+project_ccb_remote=""
+if [[ -d "$PROJECT_CCB_DIR" && "$project_ccb_is_global" != true ]]; then
+  project_key="$(python3 - "$PROJECT_ROOT" <<'PY'
+import hashlib
+import json
+import re
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1]).expanduser().resolve()
+identity_path = root / ".ccb" / "project.identity.json"
+try:
+    identity = json.loads(identity_path.read_text(encoding="utf-8"))
+except (OSError, json.JSONDecodeError):
+    identity = {}
+
+project_slug = identity.get("project_slug")
+if isinstance(project_slug, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", project_slug):
+    print(project_slug)
+else:
+    project_name = re.sub(r"[^A-Za-z0-9._-]+", "-", root.name).strip("-._") or "project"
+    project_digest = hashlib.sha256(str(root).encode("utf-8")).hexdigest()[:16]
+    print(f"{project_name}-{project_digest}")
+PY
+  )"
+  project_ccb_remote="$ROOT/ccb/projects/$project_key/ccb.config"
 fi
 
 require_directory "$CODEX_HOME/hooks"
@@ -99,7 +134,15 @@ install -m 0644 "$PI_HOME/AGENTS.md" "$PI_ROOT/AGENTS.md"
 install -m 0644 "$PI_HOME/settings.json" "$PI_ROOT/settings.json"
 install -m 0600 "$CCB_HOME/ccb.config" "$ROOT/ccb/ccb.config"
 
+if [[ -f "$PROJECT_CCB_CONFIG" && "$project_ccb_is_global" != true ]]; then
+  mkdir -p "$(dirname "$project_ccb_remote")"
+  install -m 0600 "$PROJECT_CCB_CONFIG" "$project_ccb_remote"
+fi
+
 printf '%s\n' 'Exported local global configuration:'
 printf '%s\n' '  codex/AGENTS.md codex/hooks/ codex/rules/ codex/skills/'
 printf '%s\n' '  pi/AGENTS.md pi/settings.json pi/skills/ pi/bin/pi'
 printf '%s\n' '  ccb/ccb.config'
+if [[ -f "$PROJECT_CCB_CONFIG" && "$project_ccb_is_global" != true ]]; then
+  printf '%s\n' "  ${project_ccb_remote#"$ROOT/"}"
+fi
