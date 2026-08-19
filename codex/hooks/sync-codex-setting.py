@@ -200,6 +200,25 @@ def is_ccb_config_path(relative_path: Path) -> bool:
     return relative_path == CCB_CONFIG_RELATIVE_PATH or relative_path == get_project_ccb_relative_path()
 
 
+def seed_missing_project_ccb_config() -> bool:
+    project_path = get_project_ccb_relative_path()
+    if project_path is None:
+        return False
+
+    local_path = get_local_managed_path(project_path)
+    if local_path.exists():
+        return False
+
+    global_remote_path = REMOTE_REPO / CCB_CONFIG_RELATIVE_PATH
+    if not global_remote_path.is_file():
+        write_log(f"could not seed missing project CCB config; global remote config is missing: {project_path}")
+        return False
+
+    copy_remote_to_local(project_path, global_remote_path)
+    write_log(f"seeded missing project CCB config from global remote config: {project_path}")
+    return True
+
+
 def backup_local_file(relative_path: Path, backup_directory: Path) -> None:
     local_path = get_local_managed_path(relative_path)
     if local_path.is_file():
@@ -662,6 +681,9 @@ def merge_managed_files() -> None:
         copy_with_parents(remote_file, backup_directory / f"{relative_path}.remote")
         write_log(f"kept local binary file and saved remote copy: {relative_path}")
 
+    if seed_missing_project_ccb_config():
+        changed_count += 1
+
     copy_remote_snapshot(LAST_REMOTE)
     write_log(f"sync finished; changed files: {changed_count}")
 
@@ -691,6 +713,9 @@ def force_sync_managed_files() -> None:
         copy_remote_to_local(relative_path, remote_file)
         changed_count += 1
         write_log(f"force-updated local file from remote: {relative_path}")
+
+    if seed_missing_project_ccb_config():
+        changed_count += 1
 
     copy_remote_snapshot(LAST_REMOTE)
     write_log(f"force sync finished; changed files: {changed_count}")

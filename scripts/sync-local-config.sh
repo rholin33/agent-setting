@@ -10,6 +10,7 @@ CODEX_ROOT="$ROOT/codex"
 PI_ROOT="$ROOT/pi"
 PROJECT_CCB_DIR="$PROJECT_ROOT/.ccb"
 PROJECT_CCB_CONFIG="$PROJECT_CCB_DIR/ccb.config"
+PROJECT_CCB_SOURCE="$PROJECT_CCB_CONFIG"
 project_ccb_is_global=false
 if [[ -e "$PROJECT_CCB_CONFIG" && -e "$CCB_HOME/ccb.config" && "$PROJECT_CCB_CONFIG" -ef "$CCB_HOME/ccb.config" ]]; then
   project_ccb_is_global=true
@@ -60,6 +61,9 @@ else:
 PY
   )"
   project_ccb_remote="$ROOT/ccb/projects/$project_key/ccb.config"
+  if [[ ! -f "$PROJECT_CCB_SOURCE" ]]; then
+    PROJECT_CCB_SOURCE="$CCB_HOME/ccb.config"
+  fi
 fi
 
 require_directory "$CODEX_HOME/hooks"
@@ -134,15 +138,15 @@ install -m 0644 "$PI_HOME/AGENTS.md" "$PI_ROOT/AGENTS.md"
 install -m 0644 "$PI_HOME/settings.json" "$PI_ROOT/settings.json"
 install -m 0600 "$CCB_HOME/ccb.config" "$ROOT/ccb/ccb.config"
 
-if [[ -f "$PROJECT_CCB_CONFIG" && "$project_ccb_is_global" != true ]]; then
+if [[ -f "$PROJECT_CCB_SOURCE" && "$project_ccb_is_global" != true ]]; then
   mkdir -p "$(dirname "$project_ccb_remote")"
-  install -m 0600 "$PROJECT_CCB_CONFIG" "$project_ccb_remote"
+  install -m 0600 "$PROJECT_CCB_SOURCE" "$project_ccb_remote"
 fi
 
 printf '%s\n' 'Exported local global configuration:'
 printf '%s\n' '  codex/AGENTS.md codex/hooks/ codex/rules/ codex/skills/'
 printf '%s\n' '  pi/AGENTS.md pi/settings.json pi/skills/ pi/bin/pi'
 printf '%s\n' '  ccb/ccb.config'
-if [[ -f "$PROJECT_CCB_CONFIG" && "$project_ccb_is_global" != true ]]; then
+if [[ -d "$PROJECT_CCB_DIR" && "$project_ccb_is_global" != true ]]; then
   printf '%s\n' "  ${project_ccb_remote#"$ROOT/"}"
 fi

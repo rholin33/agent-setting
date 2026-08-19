@@ -32,7 +32,7 @@ Managed Pi paths are stored under `pi/`:
 - `pi/settings.json`
 - `pi/skills/`
 
-The managed global CCB path is `$CCB_HOME/ccb.config` exported as `ccb/ccb.config`. A current project `.ccb/ccb.config`, when present, is stored under `ccb/projects/<project-key>/ccb.config`.
+The managed global CCB path is `$CCB_HOME/ccb.config` exported as `ccb/ccb.config`. When the current project has a `.ccb/` directory, its project CCB scope is also stored under `ccb/projects/<project-key>/ccb.config`; a missing project file is seeded from the global CCB config.
 
 Do not sync `auth.json`, `config.toml`, history, databases, logs, sessions, shell snapshots, temporary files, `ccb/agents/`, `skills/.system/`, Pi npm package caches, or generated extension state. Pi extensions are represented by the package sources in `pi/settings.json`; the sync hook installs missing packages with `pi install`.
 
