@@ -6,7 +6,7 @@ ROOT="$(git rev-parse --show-toplevel)"
 "$ROOT/scripts/sync-local-config.sh"
 git -C "$ROOT" add -- \
   codex/AGENTS.md codex/hooks.json codex/hooks codex/rules codex/skills \
-  pi/AGENTS.md pi/settings.json pi/skills \
+  pi/AGENTS.md pi/settings.json pi/skills pi/projects \
   ccb/ccb.config ccb/apply-pi-extension-reuse-patch.py
 
 if [[ -d "$ROOT/ccb/projects" ]]; then

@@ -19,6 +19,7 @@ CODEX_CONFIG_DIR = Path("codex")
 PI_CONFIG_DIR = Path("pi")
 CCB_CONFIG_RELATIVE_PATH = Path("ccb/ccb.config")
 PROJECT_CCB_CONFIG_ROOT = Path("ccb/projects")
+PROJECT_PI_CONFIG_ROOT = Path("pi/projects")
 PROJECT_ROOT_ENV = "AGENT_SETTING_PROJECT_ROOT"
 CODEX_MANAGED_FILES = ("AGENTS.md",)
 CODEX_MANAGED_DIRECTORIES = ("hooks", "rules", "skills")
@@ -97,6 +98,13 @@ def get_project_ccb_relative_path() -> Path | None:
     return PROJECT_CCB_CONFIG_ROOT / get_project_key() / "ccb.config"
 
 
+def get_project_pi_relative_root() -> Path | None:
+    project_root = get_project_root()
+    if not (project_root / "pi").is_dir() and not (project_root / ".ccb" / "agents").is_dir():
+        return None
+    return PROJECT_PI_CONFIG_ROOT / get_project_key()
+
+
 CODEX_HOME = get_codex_home()
 PI_HOME = get_pi_home()
 CCB_HOME = get_ccb_home()
@@ -110,6 +118,7 @@ ROLE_INSTALL_STATE_PATH = SYNC_ROOT / "installed-roles.json"
 ROLE_INSTALL_TIMEOUT_SECONDS = 30
 PI_PACKAGE_INSTALL_TIMEOUT_SECONDS = 45
 PI_SETTINGS_RELATIVE_PATH = PI_CONFIG_DIR / "settings.json"
+PROJECT_PI_SETTINGS_NAME = "settings.json"
 
 
 def ensure_directory(path: Path) -> None:
@@ -153,7 +162,34 @@ def get_managed_remote_pathspecs() -> list[str]:
     project_ccb_path = get_project_ccb_relative_path()
     if project_ccb_path is not None:
         pathspecs.append(str(project_ccb_path))
+    project_pi_root = get_project_pi_relative_root()
+    if project_pi_root is not None:
+        pathspecs.append(str(project_pi_root))
     return pathspecs
+
+
+def is_project_pi_settings_path(relative_path: Path) -> bool:
+    project_pi_root = get_project_pi_relative_root()
+    if project_pi_root is None:
+        return False
+
+    try:
+        project_relative_path = relative_path.relative_to(project_pi_root)
+    except ValueError:
+        return False
+
+    parts = project_relative_path.parts
+    if parts == (PROJECT_PI_SETTINGS_NAME,):
+        return True
+    return (
+        len(parts) == 6
+        and parts[0] == "agents"
+        and parts[2:] == ("provider-state", "pi", "home", PROJECT_PI_SETTINGS_NAME)
+    )
+
+
+def is_pi_settings_path(relative_path: Path) -> bool:
+    return relative_path == PI_SETTINGS_RELATIVE_PATH or is_project_pi_settings_path(relative_path)
 
 
 def get_managed_remote_files() -> list[Path]:
@@ -163,7 +199,10 @@ def get_managed_remote_files() -> list[Path]:
         if not line.strip():
             continue
         file_path = REMOTE_REPO / line.strip()
-        if file_path.is_file():
+        relative_path = get_relative_path(REMOTE_REPO, file_path)
+        if file_path.is_file() and (
+            relative_path.parts[:2] != PROJECT_PI_CONFIG_ROOT.parts or is_project_pi_settings_path(relative_path)
+        ):
             files.append(file_path)
     return files
 
@@ -174,6 +213,24 @@ def get_local_managed_path(relative_path: Path) -> Path:
 
     if relative_path == get_project_ccb_relative_path():
         return get_project_root() / ".ccb" / "ccb.config"
+
+    project_pi_root = get_project_pi_relative_root()
+    if project_pi_root is not None:
+        try:
+            project_relative_path = relative_path.relative_to(project_pi_root)
+        except ValueError:
+            project_relative_path = None
+        if project_relative_path == (PROJECT_PI_SETTINGS_NAME,):
+            return get_project_root() / "pi" / PROJECT_PI_SETTINGS_NAME
+        if (
+            project_relative_path is not None
+            and len(project_relative_path.parts) == 6
+            and project_relative_path.parts[0] == "agents"
+            and project_relative_path.parts[2:] == ("provider-state", "pi", "home", PROJECT_PI_SETTINGS_NAME)
+        ):
+            return get_project_root() / ".ccb" / "agents" / project_relative_path.parts[1] / Path(
+                *project_relative_path.parts[2:]
+            )
 
     if relative_path.parts and relative_path.parts[0] == CODEX_CONFIG_DIR.name:
         return CODEX_HOME.joinpath(*relative_path.parts[1:])
@@ -282,6 +339,10 @@ def validate_remote_layout() -> None:
         raise RuntimeError("remote pi/skills has no SKILL.md")
 
     load_pi_settings(REMOTE_REPO / PI_CONFIG_DIR / "settings.json")
+    for remote_file in get_managed_remote_files():
+        relative_path = get_relative_path(REMOTE_REPO, remote_file)
+        if is_project_pi_settings_path(relative_path):
+            load_pi_settings(remote_file)
 
 
 def install_packaged_roles() -> None:
@@ -629,7 +690,7 @@ def merge_managed_files() -> None:
             write_log(f"kept local directory because remote path is file: {relative_path}")
             continue
 
-        if relative_path == PI_SETTINGS_RELATIVE_PATH:
+        if is_pi_settings_path(relative_path):
             if merge_pi_settings_file(relative_path, local_path, base_path, remote_file, backup_directory):
                 changed_count += 1
             continue

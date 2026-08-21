@@ -7,6 +7,10 @@ description: Synchronize portable local Codex, Pi, and CCB configuration with ht
 
 Synchronize only the portable configuration managed by `agent-setting`. Preserve unrelated local changes, stop on ambiguous conflicts or sensitive-file changes, and never force-push.
 
+## Modes
+
+- `force`: make the validated remote configuration authoritative for the current machine. Invoke the sync hook with `--force`; it backs up overwritten managed files and does not export, commit, or push. When the project has `.ccb/` or `pi/`, its portable Pi settings are restored as well. It does not delete local files absent from the remote.
+
 ## Scope
 
 Resolve paths from these environment variables, using the defaults when unset:
@@ -31,6 +35,15 @@ Managed Pi paths are stored under `pi/` and map to `$PI_CODING_AGENT_DIR`:
 - `pi/skills/`
 - `pi/bin/pi`
 
+The managed global `pi/settings.json` keeps the configured HTTP proxy (`httpProxy`, currently `http://127.0.0.1:1087`) so Pi requests use the system proxy by default.
+
+When the current project has a `pi/` directory or `.ccb/agents/`, its project Pi scope is stored under `pi/projects/<project-key>/`:
+
+- `pi/projects/<project-key>/settings.json` maps to `<project>/pi/settings.json`.
+- `pi/projects/<project-key>/agents/<agent>/provider-state/pi/home/settings.json` maps to `<project>/.ccb/agents/<agent>/provider-state/pi/home/settings.json`.
+
+Only these Pi `settings.json` files are portable. Never synchronize project Pi `auth.json`, `models.json`, `models-store.json`, npm/package caches, sessions, logs, or generated extension state. Provider credentials remain in the machine's application credential store.
+
 The managed CCB path is `$CCB_HOME/ccb.config`, exported as `ccb/ccb.config`.
 
 `codex/hooks.json`, `ccb/roles.json`, `roles/`, `scripts/`, and `install.sh` are repository-owned bootstrap files. Review them separately and stage them only when their changes are intentional; they are not produced by the local export.
@@ -48,14 +61,14 @@ Do not sync or stage `auth.json`, `config.toml`, history, databases, logs, sessi
    python3 "$CODEX_HOME/hooks/sync-codex-setting.py"
    ```
 
-   Read `$CODEX_HOME/log/agent-setting-sync.log` afterward. Treat a logged sync failure, incomplete remote or local Pi layout, invalid Pi settings, or an unresolved merge as a stop condition. The hook validates `codex/` and `pi/`, performs three-way text merges, performs a JSON-aware merge of Pi resource settings, treats `ccb/ccb.config` as remote-authoritative, saves backups, installs packaged/catalog CCB Roles with `--skip-tools`, and installs missing Pi extensions. It never commits, pushes, reloads, or restarts services automatically.
+   Read `$CODEX_HOME/log/agent-setting-sync.log` afterward. Treat a logged sync failure, incomplete remote or local Pi layout, invalid Pi settings, or an unresolved merge as a stop condition. The hook validates `codex/` and `pi/`, performs three-way text merges, performs a JSON-aware merge of global and discovered project Pi settings, treats global and discovered project CCB configs as remote-authoritative, saves backups, installs packaged/catalog CCB Roles with `--skip-tools`, and installs missing Pi extensions. It never commits, pushes, reloads, or restarts services automatically.
 5. Export the live local managed files into the checkout:
 
    ```bash
    ./scripts/sync-local-config.sh
    ```
 
-   The export maps Codex files to `codex/`, Pi files to `pi/`, and `$CCB_HOME/ccb.config` to `ccb/ccb.config`; it excludes system skills, caches, and runtime state. Do not use a broad home-directory copy or delete remote files outside the managed allowlist.
+   The export maps Codex files to `codex/`, global Pi files to `pi/`, `$CCB_HOME/ccb.config` to `ccb/ccb.config`, and project Pi settings to `pi/projects/<project-key>/`. It excludes system skills, credentials, caches, project identity, and runtime state. Do not use a broad home-directory copy or delete remote files outside the managed allowlist.
 6. Review before staging:
 
    ```bash
@@ -63,7 +76,7 @@ Do not sync or stage `auth.json`, `config.toml`, history, databases, logs, sessi
    git diff --check
    git diff --stat
    git diff -- codex/AGENTS.md codex/hooks codex/rules codex/skills \
-     pi/AGENTS.md pi/settings.json pi/skills pi/bin ccb/ccb.config
+     pi/AGENTS.md pi/settings.json pi/skills pi/bin pi/projects ccb/ccb.config ccb/projects
    ```
 
    Confirm every changed path is portable configuration. Stop if a credential, runtime file, unrelated file, or unexpected deletion appears. Resolve conflicts deliberately; do not use `git reset --hard`, `git checkout --`, or `git push --force`.
@@ -73,7 +86,7 @@ Do not sync or stage `auth.json`, `config.toml`, history, databases, logs, sessi
    ```bash
    git add -- \
      codex/AGENTS.md codex/hooks codex/rules codex/skills \
-     pi/AGENTS.md pi/settings.json pi/skills pi/bin ccb/ccb.config
+     pi/AGENTS.md pi/settings.json pi/skills pi/bin pi/projects ccb/ccb.config ccb/projects
    git diff --cached --check
    git diff --cached
    git commit -m "chore: sync agent settings"

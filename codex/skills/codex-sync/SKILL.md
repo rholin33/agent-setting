@@ -32,7 +32,7 @@ Managed Pi paths are stored under `pi/`:
 - `pi/settings.json`
 - `pi/skills/`
 
-The managed global CCB path is `$CCB_HOME/ccb.config` exported as `ccb/ccb.config`. When the current project has a `.ccb/` directory, its project CCB scope is also stored under `ccb/projects/<project-key>/ccb.config`; a missing project file is seeded from the global CCB config.
+The managed global CCB path is `$CCB_HOME/ccb.config` exported as `ccb/ccb.config`. When the current project has a `.ccb/` directory, its project CCB scope is also stored under `ccb/projects/<project-key>/ccb.config`; a missing project file is seeded from the global CCB config. When the project has `pi/` or `.ccb/agents/`, portable Pi settings are stored under `pi/projects/<project-key>/`: project `pi/settings.json` and each agent's `.ccb/agents/<agent>/provider-state/pi/home/settings.json` are mapped there. Only those `settings.json` files are synchronized; credentials, models, caches, and runtime state are excluded.
 
 Do not sync `auth.json`, `config.toml`, history, databases, logs, sessions, shell snapshots, temporary files, `ccb/agents/`, `skills/.system/`, Pi npm package caches, or generated extension state. Pi extensions are represented by the package sources in `pi/settings.json`; the sync hook installs missing packages with `pi install`.
 
@@ -47,14 +47,14 @@ Do not sync `auth.json`, `config.toml`, history, databases, logs, sessions, shel
    python3 "$CODEX_HOME/hooks/sync-codex-setting.py"
    ```
 
-   Read the sync log afterward. Treat a logged sync failure, an incomplete `pi/` layout, or an unresolved merge as a stop condition. The hook provides the remote baseline, merges remote changes into the live Codex and Pi files, verifies Pi `AGENTS.md`, `skills/`, and `settings.json`, and installs missing Pi extensions.
+   Read the sync log afterward. Treat a logged sync failure, an incomplete `pi/` layout, or an unresolved merge as a stop condition. The hook provides the remote baseline, merges remote changes into the live Codex and global/project Pi files, verifies Pi `AGENTS.md`, `skills/`, and `settings.json`, and installs missing Pi extensions.
 5. Export the live local managed files into the checkout with:
 
    ```bash
    ./scripts/sync-local-config.sh
    ```
 
-   The export maps Codex files to `codex/`, Pi files to `pi/`, and `$CCB_HOME/ccb.config` to `ccb/ccb.config`. It excludes system skills and runtime state. Do not use a broad home-directory copy and do not delete remote files outside the managed allowlist.
+   The export maps Codex files to `codex/`, global Pi files to `pi/`, project Pi settings to `pi/projects/<project-key>/`, and `$CCB_HOME/ccb.config` to `ccb/ccb.config`. It excludes system skills, credentials, caches, and runtime state. Do not use a broad home-directory copy and do not delete remote files outside the managed allowlist.
 6. Review the result before staging:
 
    ```bash
