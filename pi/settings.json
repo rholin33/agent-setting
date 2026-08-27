@@ -8,10 +8,10 @@
   "packages": [
     "npm:@cortexkit/pi-magic-context",
     "npm:@narumitw/pi-statusline",
-    "npm:pi-tool-display",
-    "npm:@narumitw/pi-plan-mode"
+    "npm:pi-tool-display"
   ],
   "defaultProvider": "pay",
   "httpProxy": "http://127.0.0.1:1087",
-  "lastChangelogVersion": "0.84.2"
+  "lastChangelogVersion": "0.84.3",
+  "hideThinkingBlock": false
 }
