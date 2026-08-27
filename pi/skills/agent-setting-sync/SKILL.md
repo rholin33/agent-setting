@@ -9,7 +9,7 @@ Synchronize only the portable configuration managed by `agent-setting`. Preserve
 
 ## Modes
 
-- `force`: make the validated remote configuration authoritative for the current machine. Invoke the sync hook with `--force`; it backs up overwritten managed files and does not export, commit, or push. When the project has `.ccb/` or `pi/`, its portable Pi settings are restored as well. It does not delete local files absent from the remote.
+- `force`: make the validated remote configuration authoritative for the current machine. Invoke the sync hook with `--force`; it backs up overwritten managed files and does not export, commit, or push. The current project's `.ccb/ccb.config` is restored even when `.ccb/` does not yet exist; project Pi settings are restored when the project has `pi/` or `.ccb/agents/`. It does not delete local files absent from the remote.
 
 ## Scope
 
@@ -44,7 +44,7 @@ When the current project has a `pi/` directory or `.ccb/agents/`, its project Pi
 
 Only these Pi `settings.json` files are portable. Never synchronize project Pi `auth.json`, `models.json`, `models-store.json`, npm/package caches, sessions, logs, or generated extension state. Provider credentials remain in the machine's application credential store.
 
-The managed CCB path is `$CCB_HOME/ccb.config`, exported as `ccb/ccb.config`.
+The managed global CCB path is `$CCB_HOME/ccb.config`, exported as `ccb/ccb.config`. The current project's `.ccb/ccb.config` is always managed (except when the repository checkout itself is the project root), even when `.ccb/` does not yet exist, and is stored remotely as `ccb/projects/<project-key>/ccb.config`. Project identity is read from `.ccb/project.identity.json` or `ccb/project.identity.json`, with a deterministic directory-name/path-hash fallback. A missing project file is seeded from the matching remote project config or the global remote config. Other `.ccb/` runtime state and identity files are excluded.
 
 `codex/hooks.json`, `ccb/roles.json`, `roles/`, `scripts/`, and `install.sh` are repository-owned bootstrap files. Review them separately and stage them only when their changes are intentional; they are not produced by the local export.
 
@@ -68,7 +68,7 @@ Do not sync or stage `auth.json`, `config.toml`, history, databases, logs, sessi
    ./scripts/sync-local-config.sh
    ```
 
-   The export maps Codex files to `codex/`, global Pi files to `pi/`, `$CCB_HOME/ccb.config` to `ccb/ccb.config`, and project Pi settings to `pi/projects/<project-key>/`. It excludes system skills, credentials, caches, project identity, and runtime state. Do not use a broad home-directory copy or delete remote files outside the managed allowlist.
+   The export maps Codex files to `codex/`, global Pi files to `pi/`, `$CCB_HOME/ccb.config` to `ccb/ccb.config`, and the current project's `.ccb/ccb.config` to `ccb/projects/<project-key>/ccb.config`. A missing project `.ccb/` directory is created and seeded from the matching remote project or global config. Project Pi settings are exported to `pi/projects/<project-key>/` when present. It excludes system skills, credentials, caches, project identity, and runtime state. Do not use a broad home-directory copy or delete remote files outside the managed allowlist.
 6. Review before staging:
 
    ```bash

@@ -76,15 +76,21 @@ def get_project_root() -> Path:
 
 def get_project_key() -> str:
     project_root = get_project_root()
-    identity_path = project_root / ".ccb" / "project.identity.json"
-    try:
-        with identity_path.open(encoding="utf-8") as identity_file:
-            identity = json.load(identity_file)
-        project_slug = identity.get("project_slug")
-        if isinstance(project_slug, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", project_slug):
-            return project_slug
-    except (OSError, json.JSONDecodeError, ValueError):
-        pass
+    # CCB may keep project identity under `.ccb/` or the portable `ccb/`
+    # source directory. The latter lets a fresh checkout resolve its existing
+    # remote project scope before `.ccb/` has been generated.
+    for identity_path in (
+        project_root / ".ccb" / "project.identity.json",
+        project_root / "ccb" / "project.identity.json",
+    ):
+        try:
+            with identity_path.open(encoding="utf-8") as identity_file:
+                identity = json.load(identity_file)
+            project_slug = identity.get("project_slug")
+            if isinstance(project_slug, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", project_slug):
+                return project_slug
+        except (OSError, json.JSONDecodeError, ValueError):
+            continue
 
     project_name = re.sub(r"[^A-Za-z0-9._-]+", "-", project_root.name).strip("-._") or "project"
     project_digest = hashlib.sha256(str(project_root).encode("utf-8")).hexdigest()[:16]
@@ -92,8 +98,11 @@ def get_project_key() -> str:
 
 
 def get_project_ccb_relative_path() -> Path | None:
-    project_config = get_project_root() / ".ccb" / "ccb.config"
-    if not project_config.parent.is_dir() or project_config.resolve() == (CCB_HOME / "ccb.config").resolve():
+    project_root = get_project_root()
+    if project_root == REMOTE_REPO.resolve():
+        return None
+    project_config = project_root / ".ccb" / "ccb.config"
+    if project_config.resolve() == (CCB_HOME / "ccb.config").resolve():
         return None
     return PROJECT_CCB_CONFIG_ROOT / get_project_key() / "ccb.config"
 
@@ -266,13 +275,19 @@ def seed_missing_project_ccb_config() -> bool:
     if local_path.exists():
         return False
 
+    remote_project_path = REMOTE_REPO / project_path
     global_remote_path = REMOTE_REPO / CCB_CONFIG_RELATIVE_PATH
-    if not global_remote_path.is_file():
-        write_log(f"could not seed missing project CCB config; global remote config is missing: {project_path}")
+    if remote_project_path.is_file():
+        source_path = remote_project_path
+    elif global_remote_path.is_file():
+        source_path = global_remote_path
+    else:
+        write_log(f"could not seed missing project CCB config; remote config is missing: {project_path}")
         return False
 
-    copy_remote_to_local(project_path, global_remote_path)
-    write_log(f"seeded missing project CCB config from global remote config: {project_path}")
+    copy_remote_to_local(project_path, source_path)
+    source_label = "project" if source_path == remote_project_path else "global"
+    write_log(f"seeded missing project CCB config from {source_label} remote config: {project_path}")
     return True
 
 

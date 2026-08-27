@@ -28,7 +28,7 @@ Define the authoritative synchronization boundary for the Codex, Pi, and CCB glo
 
 ## Data Model
 
-Codex configuration is stored under `codex/` and maps to `$CODEX_HOME`. Pi configuration is stored under `pi/` and maps to `$PI_CODING_AGENT_DIR`, defaulting to `~/.pi/agent`. CCB configuration remains under `ccb/` and maps `ccb/ccb.config` to `$CCB_HOME/ccb.config`.
+Codex configuration is stored under `codex/` and maps to `$CODEX_HOME`. Pi configuration is stored under `pi/` and maps to `$PI_CODING_AGENT_DIR`, defaulting to `~/.pi/agent`. CCB configuration remains under `ccb/` and maps `ccb/ccb.config` to `$CCB_HOME/ccb.config`; the current project's `.ccb/ccb.config` is also synchronized under `ccb/projects/<project-key>/ccb.config`, including when `.ccb/` has not yet been generated. Project identity is read from `.ccb/project.identity.json` or `ccb/project.identity.json`, while provider state and other generated `.ccb/` files remain local-only.
 
 Pi extension source strings live in `pi/settings.json`. The hook does not synchronize Pi npm caches, auth files, sessions, or generated extension state; it calls `pi install` only for package sources that are configured but not installed.
 

@@ -10,7 +10,7 @@ Synchronize only the portable configuration managed by `agent-setting`. Preserve
 ## Modes
 
 - Default: merge the remote configuration into the live local configuration, export reviewed local changes back into the checkout, commit, and push.
-- `force`: make the validated remote configuration authoritative for the current machine. Invoke the sync hook with `--force`; it skips the debounce window, backs up every overwritten local managed file under `$CODEX_HOME/.sync/codex-setting/backups/`, and does not export, commit, or push. When the current execution directory has a `.ccb/` directory, the project-local `.ccb/ccb.config` is always included alongside the global CCB config; if the project file is missing, the global remote config seeds a project copy. When the project has `pi/` or `.ccb/agents/`, its portable Pi settings are also restored. It does not delete local files that are absent from the remote.
+- `force`: make the validated remote configuration authoritative for the current machine. Invoke the sync hook with `--force`; it skips the debounce window, backs up every overwritten local managed file under `$CODEX_HOME/.sync/codex-setting/backups/`, and does not export, commit, or push. The current project's `.ccb/ccb.config` is always included alongside the global CCB config, even when `.ccb/` does not yet exist; a missing project file is seeded from the global remote config. When the project has `pi/` or `.ccb/agents/`, its portable Pi settings are also restored. It does not delete local files that are absent from the remote.
 
 ## Scope
 
@@ -47,7 +47,7 @@ Only these Pi `settings.json` files are portable. Never synchronize project Pi `
 
 The managed global CCB path is `$CCB_HOME/ccb.config`, exported as `ccb/ccb.config`.
 
-When the current execution directory contains `.ccb/`, its project CCB scope is always managed. The local `.ccb/ccb.config` is stored in the remote as `ccb/projects/<project-key>/ccb.config`, where `<project-key>` comes from `.ccb/project.identity.json`'s validated `project_slug`, or a deterministic directory-name/path-hash fallback. If the local project config is missing, the global remote CCB config is copied as its seed. The project identity file and the rest of `.ccb/` runtime state are never synchronized.
+The current project's CCB scope is always managed (unless syncing from the repository checkout itself). The local `.ccb/ccb.config` is stored in the remote as `ccb/projects/<project-key>/ccb.config`, where `<project-key>` comes from `.ccb/project.identity.json` or `ccb/project.identity.json`'s validated `project_slug`, or a deterministic directory-name/path-hash fallback. If `.ccb/` or the local project config is missing, the sync creates the directory and seeds the config from the matching remote project config, falling back to the global remote CCB config. The identity file and the rest of `.ccb/` runtime state are never synchronized.
 
 `codex/hooks.json`, `ccb/roles.json`, `roles/`, `scripts/`, and `install.sh` are repository-owned bootstrap files. Review them separately and stage them only when their changes are intentional; they are not produced by the local export.
 
@@ -80,7 +80,7 @@ Do not sync or stage `auth.json`, `config.toml`, history, databases, logs, sessi
    AGENT_SETTING_PROJECT_ROOT="$PROJECT_ROOT" ./scripts/sync-local-config.sh
    ```
 
-   The export maps Codex files to `codex/`, global Pi files to `pi/`, `$CCB_HOME/ccb.config` to `ccb/ccb.config`, and `$PROJECT_ROOT/.ccb/ccb.config` to its `ccb/projects/<project-key>/ccb.config` path. When present, project Pi settings are exported to `pi/projects/<project-key>/settings.json` and each discovered agent Pi `settings.json` is exported under the matching `agents/<agent>/provider-state/pi/home/` path. When the project CCB file is absent, it exports one project copy from the global CCB config. It excludes system skills, credentials, caches, project identity, and runtime state. Do not use a broad home-directory copy or delete remote files outside the managed allowlist.
+   The export maps Codex files to `codex/`, global Pi files to `pi/`, `$CCB_HOME/ccb.config` to `ccb/ccb.config`, and `$PROJECT_ROOT/.ccb/ccb.config` to its `ccb/projects/<project-key>/ccb.config` path. Project CCB export always creates a missing `.ccb/` directory and seeds the project copy from the matching remote project config or global CCB config when no local project file exists. When present, project Pi settings are exported to `pi/projects/<project-key>/settings.json` and each discovered agent Pi `settings.json` is exported under the matching `agents/<agent>/provider-state/pi/home/` path. It excludes system skills, credentials, caches, project identity, and runtime state. Do not use a broad home-directory copy or delete remote files outside the managed allowlist.
 6. Review before staging:
 
    ```bash

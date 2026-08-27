@@ -32,7 +32,7 @@ Managed Pi paths are stored under `pi/`:
 - `pi/settings.json`
 - `pi/skills/`
 
-The managed global CCB path is `$CCB_HOME/ccb.config` exported as `ccb/ccb.config`. When the project has `pi/` or `.ccb/agents/`, portable Pi settings are stored under `pi/projects/<project-key>/`: project `pi/settings.json` and each agent's `.ccb/agents/<agent>/provider-state/pi/home/settings.json` are mapped there. Only those `settings.json` files are synchronized; credentials, models, caches, and runtime state are excluded.
+The managed global CCB path is `$CCB_HOME/ccb.config`, exported as `ccb/ccb.config`. The current project's `.ccb/ccb.config` is also always managed (except when the repository checkout itself is the project root), even when `.ccb/` does not yet exist; it is stored under `ccb/projects/<project-key>/ccb.config` and seeded from the matching remote project or global CCB config. When the project has `pi/` or `.ccb/agents/`, portable Pi settings are stored under `pi/projects/<project-key>/`: project `pi/settings.json` and each agent's `.ccb/agents/<agent>/provider-state/pi/home/settings.json` are mapped there. Only those `settings.json` files are synchronized; credentials, models, caches, and runtime state are excluded.
 
 Do not sync `auth.json`, `config.toml`, history, databases, logs, sessions, shell snapshots, temporary files, `ccb/agents/`, `skills/.system/`, Pi npm package caches, or generated extension state. Pi extensions are represented by the package sources in `pi/settings.json`; the sync hook installs missing packages with `pi install`.
 

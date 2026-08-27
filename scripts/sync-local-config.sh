@@ -67,7 +67,7 @@ project_scope_allowed=true
 if [[ -z "${AGENT_SETTING_PROJECT_ROOT:-}" && "$PROJECT_ROOT" == "$ROOT" ]]; then
   project_scope_allowed=false
 fi
-if [[ "$project_scope_allowed" == true && ( -d "$PROJECT_CCB_DIR" || -d "$PROJECT_PI_DIR" ) ]]; then
+if [[ "$project_scope_allowed" == true && "$PROJECT_ROOT" != "$ROOT" ]]; then
   project_key="$(python3 - "$PROJECT_ROOT" <<'PY'
 import hashlib
 import json
@@ -76,30 +76,43 @@ import sys
 from pathlib import Path
 
 root = Path(sys.argv[1]).expanduser().resolve()
-identity_path = root / ".ccb" / "project.identity.json"
-try:
-    identity = json.loads(identity_path.read_text(encoding="utf-8"))
-except (OSError, json.JSONDecodeError):
-    identity = {}
-
-project_slug = identity.get("project_slug")
-if isinstance(project_slug, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", project_slug):
-    print(project_slug)
+for identity_path in (
+    root / ".ccb" / "project.identity.json",
+    root / "ccb" / "project.identity.json",
+):
+    try:
+        identity = json.loads(identity_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        continue
+    project_slug = identity.get("project_slug")
+    if isinstance(project_slug, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", project_slug):
+        print(project_slug)
+        break
 else:
     project_name = re.sub(r"[^A-Za-z0-9._-]+", "-", root.name).strip("-._") or "project"
     project_digest = hashlib.sha256(str(root).encode("utf-8")).hexdigest()[:16]
     print(f"{project_name}-{project_digest}")
 PY
   )"
-  if [[ -d "$PROJECT_CCB_DIR" && "$project_ccb_is_global" != true ]]; then
+  if [[ "$project_ccb_is_global" != true ]]; then
     project_ccb_remote="$ROOT/ccb/projects/$project_key/ccb.config"
   fi
   if [[ -d "$PROJECT_PI_DIR" || -d "$PROJECT_CCB_DIR/agents" ]]; then
     project_pi_remote="$ROOT/pi/projects/$project_key"
   fi
-  if [[ ! -f "$PROJECT_CCB_SOURCE" ]]; then
+fi
+
+# A project config is portable even before CCB has generated `.ccb/`; seed the
+# local path from the project-specific or global config during export.
+if [[ -n "$project_ccb_remote" && ! -f "$PROJECT_CCB_CONFIG" ]]; then
+  if [[ -f "$project_ccb_remote" ]]; then
+    PROJECT_CCB_SOURCE="$project_ccb_remote"
+  else
     PROJECT_CCB_SOURCE="$CCB_HOME/ccb.config"
   fi
+  mkdir -p "$PROJECT_CCB_DIR"
+  install -m 0600 "$PROJECT_CCB_SOURCE" "$PROJECT_CCB_CONFIG"
+  PROJECT_CCB_SOURCE="$PROJECT_CCB_CONFIG"
 fi
 
 require_directory "$CODEX_HOME/hooks"
