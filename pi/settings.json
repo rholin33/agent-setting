@@ -11,7 +11,6 @@
     "npm:pi-tool-display"
   ],
   "defaultProvider": "pay",
-  "httpProxy": "http://127.0.0.1:1087",
   "lastChangelogVersion": "0.84.3",
   "hideThinkingBlock": false
 }

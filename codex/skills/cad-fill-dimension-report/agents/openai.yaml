@@ -1,4 +1,0 @@
-interface:
-  display_name: "CAD 尺寸报告填报"
-  short_description: "从 DWG 规格填入 Excel 尺寸报告并保留公式"
-  default_prompt: "Use $cad-fill-dimension-report to fill only the 尺寸报告 sheet from a DWG and verify the recalculated formulas."
