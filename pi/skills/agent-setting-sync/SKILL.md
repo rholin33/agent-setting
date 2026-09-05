@@ -7,9 +7,11 @@ description: Synchronize portable local Codex, Pi, and CCB configuration with ht
 
 Synchronize only the portable configuration managed by `agent-setting`. Preserve unrelated local changes, stop on ambiguous conflicts or sensitive-file changes, and never force-push.
 
+Exclude `cad-fill-dimension-report/` from Codex and Pi skill synchronization. Never export or restore `.ccb/agents/`, including agent Pi `settings.json`; `pi/projects/**/agents/` is generated runtime state. Preserve these files locally. Before staging newly exported files, inspect `git log --diff-filter=D -- <path>` and honor intentional remote deletions instead of restoring local remnants.
+
 ## Modes
 
-- `force`: make the validated remote configuration authoritative for the current machine. Invoke the sync hook with `--force`; it backs up overwritten managed files and does not export, commit, or push. The current project's `.ccb/ccb.config` is restored even when `.ccb/` does not yet exist; project Pi settings are restored when the project has `pi/` or `.ccb/agents/`. It does not delete local files absent from the remote.
+- `force`: make the validated remote configuration authoritative for the current machine. Invoke the sync hook with `--force`; it backs up overwritten managed files and does not export, commit, or push. The current project's `.ccb/ccb.config` is restored even when `.ccb/` does not yet exist; project Pi settings are restored when the project has `pi/`. It does not delete local files absent from the remote.
 
 ## Scope
 
@@ -37,12 +39,11 @@ Managed Pi paths are stored under `pi/` and map to `$PI_CODING_AGENT_DIR`:
 
 The managed global `pi/settings.json` keeps the configured HTTP proxy (`httpProxy`, currently `http://127.0.0.1:1087`) so Pi requests use the system proxy by default.
 
-When the current project has a `pi/` directory or `.ccb/agents/`, its project Pi scope is stored under `pi/projects/<project-key>/`:
+When the current project has a `pi/` directory, its project Pi scope is stored under `pi/projects/<project-key>/`:
 
 - `pi/projects/<project-key>/settings.json` maps to `<project>/pi/settings.json`.
-- `pi/projects/<project-key>/agents/<agent>/provider-state/pi/home/settings.json` maps to `<project>/.ccb/agents/<agent>/provider-state/pi/home/settings.json`.
 
-Only these Pi `settings.json` files are portable. Never synchronize project Pi `auth.json`, `models.json`, `models-store.json`, npm/package caches, sessions, logs, or generated extension state. Provider credentials remain in the machine's application credential store.
+Only global and project-owned Pi `settings.json` files are portable. Never synchronize project Pi `auth.json`, `models.json`, `models-store.json`, npm/package caches, sessions, logs, or generated extension state. Provider credentials remain in the machine's application credential store.
 
 The managed global CCB path is `$CCB_HOME/ccb.config`, exported as `ccb/ccb.config`. The current project's `.ccb/ccb.config` is always managed (except when the repository checkout itself is the project root), even when `.ccb/` does not yet exist, and is stored remotely as `ccb/projects/<project-key>/ccb.config`. Project identity is read from `.ccb/project.identity.json` or `ccb/project.identity.json`, with a deterministic directory-name/path-hash fallback. A missing project file is seeded from the matching remote project config or the global remote config. Other `.ccb/` runtime state and identity files are excluded.
 
@@ -86,7 +87,10 @@ Do not sync or stage `auth.json`, `config.toml`, history, databases, logs, sessi
    ```bash
    git add -- \
      codex/AGENTS.md codex/hooks codex/rules codex/skills \
-     pi/AGENTS.md pi/settings.json pi/skills pi/bin pi/projects ccb/ccb.config ccb/projects
+     pi/AGENTS.md pi/settings.json pi/skills pi/bin ccb/ccb.config
+   for scope in pi/projects ccb/projects; do
+     if [ -d "$scope" ]; then git add -- "$scope"; fi
+   done
    git diff --cached --check
    git diff --cached
    git commit -m "chore: sync agent settings"

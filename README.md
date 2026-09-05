@@ -34,6 +34,10 @@ The local global configuration is the source for these repository paths:
 
 Codex system skills under `codex/skills/.system/` are excluded from export. Pi package caches, package lock state, authentication files, sessions, and generated extension state are excluded as well. Pi extensions are restored from the package sources in `pi/settings.json`; the sync hook checks Pi `AGENTS.md`, `skills/`, and valid JSON settings before installing missing packages with `pi install`.
 
+`cad-fill-dimension-report/` is a local-only skill, excluded from export, sync, and installation. Generated `.ccb/agents/` files, including each agent's Pi `settings.json`, are never portable. Only a project's own `pi/settings.json` maps to `pi/projects/<project-key>/settings.json`. These exclusions preserve local files while keeping them out of the repository; `.gitignore` provides an additional staging guard.
+
+Before adding an untracked export, inspect its deletion history with `git log --diff-filter=D -- <path>`. A file that still exists locally must not silently undo an intentional remote deletion.
+
 ## Automatic Sync
 
 The Codex `SessionStart` hook pulls the remote repository and synchronizes both configuration trees and the CCB config. It uses a three-way merge against the last remote snapshot for text files. Pi settings receive a JSON-aware merge: resource keys such as `packages` and `skills` follow the remote configuration when both sides changed, while unrelated local preference keys remain local on conflict.

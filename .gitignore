@@ -20,12 +20,12 @@ tmp/
 ccb/agents/
 ccb/*.bak.*
 
-# Project Pi provider state is portable only through its settings.json.
-pi/projects/**/agents/**/provider-state/pi/home/auth.json
-pi/projects/**/agents/**/provider-state/pi/home/models.json
-pi/projects/**/agents/**/provider-state/pi/home/models-store.json
-pi/projects/**/agents/**/provider-state/pi/home/sessions/
-pi/projects/**/agents/**/provider-state/pi/home/.npm/
+# Generated agent settings are runtime state, including settings.json.
+pi/projects/**/agents/
+
+# This skill is local-only and must not be restored by configuration export.
+codex/skills/cad-fill-dimension-report/
+pi/skills/cad-fill-dimension-report/
 
 # Local editor and OS metadata.
 .idea/

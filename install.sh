@@ -22,6 +22,7 @@ done < <(find "$ROOT/roles" -mindepth 2 -maxdepth 2 -name role.toml -print0)
 fi
 
 rsync -a \
+  --exclude '/cad-fill-dimension-report/' \
   --exclude '.DS_Store' \
   --exclude '__pycache__/' \
   --exclude '*.pyc' \
@@ -41,6 +42,7 @@ rsync -a \
   --exclude '.DS_Store' \
   --exclude '__pycache__/' \
   --exclude '*.pyc' \
+  --exclude '/cad-fill-dimension-report/' \
   "$ROOT/pi/skills/" "$PI_HOME/skills/"
 
 rsync -a \

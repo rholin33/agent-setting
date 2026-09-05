@@ -97,7 +97,7 @@ PY
   if [[ "$project_ccb_is_global" != true ]]; then
     project_ccb_remote="$ROOT/ccb/projects/$project_key/ccb.config"
   fi
-  if [[ -d "$PROJECT_PI_DIR" || -d "$PROJECT_CCB_DIR/agents" ]]; then
+  if [[ -d "$PROJECT_PI_DIR" ]]; then
     project_pi_remote="$ROOT/pi/projects/$project_key"
   fi
 fi
@@ -137,6 +137,7 @@ mkdir -p "$CODEX_ROOT" "$PI_ROOT"
 
 rsync -a --delete \
   --exclude '.system/' \
+  --exclude '/cad-fill-dimension-report/' \
   --exclude '.DS_Store' \
   --exclude '__pycache__/' \
   --exclude '*.pyc' \
@@ -163,6 +164,7 @@ rsync -a --delete \
   --exclude '__pycache__/' \
   --exclude '*.pyc' \
   --exclude '.coverage' \
+  --exclude '/cad-fill-dimension-report/' \
   "$PI_HOME/skills/" "$PI_ROOT/skills/"
 
 install -m 0755 "$PI_HOME/bin/pi" "$PI_ROOT/bin/pi"
@@ -182,24 +184,6 @@ if [[ -n "$project_pi_remote" ]]; then
     mkdir -p "$project_pi_remote"
     install -m 0644 "$PROJECT_PI_SETTINGS" "$project_pi_remote/settings.json"
   fi
-
-  if [[ -d "$PROJECT_CCB_DIR/agents" ]]; then
-    for agent_dir in "$PROJECT_CCB_DIR"/agents/*; do
-      [[ -d "$agent_dir" ]] || continue
-      agent_name="${agent_dir##*/}"
-      if [[ ! "$agent_name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
-        printf 'Invalid CCB agent directory name: %s\n' "$agent_name" >&2
-        exit 1
-      fi
-      agent_pi_settings="$agent_dir/provider-state/pi/home/settings.json"
-      if [[ -f "$agent_pi_settings" ]]; then
-        validate_pi_settings_file "$agent_pi_settings"
-        remote_agent_settings="$project_pi_remote/agents/$agent_name/provider-state/pi/home/settings.json"
-        mkdir -p "$(dirname "$remote_agent_settings")"
-        install -m 0644 "$agent_pi_settings" "$remote_agent_settings"
-      fi
-    done
-  fi
 fi
 
 printf '%s\n' 'Exported local global configuration:'
@@ -212,8 +196,5 @@ fi
 if [[ -n "$project_pi_remote" ]]; then
   if [[ -f "$PROJECT_PI_SETTINGS" ]]; then
     printf '%s\n' "  ${project_pi_remote#"$ROOT/"}/settings.json"
-  fi
-  if [[ -d "$PROJECT_CCB_DIR/agents" ]]; then
-    printf '%s\n' "  ${project_pi_remote#"$ROOT/"}/agents/*/provider-state/pi/home/settings.json"
   fi
 fi

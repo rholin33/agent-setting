@@ -9,6 +9,8 @@ Use `$agent-setting-sync` for the current workflow. Pass `force` through to that
 
 Synchronize only the portable configuration managed by `agent-setting`. Preserve unrelated local changes, stop on ambiguous conflicts or sensitive-file changes, and never force-push.
 
+Exclude `cad-fill-dimension-report/` from Codex and Pi skill synchronization. Never export or restore `.ccb/agents/`, including agent Pi `settings.json`; `pi/projects/**/agents/` is generated runtime state. Preserve these files locally. Before staging newly exported files, inspect `git log --diff-filter=D -- <path>` and honor intentional remote deletions instead of restoring local remnants.
+
 ## Scope
 
 Resolve paths from these environment variables, using the defaults when unset:
@@ -32,7 +34,7 @@ Managed Pi paths are stored under `pi/`:
 - `pi/settings.json`
 - `pi/skills/`
 
-The managed global CCB path is `$CCB_HOME/ccb.config` exported as `ccb/ccb.config`. The current project's `.ccb/ccb.config` is also always managed (except when the repository checkout itself is the project root), even when `.ccb/` does not yet exist; it is stored under `ccb/projects/<project-key>/ccb.config` and seeded from the matching remote project or global CCB config. When the project has `pi/` or `.ccb/agents/`, portable Pi settings are stored under `pi/projects/<project-key>/`: project `pi/settings.json` and each agent's `.ccb/agents/<agent>/provider-state/pi/home/settings.json` are mapped there. Only those `settings.json` files are synchronized; credentials, models, caches, and runtime state are excluded.
+The managed global CCB path is `$CCB_HOME/ccb.config` exported as `ccb/ccb.config`. The current project's `.ccb/ccb.config` is also always managed (except when the repository checkout itself is the project root), even when `.ccb/` does not yet exist; it is stored under `ccb/projects/<project-key>/ccb.config` and seeded from the matching remote project or global CCB config. When the project has `pi/`, portable Pi settings are stored under `pi/projects/<project-key>/`: only project-owned `pi/settings.json` is mapped there. Agent settings, credentials, models, caches, and runtime state are excluded.
 
 Do not sync `auth.json`, `config.toml`, history, databases, logs, sessions, shell snapshots, temporary files, `ccb/agents/`, `skills/.system/`, Pi npm package caches, or generated extension state. Pi extensions are represented by the package sources in `pi/settings.json`; the sync hook installs missing packages with `pi install`.
 

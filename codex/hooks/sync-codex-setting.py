@@ -109,7 +109,7 @@ def get_project_ccb_relative_path() -> Path | None:
 
 def get_project_pi_relative_root() -> Path | None:
     project_root = get_project_root()
-    if not (project_root / "pi").is_dir() and not (project_root / ".ccb" / "agents").is_dir():
+    if not (project_root / "pi").is_dir():
         return None
     return PROJECT_PI_CONFIG_ROOT / get_project_key()
 
@@ -187,14 +187,7 @@ def is_project_pi_settings_path(relative_path: Path) -> bool:
     except ValueError:
         return False
 
-    parts = project_relative_path.parts
-    if parts == (PROJECT_PI_SETTINGS_NAME,):
-        return True
-    return (
-        len(parts) == 6
-        and parts[0] == "agents"
-        and parts[2:] == ("provider-state", "pi", "home", PROJECT_PI_SETTINGS_NAME)
-    )
+    return project_relative_path == Path(PROJECT_PI_SETTINGS_NAME)
 
 
 def is_pi_settings_path(relative_path: Path) -> bool:
@@ -209,6 +202,11 @@ def get_managed_remote_files() -> list[Path]:
             continue
         file_path = REMOTE_REPO / line.strip()
         relative_path = get_relative_path(REMOTE_REPO, file_path)
+        if relative_path.parts[:3] in {
+            ("codex", "skills", "cad-fill-dimension-report"),
+            ("pi", "skills", "cad-fill-dimension-report"),
+        }:
+            continue
         if file_path.is_file() and (
             relative_path.parts[:2] != PROJECT_PI_CONFIG_ROOT.parts or is_project_pi_settings_path(relative_path)
         ):
@@ -229,17 +227,10 @@ def get_local_managed_path(relative_path: Path) -> Path:
             project_relative_path = relative_path.relative_to(project_pi_root)
         except ValueError:
             project_relative_path = None
-        if project_relative_path == (PROJECT_PI_SETTINGS_NAME,):
+        if project_relative_path == Path(PROJECT_PI_SETTINGS_NAME):
             return get_project_root() / "pi" / PROJECT_PI_SETTINGS_NAME
-        if (
-            project_relative_path is not None
-            and len(project_relative_path.parts) == 6
-            and project_relative_path.parts[0] == "agents"
-            and project_relative_path.parts[2:] == ("provider-state", "pi", "home", PROJECT_PI_SETTINGS_NAME)
-        ):
-            return get_project_root() / ".ccb" / "agents" / project_relative_path.parts[1] / Path(
-                *project_relative_path.parts[2:]
-            )
+        if project_relative_path is not None:
+            raise ValueError(f"unsupported project Pi path: {relative_path}")
 
     if relative_path.parts and relative_path.parts[0] == CODEX_CONFIG_DIR.name:
         return CODEX_HOME.joinpath(*relative_path.parts[1:])
