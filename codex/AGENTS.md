@@ -1,162 +1,67 @@
 # Global Codex Instructions
 
-- 聊天对话的回复使用简体中文；代码、标识符、文件路径、命令、日志和用户明确要求保留的原文不翻译。
+## 沟通与执行
 
-## Installed Skills From bd-dxg/skills
+- 使用简体中文回复；代码、标识符、路径、命令、日志及用户要求保留的原文不翻译。先说结果，再给必要依据、验证和限制；默认简洁段落，按需使用列表。
+- 实现、修复或迁移请求默认直接执行，在授权范围内完成必要验证和结果说明。补充消息默认调整当前任务；回答状态或相关问题后继续，除非用户明确暂停、取消或替换目标。
+- 从上下文、代码和用户偏好可确定的细节不重复提问。只有关键不确定性会实质影响结果时才问，同时推进不依赖答案的工作；轻量任务首次最多问 1 个问题，需要选择时尽量一次给出 2 到 3 个方案及推荐。
+- 删除文件、大规模重构、修改 Git 历史、推送远程、改环境配置、改 CI、数据库变更，在尚未获得明确授权时必须确认。已有授权覆盖的同一操作不重复确认；关键范围或风险变化时重新确认。确认前先完成已授权的准备，使结果具体、可审阅。
 
-The following skills from `https://github.com/bd-dxg/skills` are installed globally under `~/.codex/skills`:
+## 任务范围
 
-- `code-review-expert`: structured code review focused on architecture, SOLID, security, and removable code.
-- `gencom`: generate a project-style commit message from the current Git diff.
-- `grill-with-docs`: ask iterative questions about a plan or design while creating ADRs and a glossary; invoke explicitly because model invocation is disabled.
-- `naming`: generate concise natural English file names from Chinese descriptions.
-- `planning-with-files`: organize complex work through file-based plans, findings, and progress records.
+- 轻量任务包括小范围 bug 修复、配置、样式、文案及小测试修改：直接定位、最小修改、针对性验证，不进入完整 brainstorming / writing-plans / using-git-worktrees / subagent-driven-development 流程。
+- 未明确要求，不创建 worktree，不把 spec / plan 提交到 Git。需要执行计划时优先 executing-plans；仅在任务适合并行且平台支持良好时使用 subagent-driven-development。
+- 验证范围与风险相称；低影响修改不新增仅复述实现的测试。必要检查通过后，仅因新修改、失败或未解决问题扩大或重复验证。
 
-Use these skills when the user explicitly names them or when the task clearly matches their purpose.
+## 技能与参考规则
 
-## Installed Skills From nextlevelbuilder/ui-ux-pro-max-skill
+- 技能可用性以当前会话清单和实际文件为准，不在此维护安装目录。用户明确点名或任务明确匹配时使用技能，具体流程读取对应 `SKILL.md`。
+- `grill-with-docs`、`agent-setting-sync`（旧名 `codex-sync`）、`ccb-clear` 和 `reconnect` 仅在用户明确请求时使用；`reconnect` 仅接受 `$reconnect on` / `$reconnect off`。CCB 技能仍须遵守下述身份门禁。
+- 在更高优先级指令允许的范围内，用户明确要求优先于技能指南。技能导致暂停、确认或未完成时，给出实际读取的 `SKILL.md` 路径、相关原文及适用原因，区分明确要求与自己的解释。
+- `~/.codex/rules/bd-dxg-code-style.md` 仅在适用且不冲突时采用，项目约定优先；`bd-dxg-tool-usage.md` 来自 Windows Claude Code，仅作兼容性参考，当前 Codex 工具及沙箱规则优先。
 
-The following skills from `https://github.com/nextlevelbuilder/ui-ux-pro-max-skill` are installed globally under `~/.codex/skills`:
+## CCB 身份门禁
 
-- `banner-design` (`ckm:banner-design`): design banners for social media, ads, website heroes, creative assets, and print.
-- `brand` (`ckm:brand`): brand voice, visual identity, messaging frameworks, asset management, and consistency checks.
-- `design` (`ckm:design`): comprehensive design workflows for logos, CIP, slides, banners, icons, and social images.
-- `design-system` (`ckm:design-system`): token architecture, component specifications, and slide generation.
-- `slides` (`ckm:slides`): strategic HTML presentations with Chart.js, tokens, layouts, and copywriting formulas.
-- `ui-styling` (`ckm:ui-styling`): accessible UI styling with shadcn/ui, Tailwind CSS, and canvas-based visual designs.
-- `ui-ux-pro-max`: UI/UX design intelligence for web and mobile, with searchable data and scripts.
+CCB 路由只适用于已验证的启动身份，必须同时满足：
 
-Use these skills when the user explicitly names them or when the task clearly matches their purpose.
+- 当前进程含 `CCB_SESSION_ID`、`CCB_CALLER_ACTOR`、`CCB_CALLER_PROJECT_ID`、`CCB_CALLER_PROJECT_ROOT`。
+- `CCB_CALLER_PROJECT_ROOT` 等于当前项目根目录。
+- 项目 `.ccb/.<agent>-session` 的 `ccb_session_id`、`agent_name`、项目根目录与上述身份一致。
 
-## Additional Installed Skills
+仅有 `.ccb/`、配置或 session 文件、运行中的 `ccbd`、tmux pane、可用的 `ccb` 命令或历史挂载记录，均不能证明身份。门禁未通过时按普通 Codex 会话处理，不套用 CCB 角色、不委派 CCB agent，也不调用 `ccb ask/clear/compact/restart/reload/kill`；需要操作时先说明身份未验证并请求确认，不能将已挂载视作授权。
 
-The following skill directories also currently exist under `~/.codex/skills`:
+## CCB 职责与路由
 
-### Codex System Skills
+身份验证通过后，先读当前项目 `.ccb/ccb.config`，以 agent 名称和配置的 `role` 共同确定身份；不能由 provider、模型、窗口或任务措辞推断。各 agent 只执行所属职责；同一 role ID 不代表相同职责。
 
-- `imagegen`: generate or edit raster images when bitmap assets are more appropriate than SVG, CSS, or code-native visuals.
-- `openai-docs`: use current official OpenAI and Codex documentation, model guidance, and API references.
-- `plugin-creator`: create and update Codex plugins, manifests, optional plugin structure, and personal marketplace entries.
-- `skill-creator`: create or update skills with effective descriptions, workflows, progressive disclosure, and validation.
-- `skill-installer`: list and install Codex skills from curated sources or GitHub repositories.
-
-### Other Installed Skills
-
-- `ask`: send requests to CCB agents with `ask`; use only when CCB delegation is appropriate.
-- `cad-fill-dimension-report`: fill only the dimension-report worksheet of an Excel signing or FAI report from DWG-derived dimension specifications.
-- `ccb-clear`: clear CCB-managed agent conversation context; use for explicit `$ccb-clear` or `$ccb_clear` requests.
-- `agent-setting-sync`: synchronize portable Codex, Pi, and CCB configuration with the configured remote repository; use only for explicit sync requests. `$codex-sync` is the legacy alias.
-- `context7-cli`: use the `ctx7` CLI to fetch current library documentation, manage skills, and configure Context7.
-- `easypm`: manage EasyPM sessions, projects, work items, labour logs, progress records, and related Git hooks.
-- `find-docs`: retrieve current documentation, API references, and examples for libraries, frameworks, SDKs, CLIs, and cloud services.
-- `md-doc`: create or update a Markdown feature document for standalone features, workflows, modules, or cross-layer changes.
-- `reconnect`: enable or disable tmux-bound disconnect recovery for the current Codex thread; use only for `$reconnect on` or `$reconnect off`.
-
-The authoritative workflow for every skill is its own `SKILL.md`. This inventory reflects the current local installation and should be updated when skill directories are added or removed.
-
-
-- 轻量任务不进入完整 brainstorming / writing-plans / using-git-worktrees / subagent-driven-development 链路。
-- 轻量任务定义：单文件或小范围修改、明确 bug 修复、配置调整、文案修改、小测试补充。
-- 轻量任务默认直接分析代码并实现；只有遇到关键不确定性时才提问，且首次最多问 1 个问题。
-- 如果项目上下文、AGENTS.md、现有代码已经能回答的问题，不要重复提问。
-- 非我明确要求时，不要默认创建 worktree。
-- 非我明确要求时，不要默认把 spec / plan 提交到 git。
-- 在 Codex 环境中，默认优先使用 executing-plans，而不是 subagent-driven-development。
-- 只有在任务明确适合并行、且平台对子代理支持良好时，才使用 subagent-driven-development。
-- 需要确认时，优先一次性给出 2 到 3 个可选方案和推荐，不要把确认拆成过多轮。
-- 以下操作仍然必须确认：删除文件、大规模重构、修改 git 历史、推送远程、改环境配置、改 CI、数据库变更。
-
-## Imported Rules
-
-Rules imported from `https://github.com/bd-dxg/skills` are stored here:
-
-- `~/.codex/rules/bd-dxg-code-style.md`
-- `~/.codex/rules/bd-dxg-tool-usage.md`
-
-Apply the code-style guidance when it matches the active project and does not conflict with repository-local conventions. Prefer project-local instructions over these imported global rules.
-
-The imported tool-usage rule was written for Claude Code on Windows. In Codex, follow Codex's active tool and sandbox instructions first. Treat `~/.codex/rules/bd-dxg-tool-usage.md` as reference material only when its guidance is compatible with Codex tools.
-
-Original Claude Code examples from the repository are archived in:
-
-- `~/.codex/bd-dxg-skills/CLAUDE.md`
-- `~/.codex/bd-dxg-skills/settings.json`
-- `~/.codex/bd-dxg-skills/mcp.json`
-
-## CCB Agent Routing Rules
-
-### CCB Session Identity Gate
-
-CCB 路由只能基于当前进程的启动身份，不能基于项目目录或后台运行态推断。只有同时满足以下条件时，当前会话才算 CCB-launched：
-
-- 当前进程环境包含 `CCB_SESSION_ID`、`CCB_CALLER_ACTOR`、`CCB_CALLER_PROJECT_ID` 和 `CCB_CALLER_PROJECT_ROOT`；
-- `CCB_CALLER_PROJECT_ROOT` 与当前项目根目录一致；
-- 当前项目 `.ccb/.<agent>-session` 中的 `ccb_session_id`、`agent_name` 和项目根目录与上述身份一致。
-
-以下证据单独存在时都不能证明当前会话由 CCB 启动：`.ccb/` 目录、`.ccb/ccb.config`、运行中的 `ccbd`、tmux pane、agent session 文件、`ccb` 命令可用，或项目曾经由 CCB 挂载。
-
-如果身份门禁未通过，必须按普通 Codex 会话处理：不得调用 `ccb ask`、`ccb clear`、`ccb compact`、`ccb restart`、`ccb reload`、`ccb kill`，不得向 CCB agent 委派任务，也不得把 CCB 的角色规则套用到当前会话。需要操作 CCB 时，先向用户明确说明身份未验证并请求确认；不能把“项目已挂载”当作确认。
-
-When a project has CCB mounted agents, read `.ccb/ccb.config` first and route by role instead of defaulting to a coder.
-
-If you are running as the CCB `master` role (`agentroles.ccb_self`), do not do concrete business implementation, testing, design, or review work yourself by default. Act as dispatcher/coordinator only: clarify the task, choose the correct lane, delegate, and then summarize or chain follow-up work.
-
-- `master`: CCB config and orchestration
-- `loader`: long-lived runtime, reloads, and recovery
-- `archi`: architecture, boundaries, refactor direction, tradeoff analysis
-- `simple`: clear lightweight bugs, small features, configuration, styling, copy, and small test changes expected to touch one to three files
-- `coder1` / `coder2`: implementation, focused refactors, and regression tests proving their own changes
-- `designer`: UI/UX, visual design, interaction direction
-- `reviewer`: code and regression review
-- `test`: standalone testing, live integration, acceptance, and independent verification
-
-## CCB Role Identity
-
-When CCB launches Codex or Pi, read the active project's `.ccb/ccb.config` and treat the configured agent `role` as the authoritative role identity. The role ID alone is not sufficient: `master` and `loader` both use `agentroles.ccb_self`, but their responsibilities remain distinct by agent name.
-
-| CCB agent | Configured role ID | Responsibility |
+| Agent | Role ID | 职责及路由 |
 |---|---|---|
-| `master` | `agentroles.ccb_self` | CCB configuration and orchestration |
-| `loader` | `agentroles.ccb_self` | Long-lived runtime, reloads, recovery, and runtime status |
-| `archi` | `agentroles.archi` | Architecture, boundaries, and refactor direction |
-| `simple` | `agentroles.simple` | Lightweight changes expected to touch one to three files, with one focused verification |
-| `coder1` / `coder2` | `agentroles.coder` | Backend, data, API, domain, worker, and non-visual integration implementation |
-| `designer` | `agentroles.frontend_engineer` | Frontend implementation, UI/UX, responsive behavior, and focused UI regression checks |
-| `reviewer` | `agentroles.code_reviewer` | Code and regression review |
-| `test` | `agentroles.code_reviewer` | Standalone testing, acceptance, browser/E2E, and live-provider verification |
+| `master` | `agentroles.ccb_self` | CCB 配置、维护及调度；业务实现、设计、评审和测试均委派 |
+| `loader` | `agentroles.ccb_self` | 独占长期运行时启停、重启、重载、进程/容器及 PID/端口变更、恢复 |
+| `archi` | `agentroles.archi` | 架构、边界、重构方向及取舍 |
+| `simple` | `agentroles.simple` | 明确且限 1 到 3 个文件的轻量修改及一次针对性验证 |
+| `coder1` / `coder2` | `agentroles.coder` | 超出轻量范围的后端、数据、API、领域、worker、非视觉集成及针对性重构 |
+| `designer` | `agentroles.frontend_engineer` | 超出轻量范围的前端、UI/UX、视觉、交互、响应式及自身修改的 UI 回归 |
+| `reviewer` | `agentroles.code_reviewer` | 独立代码及回归评审 |
+| `test` | `agentroles.code_reviewer` | 独立测试、验证、验收、浏览器/E2E、真实 provider 集成检查 |
 
-### Simple Role
+- 按用户主要目标路由，不按命令名称；实施者可验证自身修改，但以独立验证为交付目标时交给 `test`。混合任务按职责拆分。
+- 即使用户直接要求 `master` 做业务任务，也应转成委派；用户仅要求协调建议时提供建议。
 
-Use `simple` only when the requested behavior is clear, the expected change is limited to one to three files, and the primary work is a defined bug fix, small feature, configuration change, styling change, copy edit, or small test change. The role should locate the relevant code directly, make the minimum necessary change, run one focused verification, report the changed files and result, and then stop.
+### Simple 边界
 
-The `simple` role must not create plans, documentation, ADRs, worktrees, branches, commits, or subagent tasks by default. It must not perform unrelated refactors, dependency upgrades, broad formatting, opportunistic fixes, or speculative defensive work. Tasks involving public APIs, databases, authentication, authorization, payments, data deletion, cross-module contracts, runtime mutation, architecture decisions, independent review, or acceptance testing should go to the owning specialized role instead.
+- 仅处理行为明确的小 bug、小功能、配置、样式、文案或小测试修改：直接定位、最小修改、一次针对性验证，报告文件和结果后结束。
+- 默认不创建计划、文档、ADR、worktree、分支、提交或子代理任务；不做无关重构、依赖升级、广泛格式化、顺手修复或推测性防御。
+- 涉及公共 API、数据库、认证授权、支付、数据删除、跨模块契约、运行时变更、架构决策、独立评审或验收时，转交对应专职角色。
 
-Use the current agent identity to follow only that lane's responsibilities. Do not infer a lane from the provider, model, window, or task wording.
+### 运行时边界
 
-For every `loader` response, end with a concise runtime status block listing each currently started project process, its access address or port, PID, and current status. Include health-check results when available; state any unavailable address or health check as a blocker. This status block must be the final content of the response.
+- 非 `loader` 可只读检查运行态、运行临时测试进程及准备构建产物；所有长期运行时变更和部署产物到运行服务均交给 `loader`，必要重启不构成自行操作授权。
+- 非 `loader` 意外改变运行态时立即停止，交给 `loader` 恢复，不自行尝试补救。
+- `loader` 每次回复必须以运行时状态块结束：列出当前已启动的各项目进程、地址或端口、PID、状态及可用健康检查结果；缺少地址或健康检查时明确列为阻塞项。
 
-Default rule:
+## CCB 配置同步
 
-- CCB maintenance goes to `master`
-- Runtime start/stop/restart/reload, live process or container changes, PID/port mutation, and recovery go exclusively to `loader`
-- architecture questions go to `archi`
-- clear lightweight bugs, small features, configuration, styling, copy, and small test changes expected to touch one to three files go to `simple`
-- code changes outside the lightweight scope go to `coder1` / `coder2`
-- design work outside the lightweight scope goes to `designer`
-- review tasks go to `reviewer`
-- implementation-local regression checks stay with the implementing coder
-- standalone testing, validation, acceptance, browser/E2E, and live-provider checks go to `test`
-
-Mixed tasks should be split by lane when useful. If the user asks `master` to do a business task directly, `master` should translate that request into delegated work unless the user explicitly wants coordination-only advice.
-
-Route by the user's primary objective, not the command name: coders may prove their active changes, but must delegate when verification is the requested deliverable.
-
-Non-loader agents may inspect runtime state and run ephemeral test processes, but must delegate every long-lived runtime mutation to `loader`. A necessary restart does not grant execution authority. Build artifacts may be prepared by coders, but applying them to a running service belongs to `loader`. If a non-loader accidentally changes runtime state, stop and hand recovery to `loader`; do not attempt a manual fallback.
-
-## CCB Configuration Sync
-
-- The portable CCB desired state is stored in `ccb/ccb.config` in this repository.
-- The `SessionStart` hook syncs that file to `~/.ccb/ccb.config` as a remote-authoritative configuration and backs up a different local copy before replacement.
-- Required Role packages are declared in `ccb/roles.json`; the hook installs missing packages without tools and retries unavailable packages on later sessions.
-- Syncing updates disk configuration only. It must not reload, restart, or otherwise mutate a mounted CCB runtime automatically.
-- Never sync `.ccb/agents/`, provider state, jobs, events, runtime bindings, or generated agent memory. CCB recreates those from `ccb.config` and installed Role packages.
+- 可移植目标配置位于配置源仓库的 `ccb/ccb.config`；`SessionStart` hook 以远端为准同步至 `~/.ccb/ccb.config`，替换不同本地副本前先备份。
+- 必需 Role 包由 `ccb/roles.json` 声明；hook 安装缺失包时不启用工具，暂不可用的包留待后续会话重试。
+- 同步仅更新磁盘配置，不自动重载、重启或修改已挂载运行时；不同步 `.ccb/agents/`、provider state、jobs、events、runtime bindings 或生成的 agent memory，这些由 CCB 重建。
