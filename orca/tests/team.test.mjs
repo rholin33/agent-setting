@@ -77,7 +77,7 @@ test('fresh launch creates six tabs/nine roles and rerun has no mutations', asyn
     if (verb === 'show') return { terminal: terminals.find(row => row.handle === val('--terminal')) };
     throw new Error(`Unexpected ${noun} ${verb}`);
   };
-  const options = { home, project, action: 'start', cli, snapshot: () => ({}), sleep: async () => {}, log: () => {} };
+  const options = { home, project, action: 'start', cli, inspect: async () => ({ kind: 'agent' }), snapshot: () => ({}), sleep: async () => {}, log: () => {} };
   await runTeam(options); assert.equal(creations, 9); assert.equal(tabs.length, 6);
   await runTeam(options); assert.equal(creations, 9);
   terminals.pop();
@@ -157,7 +157,7 @@ for (const missing of [['master'], ['loader'], ['master', 'loader']]) {
       }
       throw new Error(`Unexpected ${verb}`);
     };
-    const result = await runTeam({ home, project, action: 'start', cli, snapshot: () => snap, sleep: async () => {}, log: () => {} });
+    const result = await runTeam({ home, project, action: 'start', cli, inspect: async () => ({ kind: 'agent' }), snapshot: () => snap, sleep: async () => {}, log: () => {} });
     assert.equal(count, missing.length);
     for (const name of ['master', 'loader']) assert.equal(result.agents[name].session.id, name);
     for (const name of ['master', 'loader'].filter(name => !missing.includes(name))) assert.equal(result.agents[name].leafId, name);

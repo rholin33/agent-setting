@@ -66,6 +66,26 @@ attributes protect original role resources across Windows line-ending settings.
 
 ## Limitations
 
+Connected-pane recovery now uses `terminal.inspectProcess` with incarnation and
+freshness checks. Only proven idle shells accept an exact resume command;
+unverifiable results are reported and never injected into. Windows Orca 1.4.202
+uses a POSIX-only inspection path; the manager now reads local terminal-host v36
+inventory and two CIM process snapshots instead. It checks pane identity, process
+creation times and Windows session boundaries. Unknown protocol versions fail
+closed. Tests cover false child booleans, PID reuse, replaced panes, changing
+process trees, same-pane send and pending retention. Native sewpg inspection
+distinguished the existing loader Pi from eight idle shells.
+
+Windows sewpg acceptance restored master, coder1, coder2, designer, reviewer and
+test in their existing panes with exact original session arguments. Loader was
+reused. Archi and simple had no saved original conversation and were refused;
+the command correctly exited nonzero rather than claiming all nine were ready.
+Active Pi transcript paths and Codex resume IDs can confirm recovery when Orca
+removes its sleeping-session record. An interrupted launch clears pending only
+after this exact live-session proof and transcript validation, without resending.
+Master's restored history showed context overflow and cancelled compaction;
+conversation restoration does not verify model response readiness.
+
 Restoring only the left pane can reverse left/right ordering. Missing or changed
 provider bindings refuse fresh-session fallback. Different branches with the
 same origin share a portable layout key unless explicitly overridden. New

@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { normalizeProject, projectKey, nodeCommand } from './platform.mjs';
 import { binding, sameWorktree, validateTranscript } from './sessions.mjs';
+import { inspectHealth, recoverInPane, provesSession } from './health.mjs';
+import { rpc } from './orca.mjs';
 
 export const readJson = file => JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
 export function saveJson(file, value) {
@@ -91,7 +93,7 @@ export function validateConfig(config, catalog) {
   }
   return [...names];
 }
-export async function runTeam({ home, project, action, cli, snapshot, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), log = console.log }) {
+export async function runTeam({ home, project, action, cli, snapshot, inspect = (handle, provider) => inspectHealth(cli, rpc, handle, provider), sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), log = console.log }) {
   project = normalizeProject(project);
   const files = projectFiles(home, project);
   if (action === 'start') await initialize(home, project);
@@ -106,12 +108,17 @@ export async function runTeam({ home, project, action, cli, snapshot, sleep = ms
       if (error.code !== 'selector_not_found' || error.selector !== `path:${project}` || action !== 'start') throw error;
       await cli(['repo', 'add', '--path', project]); inventory = await list();
     }
-    const resolved = {}, resume = {};
+    const resolved = {}, resume = {}, health = {}, issues = [];
     const snap = await snapshot();
     for (const name of names) {
       const saved = state.agents[name];
       if (!saved) continue;
-      if (saved.pending) throw new Error(`Role ${name} has an interrupted launch; inspect Orca before retrying`);
+      if (saved.pending) {
+        const candidates = inventory.terminals.filter(row => row.tabId === saved.tabId && row.leafId === saved.leafId && row.connected && !row.orphaned && sameWorktree(`local::${row.worktreePath}`, project));
+        if (candidates.length !== 1 || !provesSession(await inspect(candidates[0].handle, saved.agent), saved)) throw new Error(`Role ${name} has an interrupted launch; inspect Orca before retrying`);
+        validateTranscript(saved, project);
+        if (action === 'start') { delete saved.pending; saveJson(files.state, state); }
+      }
       const foundBinding = binding(snap, saved, project);
       if (foundBinding) saved.session = foundBinding;
       const matches = inventory.terminals.filter(row => sameWorktree(`local::${row.worktreePath}`, project) && row.tabId === saved.tabId && row.leafId === saved.leafId);
@@ -123,11 +130,33 @@ export async function runTeam({ home, project, action, cli, snapshot, sleep = ms
       } else {
         if (matches.length !== 1 || !matches[0].connected || matches[0].orphaned) throw new Error(`Cannot verify running role ${name}`);
         resolved[name] = matches[0];
+        health[name] = await inspect(matches[0].handle, saved.agent);
       }
     }
     if (action === 'start') saveJson(files.state, state);
     for (const tab of config.tabs) for (const name of tab.agents) {
-      if (resolved[name]) { log(`${name}: existing${state.agents[name].session ? '' : ' (session binding unavailable)'}`); continue; }
+      if (resolved[name]) {
+        const status = health[name];
+        if (status.kind === 'agent') { log(`${name}: agent running`); continue; }
+        if (action === 'status') { log(`${name}: ${status.kind} (${status.reason || 'agent not running'})`); continue; }
+        if (status.kind !== 'shell') { issues.push(`${name}: process unverifiable (${status.reason})`); continue; }
+        const saved = state.agents[name];
+        try { validateTranscript(saved, project); }
+        catch (error) { issues.push(`${name}: ${error.message}`); continue; }
+        const command = nodeCommand([path.join(home, 'bin', 'orca-team.mjs'), 'launch', '--home', home, '--project', project, '--role', name, '--resume']);
+        await recoverInPane({ name, saved, handle: resolved[name].handle, command, cli, inspect,
+          checkpoint: () => saveJson(files.state, state), verifyBinding: async () => {
+            for (let attempt = 0; attempt < 30; attempt++) {
+              const found = binding(await snapshot(), saved, project);
+              const live = await inspect(resolved[name].handle, saved.agent);
+              if ((found?.id === saved.session.id && live.kind === 'agent') || provesSession(live, saved)) return;
+              await sleep(500);
+            }
+            throw new Error(`${name}: original conversation recovery is unconfirmed; pending retained`);
+          } });
+        log(`${name}: original conversation restored in existing pane`);
+        continue;
+      }
       if (action === 'status') { log(`${name}: not running`); continue; }
       const role = catalog.find(row => row.name === name);
       const saved = state.agents[name] ||= {};
@@ -166,7 +195,11 @@ export async function runTeam({ home, project, action, cli, snapshot, sleep = ms
       }
       log(`${name}: ${resume[name] ? 'resume launched' : 'created'}${found ? '' : '; conversation unconfirmed, rerun before closing'}`);
     }
-    if (action === 'start') { assertLayout(await list(), config, state); saveJson(files.state, state); log('Verified all configured roles in visible desktop layout'); }
+    if (action === 'start') {
+      assertLayout(await list(), config, state); saveJson(files.state, state);
+      if (issues.length) throw new Error(issues.join('\n'));
+      log('Verified configured desktop layout; new launches report conversation readiness separately');
+    }
     return state;
   };
   return action === 'start' ? withLock(files.lock, execute) : execute();

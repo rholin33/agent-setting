@@ -34,6 +34,25 @@ The portable lock is `start.node.lock`. The predecessor PowerShell manager retai
 
 ## Recovery And Limits
 
+Connected panes are inspected using Orca's fenced process evidence. A live shell
+with confirmed no children can resume the exact saved conversation in-place;
+the prompt and incarnation are rechecked before sending. Input acceptance alone
+does not complete recovery: the original binding and agent process must appear.
+Unconfirmed recovery retains pending state and is never automatically resent.
+Unverifiable process tables (including older Windows hosts returning false child
+booleans) block startup success and command injection. A connected shell is not
+reported as a running agent. Local Windows uses a read-only terminal-host v36
+inventory plus two native CIM snapshots, checking pane incarnation, PID creation
+time, session boundaries and recognized provider processes. Unknown protocol
+versions, WSL, changed identities or incomplete snapshots refuse recovery. No
+Orca application files are patched; daemon tokens and command lines are never logged.
+
+Windows 1.4.202 has native recovery acceptance coverage. macOS/Linux use Orca's
+process evidence and have platform-routing/path tests, not GUI acceptance.
+If their daemon omits `childProcessEvidence: no-children`, idle-shell recovery
+remains unavailable; the manager reports it rather than guessing from a false
+child boolean. This release does not claim automatic recovery parity on all hosts.
+
 Existing connected panes are reused. A missing pane is restored only when Orca records its closure and the saved transcript has the exact session ID and project path. Pi receives its exact transcript path; Codex receives its exact session ID and original Codex home. No latest-session search or fresh-session fallback occurs. Unknown/disconnected/orphaned panes and interrupted launches stop the operation for inspection. The manager never closes active panes.
 
 Bindings are read from Orca's persisted workspace session, not inferred by project or file modification time. Some active providers do not yet expose a binding: the manager reports this; rerun before closing those panes. A verified pane layout does not prove provider login/readiness. Restoring only the left pane places it to the right of the surviving sibling; both roles remain paired, but order can swap. Invisible renderer panes can require Orca View > Reload. No automatic reload occurs.
