@@ -1,0 +1,9 @@
+schema = "agent-role-adapter/ccb-preview-0.1"
+host = "ccb"
+
+default_agent_name = "simple"
+recommended_provider = "codex"
+supported_providers = ["codex", "claude"]
+recommended_workspace_mode = "inplace"
+permission_default = "manual"
+memory_merge_strategy = "append_after_project_memory"

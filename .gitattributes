@@ -1,0 +1,4 @@
+# Original role resources must retain their exact source bytes on every OS.
+orca/source/** -text -whitespace
+*.sh text eol=lf
+.githooks/* text eol=lf

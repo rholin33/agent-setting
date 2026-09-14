@@ -1,79 +1,92 @@
-# Agent Global Config
+# Agent Settings
 
-This repository stores portable global configuration for Codex, Pi, and CCB. The repository was originally named `codex-setting`; its canonical remote is now `https://github.com/rholin33/agent-setting`.
+Portable Codex/Pi configuration plus one explicitly selected orchestration host:
+CCB or Orca. Canonical remote: https://github.com/rholin33/agent-setting.
 
-## Layout
+## Sync Through The Skill
 
-- `codex/`: Codex global instructions, hooks, rules, and non-system skills.
-- `pi/`: Pi global instructions, selected skills, and Pi settings including extension package sources.
-- `ccb/`: portable CCB configuration and required Role metadata.
-- `roles/`: portable local CCB Role sources installed by the sync and install scripts.
-- `hooks/`: not used at the repository root; the Codex sync hook is stored under `codex/hooks/`.
-- `scripts/sync-local-config.sh`: exports the live Codex, Pi, and CCB configuration into this repository.
-- `.githooks/pre-commit`: refreshes and stages the managed configuration before every commit.
-- `install.sh`: installs both Codex and Pi configuration, plus CCB configuration.
+Use one of these forms:
 
-Do not store credentials or runtime state here, including Codex auth/history/session data, Pi auth/session/npm caches, sqlite databases, logs, backups, shell snapshots, or generated CCB agent state. CCB regenerates `.ccb/agents/` from its portable configuration; that directory is never synchronized.
+- `$agent-setting-sync ccb`: pull/merge common configuration and CCB.
+- `$agent-setting-sync orca`: pull/merge common configuration and Orca.
+- Append `force` to back up and apply remote files to this machine.
+- Append `push` to export local configuration, review, commit and push.
 
-## Synchronization Boundary
+A target is mandatory and mutually exclusive. `force` cannot combine with
+`push`. Without explicit `push`, no export, staging, commit or push occurs.
+The legacy `codex-sync` alias follows the same rules. Untargeted SessionStart
+does nothing, so starting an agent cannot accidentally select CCB or Orca.
+The pre-commit hook only checks staged whitespace; it never exports or stages.
 
-The local global configuration is the source for these repository paths:
+## Install From A Checkout
 
-| Local source | Repository path | Notes |
-| --- | --- | --- |
-| `${CODEX_HOME:-~/.codex}/AGENTS.md` | `codex/AGENTS.md` | Codex global instructions |
-| `${CODEX_HOME:-~/.codex}/hooks/` | `codex/hooks/` | Codex lifecycle hooks |
-| `${CODEX_HOME:-~/.codex}/rules/` | `codex/rules/` | Codex reusable rules |
-| `${CODEX_HOME:-~/.codex}/skills/` | `codex/skills/` | Non-system Codex skills |
-| `${PI_CODING_AGENT_DIR:-~/.pi/agent}/AGENTS.md` | `pi/AGENTS.md` | Pi global instructions |
-| `${PI_CODING_AGENT_DIR:-~/.pi/agent}/settings.json` | `pi/settings.json` | Pi settings and extension package sources |
-| `${PI_CODING_AGENT_DIR:-~/.pi/agent}/skills/` | `pi/skills/` | Selected Pi skills |
-| `${CCB_HOME:-~/.ccb}/ccb.config` | `ccb/ccb.config` | Portable CCB configuration |
+Orca, Pi, Codex, model services and credentials are already configured.
+Python 3 runs configuration sync on all platforms; Orca team management requires
+Node.js 22+. No rsync dependency is required.
 
-`codex/hooks.json` is bootstrap metadata for registering the Codex SessionStart hook. It is tracked in the repository but is not exported from local state. `ccb/roles.json` and `roles/` are also repository-managed bootstrap data.
-
-Codex system skills under `codex/skills/.system/` are excluded from export. Pi package caches, package lock state, authentication files, sessions, and generated extension state are excluded as well. Pi extensions are restored from the package sources in `pi/settings.json`; the sync hook checks Pi `AGENTS.md`, `skills/`, and valid JSON settings before installing missing packages with `pi install`.
-
-`cad-fill-dimension-report/` is a local-only skill, excluded from export, sync, and installation. Generated `.ccb/agents/` files, including each agent's Pi `settings.json`, are never portable. Only a project's own `pi/settings.json` maps to `pi/projects/<project-key>/settings.json`. These exclusions preserve local files while keeping them out of the repository; `.gitignore` provides an additional staging guard.
-
-Before adding an untracked export, inspect its deletion history with `git log --diff-filter=D -- <path>`. A file that still exists locally must not silently undo an intentional remote deletion.
-
-## Automatic Sync
-
-The Codex `SessionStart` hook pulls the remote repository and synchronizes both configuration trees and the CCB config. It uses a three-way merge against the last remote snapshot for text files. Pi settings receive a JSON-aware merge: resource keys such as `packages` and `skills` follow the remote configuration when both sides changed, while unrelated local preference keys remain local on conflict.
-
-The hook validates the remote `codex/` and `pi/` layouts before applying them. If Pi is missing `AGENTS.md`, `settings.json`, or a non-empty `skills/` directory, the sync records a failure and does not install Pi extensions. Missing or unavailable Pi packages are logged and retried on a later startup without blocking Codex startup.
-
-The hook installs CCB Role sources and catalog Roles with `--skip-tools` when available. It never commits, pushes, reloads, or restarts CCB or Pi automatically.
-
-## Install On A Machine
-
-```bash
-cd ~/projects/agent-setting
-chmod +x install.sh
-./install.sh
+```text
+python scripts/install-config.py --target orca --quick-commands
+python scripts/install-config.py --target ccb
 ```
 
-The installer copies Codex files into `${CODEX_HOME:-~/.codex}`, Pi files into `${PI_CODING_AGENT_DIR:-~/.pi/agent}`, and CCB config into `${CCB_HOME:-~/.ccb}`. It installs the Pi package sources declared in `pi/settings.json` when the `pi` command is available.
+Use `python3` where that is the Python 3 executable. Windows also has
+`./install.ps1 -Target orca -QuickCommands`; macOS/Linux have
+`./install.sh --target orca --quick-commands`. Add `--force` only when remote
+files should replace divergent local managed files with backups.
 
-Restart Codex and Pi after installing so new or changed instructions, skills, hooks, and extensions are loaded.
+Orca installation generates local shell entry scripts and optionally registers
+nine global quick commands. Follow the printed shell profile/PATH instruction
+once; then run `orca-team` from any project. See [Orca guide](orca/README.md).
+Or pass `--shell-profile PATH` to register a backed-up managed block directly
+(Windows wrapper: `-ShellProfile $PROFILE`; zsh: `$HOME/.zshrc`; bash: `$HOME/.bashrc`).
 
-The installer also enables the repository pre-commit hook. If this checkout was installed before the hook was added, enable it once with:
+Installation applies files from this checkout without Git commits or pushes.
+It preserves local files absent from the package. It does not configure provider
+accounts or model services. CCB role resources may be installed with --skip-tools.
 
-```bash
-git config core.hooksPath .githooks
+## Portable And Local Files
+
+| Repository | Purpose |
+| --- | --- |
+| codex/ | Shared instructions, hooks, rules and non-system skills |
+| pi/ | Shared instructions, settings, skills and launch helper |
+| ccb/, roles/ | CCB configuration and role bootstrap |
+| orca/ | Orca team manager, nine role prompts and 199 original role resources |
+| scripts/ | Cross-platform install/export entry points |
+| docs/features/orca-ccb-sync.md | Scope, design and validation |
+
+CCB selection includes current-project CCB configuration and project
+`pi/settings.json`. Generated agent provider settings are excluded.
+Orca selection includes portable project layout overrides, but never pane IDs,
+state.json, locks, transcripts, generated machine paths or shortcut backups.
+Common configuration excludes local-only `cad-fill-dimension-report` skills.
+
+Environment overrides: `CODEX_HOME`, `PI_CODING_AGENT_DIR`, `CCB_HOME`,
+`ORCA_TEAM_HOME`; `AGENT_SETTING_PROJECT_ROOT` preserves the invoking project.
+`AGENT_SETTING_PROJECT_KEY` explicitly binds the same project across machines.
+Orca otherwise uses a project identity file or normalized Git origin; a project
+without either falls back to a machine-specific path hash.
+Runtime state is not transferred to a new machine. New machines rebuild pane
+identities and shortcuts; original-conversation transfer is a separate concern.
+
+## Explicit Export
+
+Only after an explicit push request:
+
+```text
+python scripts/sync-local-config.py --target orca --push --project /path/to/project
 ```
 
-## Commit From This Machine
+The exporter itself never commits or pushes. Review the exact changed files,
+stage only approved portable paths, commit, then push. Never apply remote CCB
+configuration to the live home before exporting intended local changes.
 
-Every commit intended for the remote repository must first export the local configuration. The pre-commit hook repeats the export and stages only managed paths:
+## Verification
 
-```bash
-./scripts/sync-local-config.sh
-git diff -- codex pi ccb/ccb.config
-git add -- codex pi ccb/ccb.config
-git commit
-git push origin main
+```text
+python -m unittest discover -s tests -v
+node --test orca/tests/*.test.mjs
 ```
 
-Review the staged diff before committing. The hook never pushes automatically.
+Tests use isolated homes and mocked Orca. Native macOS/Linux desktop acceptance
+and closing business conversations are not part of these tests.

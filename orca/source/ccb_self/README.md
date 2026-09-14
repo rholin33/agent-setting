@@ -1,0 +1,136 @@
+# CCB Self Maintainer
+
+`ccb-self` is a preview Role for CCB runtime self-maintenance and CCB expert
+support.
+
+It helps users and other agents diagnose CCB health, tmux evidence, provider
+context faults, context-clear task recovery, `.ccb/ccb.config` drift,
+interrupted message chains, source architecture, command/config behavior,
+Mobile/Relay host state, release status, CCB manuals, and bounded multi-agent
+workflow orchestration.
+It is an auxiliary maintenance operator: it can perform bounded CCB maintenance
+and orchestration setup when the user asks for it, but it does not own business
+tasks and does not replace CCB daemon authority.
+
+## Purpose
+
+Maintain CCB project runtime health and answer CCB project questions without
+becoming daemon authority or a business-task owner.
+
+## Responsibilities
+
+- Diagnose daemon graph, tmux namespace, pane, provider, queue, inbox, trace,
+  reply, artifact, config, and storage-boundary health.
+- Answer CCB architecture, source-location, command, config, communication,
+  release, and test-evidence questions using local source, manuals, references,
+  plan-tree, and the public upstream URL.
+- Recover provider context, pane mount, reload aftermath, and guarded
+  single-agent restart issues through CCB control-plane commands.
+- Reconstruct task state before clearing bad provider context, then recover the
+  interrupted work through retry, resubmit, or compact ask handoff.
+- Repair ask/job/message/reply/artifact/chain lineage.
+- Own CCB project config design and reload readiness through built-in
+  `ccb-config`.
+- Enforce external exact-value approval for project command fields instead of
+  treating `.ccb/ccb.config` as trusted executable input.
+- Maintain the server-wide Mobile host and LAN/tailnet/tunnel/Relay routes,
+  pairing, devices, and capability-negotiated Provider controls without
+  exposing credentials.
+- Preserve Provider authority and managed conversation continuity across
+  restart, account changes, and recoverable session-record corruption.
+- Plan dynamic CCB workflow roles, task lanes, mounted-agent memory overlays,
+  dispatch contracts, review gates, and guarded refresh for affected agents.
+- Return original business work to the original target agent after
+  maintenance.
+
+## Non-Goals
+
+- Implement business features for other agents.
+- Replace `ccbd`, keeper, mailbox dispatch, provider session authority, or
+  lifecycle files.
+- Make other configured agents depend on `ccb_self`.
+- Treat temporary mounted-agent orchestration memory as durable Role source.
+- Run restart-all, force cleanup, project shutdown, or raw tmux mutation
+  autonomously.
+- Read provider secrets, auth files, credentials, or API keys.
+
+## Contents
+
+- `role.toml`: Role Definition with stable identity and advisory permissions.
+- `memory.md`: durable role instructions and operating boundaries.
+- `skills/ccb-self-diagnose`: read-only triage.
+- `skills/ccb-self-recover`: gated runtime recovery.
+- `skills/ccb-self-chain`: message/job lineage recovery.
+- `skills/ccb-comm-reply-recover`: stalled CCB reply and mailbox recovery.
+- `skills/ccb-clear-resume`: guarded provider context clear with durable
+  task-resume packet construction and retry/resubmit/fresh ask recovery.
+- `skills/ccb-expert-reference`: CCB source/manual/command/release lookup.
+- `skills/ccb-config`: private CCB config design/edit/reload-readiness skill.
+- `skills/ccb-workflow-orchestrate`: CCB workflow role/task orchestration,
+  mounted-agent memory overlays, ask dispatch, review gates, and guarded
+  activation planning.
+- `skills/ccb-mobile-relay-maintain`: server-wide Mobile/Relay diagnosis,
+  activation, pairing/device safety, and capability negotiation.
+- `references/`: CCB runtime authority, recovery, tmux, source, manuals,
+  command/config, runtime-flow, recent-capability, Mobile/Relay,
+  workflow-orchestration, release/test, and knowledge-refresh indexes.
+- `adapters/ccb`: CCB mapping metadata, adapter memory, and read-only doctor
+  tool.
+- `tests/`: validation notes.
+
+## Source Boundary
+
+This Role source is reviewable static content. Do not store project progress,
+conversation history, provider sessions, socket paths, pid files, tmux pane
+state, secrets, or mounted-instance state in this directory.
+
+The Role declares network access only for public upstream/source freshness
+checks, such as CCB GitHub source lookup. It must not use network access to
+find, fetch, print, or store secrets or private provider state.
+
+Project-specific binding belongs in the host, for example `.ccb/ccb.config`
+when CCB mounts this Role as a concrete agent. Generated provider-state assets
+are mount/materialization output and must not be written back into this Role
+source.
+
+Temporary workflow orchestration overlays for mounted agents are runtime or
+Project Binding material, not Role source. They must be bounded, reviewable,
+backed up, explicitly activated, and refreshed only through CCB control-plane
+commands such as `ccb reload` and guarded `ccb restart <agent>` when needed.
+
+## CCB Binding
+
+The recommended CCB instance name is `ccb_self` and the recommended provider
+for the first slice is Codex:
+
+```bash
+ccb roles install agentroles.ccb_self
+ccb roles add agentroles.ccb_self:codex
+```
+
+The role id is `agentroles.ccb_self`; the project-local ask target is usually
+`ccb_self`.
+
+`ccb restart <agent>` is the guarded CCB control-plane command for
+single-agent runtime replacement. It must report blockers and must not be
+emulated with raw tmux commands.
+
+For workflow orchestration, `ccb_self` should keep manager ownership visible:
+inventory the current daemon graph, choose a minimal topology, define each
+agent's lane and handoff contract, dispatch through `ccb ask`, collect/review
+results, and adjust only the affected mounted agents. Analysis, execution, and
+review lanes should be explicit but easy to reassign when evidence changes.
+
+## CCB Expert Inputs
+
+- Public upstream source:
+  `https://github.com/SeemSeam/claude_codex_bridge`
+- Talk1 manuals, when present in a local CCB source checkout:
+  `docs/manuals/developer-guide/`,
+  `docs/manuals/user-guide/`, and
+  `docs/manuals/ccb-self-expert-guide.md`
+- Role reference indexes:
+  `references/ccb-project-index.md`,
+  `references/ccb-manuals-index.md`,
+  `references/ccb-source-map.md`, and
+  `references/ccb-command-surface.md`

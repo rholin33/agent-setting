@@ -1,0 +1,801 @@
+{
+  "count": 199,
+  "files": [
+    {
+      "path": "source/archi/adapters/ccb/adapter.toml",
+      "sha256": "18ecbe15c688af39640d6f7e1e0f56777489770ac7354b6591c6d77e5ac5dafc"
+    },
+    {
+      "path": "source/archi/adapters/ccb/memory.md",
+      "sha256": "f123ea937788a08a6e71fa366868339532c4c4155aed468a7ed3c30285627ca5"
+    },
+    {
+      "path": "source/archi/adapters/ccb/README.md",
+      "sha256": "5ea8485b17c169bc5a84ae2367bcf2f040e72600cf06e2f0ceba15cab04ce522"
+    },
+    {
+      "path": "source/archi/adapters/ccb/skills/archi-tooling/SKILL.md",
+      "sha256": "0f0e9ab0c2fb98501f6eddf966abe2e6de878fdbe320f1e77b948df19a9f5b77"
+    },
+    {
+      "path": "source/archi/adapters/ccb/tools/architec_tool.py",
+      "sha256": "06496eb3a21d6a09def4cb8b33e1f5bb3496885ed22e1842bebc4cf99a251944"
+    },
+    {
+      "path": "source/archi/adapters/ccb/tools/doctor.py",
+      "sha256": "826067491e7dc6ed2a163ffb9ea16f490d76e2f98ef4f5756e74a34d8c16b423"
+    },
+    {
+      "path": "source/archi/adapters/ccb/tools/install.py",
+      "sha256": "0818dfd77943f4e989425df54817b6cd7ebfd99003e8ac9157a41f4481f6eced"
+    },
+    {
+      "path": "source/archi/adapters/ccb/tools/update.py",
+      "sha256": "46f79ac5e2edad12745fc24639f7f22ab6418e874baa913d8285912aa9f57422"
+    },
+    {
+      "path": "source/archi/adapters/claude-code/README.md",
+      "sha256": "528739e588e2f69387c90018c78d345d4cee430cc83cfbdf4ef08abf77cccd62"
+    },
+    {
+      "path": "source/archi/adapters/codex/README.md",
+      "sha256": "7f986c7e569ca6bdca6b6f835a7dd2bf5388eae82d78905e8e9b32649f83e73f"
+    },
+    {
+      "path": "source/archi/adapters/hive/README.md",
+      "sha256": "0015d96cbb0ad2dc6fca257d5bc6dd59f5471ab90da41abd7dd91bd8942ecd5f"
+    },
+    {
+      "path": "source/archi/memory.md",
+      "sha256": "b34f00e4c0f9d601ede51e5c63cb5c2c5430fc46ee7bde020fe49c8db0c5e2c4"
+    },
+    {
+      "path": "source/archi/plugins/archi-workbench/README.md",
+      "sha256": "8e3eed9a179e8cd0dbb97907cc437f9f579f6789d0401256134ead10d857dcf4"
+    },
+    {
+      "path": "source/archi/prompts/architecture-review.md",
+      "sha256": "939a4a2801b8cf45300396b2886eb2086e803a942892f8b03b960e7178ee4514"
+    },
+    {
+      "path": "source/archi/README.md",
+      "sha256": "00a6a4b5f9bcaddfdf7fb213eaa1dfba1618c4e665ad1ab49fbe229f80ae5224"
+    },
+    {
+      "path": "source/archi/references/architecture-toolbox.md",
+      "sha256": "b377fad2d5c77f51dd6e2a39f339c701231ecaaf8bc0c3b12fb593d0d668a77e"
+    },
+    {
+      "path": "source/archi/references/vendored-skill-provenance.md",
+      "sha256": "38f81ffb8c900dcba96b37627f83c1cad52afd2c05670bb2b8cca491dd9465b5"
+    },
+    {
+      "path": "source/archi/role.toml",
+      "sha256": "727b5efc4038a1c7b0c5464ee709bac91ab9417ee2ce354905125149287022c0"
+    },
+    {
+      "path": "source/archi/skills/archi-advice/SKILL.md",
+      "sha256": "a213c2b2f95bc991ae8c659036829a91b1a374ece81074c8c2173c1af0f77658"
+    },
+    {
+      "path": "source/archi/skills/archi-change-impact/SKILL.md",
+      "sha256": "697065333217c024bae229708db6983d9c6fddb2446e5887846b017517efe0ea"
+    },
+    {
+      "path": "source/archi/skills/archi-decision-drift/SKILL.md",
+      "sha256": "0c6b12d14242caf37fcaf7df6c2c557519b9c32a78a2249ee0ac88cf348a0b42"
+    },
+    {
+      "path": "source/archi/skills/archi-dependency-topology/SKILL.md",
+      "sha256": "5d1fd669caa0c0210edae4a437ca4bdd33b3eee7d927106d8af1b3462dc3fc1c"
+    },
+    {
+      "path": "source/archi/skills/archi-diff/SKILL.md",
+      "sha256": "ec066a9fe95db890f7e762e7e60594a3cd1d6b1d8bead4d34f57e97961c11179"
+    },
+    {
+      "path": "source/archi/skills/archi-distributed-systems/SKILL.md",
+      "sha256": "1490bafffd621135ce27db72910020951b7b8acc3c0b08aee3e557dc9fb71ab4"
+    },
+    {
+      "path": "source/archi/skills/archi-evidence-map/SKILL.md",
+      "sha256": "f5212a00436e208d70920ab06903bf72a6b23cffcdf0d84d4801a2ceaf366a84"
+    },
+    {
+      "path": "source/archi/skills/archi-fitness-functions/SKILL.md",
+      "sha256": "338937f6c3ec4c60d49e2ff7a749c62d77fc37e4cb6b19c5a7209d772936884a"
+    },
+    {
+      "path": "source/archi/skills/archi-full/SKILL.md",
+      "sha256": "61ef3c2d17f9a5fd07640928b306b9f3c6d07943f7fdda8871a3bfd02cc419f4"
+    },
+    {
+      "path": "source/archi/skills/archi-goal/SKILL.md",
+      "sha256": "5987e3471c8c416e359660ce5e7108a5b76220afc365643ac8123388003b633d"
+    },
+    {
+      "path": "source/archi/skills/archi-module-boundaries/SKILL.md",
+      "sha256": "d0ae8ff62adcd2dd8549df6d4a47e43a85eddde1dbd622da8891a6feeaf73c69"
+    },
+    {
+      "path": "source/archi/skills/architecture-review/SKILL.md",
+      "sha256": "ea87bcec2f3cc221b4d3d1df4677f954f00acf21d28f4b27c586c4e384dcb4a4"
+    },
+    {
+      "path": "source/archi/skills/vendor/code-review-and-quality/LICENSE",
+      "sha256": "b88ef8718459d5b5aabb1943cb8f4fd57963422f2d98a801dac814fea53932c8"
+    },
+    {
+      "path": "source/archi/skills/vendor/code-review-and-quality/SKILL.md",
+      "sha256": "b226799dfd7191a149be6b55fcb83581dc1a39f787642f679832fba6358366e7"
+    },
+    {
+      "path": "source/archi/skills/vendor/improve-codebase-architecture/DEEPENING.md",
+      "sha256": "a26c6240f4ca8bfff5f11d07f199289e6ba9dfcb310d833beeec7d57c6b0d280"
+    },
+    {
+      "path": "source/archi/skills/vendor/improve-codebase-architecture/INTERFACE-DESIGN.md",
+      "sha256": "1859b050f44e883a9213efff0bced589fa406d34c4032789ceb98a19abfc7f1e"
+    },
+    {
+      "path": "source/archi/skills/vendor/improve-codebase-architecture/LANGUAGE.md",
+      "sha256": "1fd175d88e777207edc669dba22052f3407c1f136a613ba828384db96ac0b734"
+    },
+    {
+      "path": "source/archi/skills/vendor/improve-codebase-architecture/LICENSE",
+      "sha256": "4981c5f6a90eb3a969dacabb9350f5a75695ff3910b39b6534952908dfdc5ff7"
+    },
+    {
+      "path": "source/archi/skills/vendor/improve-codebase-architecture/SKILL.md",
+      "sha256": "43b7c1b5e88cb8990709c2c12c41b66896179a1745bc816a7a18339ce6fe377c"
+    },
+    {
+      "path": "source/archi/skills/vendor/receiving-code-review/LICENSE",
+      "sha256": "0da33ed814ee87e72db078f489c4447af72f13d9f25d9e17476f32efd77705fc"
+    },
+    {
+      "path": "source/archi/skills/vendor/receiving-code-review/SKILL.md",
+      "sha256": "bec8a68af4750ad86d074b3cdab4f430bbed1a66b141837b5007be8ccb79e960"
+    },
+    {
+      "path": "source/archi/skills/vendor/requesting-code-review/code-reviewer.md",
+      "sha256": "f979e8593dd60801ac79325f8d1e8ce5ed3879b4fa96cb1e20a73b24866a252d"
+    },
+    {
+      "path": "source/archi/skills/vendor/requesting-code-review/LICENSE",
+      "sha256": "0da33ed814ee87e72db078f489c4447af72f13d9f25d9e17476f32efd77705fc"
+    },
+    {
+      "path": "source/archi/skills/vendor/requesting-code-review/SKILL.md",
+      "sha256": "9ce6ba14c17aff85ab4c77c4c1e718c29502b4f2af2220c935861bd1b9f84751"
+    },
+    {
+      "path": "source/archi/tests/evaluation.toml",
+      "sha256": "2067be6d6ed9c9e84faf61bc94194d6d83307e0113830c06481671bfad6815b9"
+    },
+    {
+      "path": "source/archi/tests/validation.md",
+      "sha256": "9ff979c6fea8c22f1c62a83ffd10988d80eeadd510324c4ed69efe4de5581ea6"
+    },
+    {
+      "path": "source/archi/tools/README.md",
+      "sha256": "ad9a01994eacee5a4d403bd0c7d3dd99eb6fb33329092158c1540b2fb4e083dc"
+    },
+    {
+      "path": "source/ccb_self/adapters/ccb/adapter.toml",
+      "sha256": "6fe6e97ea5c0c250f349dc7fef7a3968a10c3f105d723d3434de147b192ae0e8"
+    },
+    {
+      "path": "source/ccb_self/adapters/ccb/memory.md",
+      "sha256": "9ce01a83732fff3ca97356f1433ee8dad0cad95b65062c0410753353d98a5b44"
+    },
+    {
+      "path": "source/ccb_self/adapters/ccb/README.md",
+      "sha256": "98a87100d2cd02e4b0971538272665070e49dc38deaa47a53485afbf2342febc"
+    },
+    {
+      "path": "source/ccb_self/adapters/ccb/tools/doctor.py",
+      "sha256": "fa943f7b3b073deab470ae7db1c6b952e3596045032eae84e293f94275f13cf1"
+    },
+    {
+      "path": "source/ccb_self/memory.md",
+      "sha256": "e090dd4f41cde4f0d6001c340b4972a613a266c90dfc2ebeb35eb4280e7c185a"
+    },
+    {
+      "path": "source/ccb_self/README.md",
+      "sha256": "24553ef7ee0c6a67a8894d89f0e46d8795420fbebb31d4e3653919b241e6c810"
+    },
+    {
+      "path": "source/ccb_self/references/ccb-command-surface.md",
+      "sha256": "c190e17b079e9852ed688ec110130eb487c4eab2682d4b5cc71e664ca21b4b38"
+    },
+    {
+      "path": "source/ccb_self/references/ccb-knowledge-refresh.md",
+      "sha256": "01f0bdb38e18dcd0fdea1e90b88ad001b48fa6bb0bbea7024affd865f9bfdbf4"
+    },
+    {
+      "path": "source/ccb_self/references/ccb-manuals-index.md",
+      "sha256": "cdc90514be1e842450998d6baad6da7631f80089539730044bbaa8db3db394f9"
+    },
+    {
+      "path": "source/ccb_self/references/ccb-mobile-relay-runtime.md",
+      "sha256": "882ca9b9ade8df975e91ced61071a7df3a05a1d01be002631f46d0d21a69d3c1"
+    },
+    {
+      "path": "source/ccb_self/references/ccb-project-index.md",
+      "sha256": "8f630983532c172cc9fb2260885345bafc7396f021af4972371c48f603af848b"
+    },
+    {
+      "path": "source/ccb_self/references/ccb-recent-capabilities.md",
+      "sha256": "8555d4972f90e70b49614d8b8fafb344e96630caf7648b01080d5f7dbcc816d2"
+    },
+    {
+      "path": "source/ccb_self/references/ccb-release-and-test-gates.md",
+      "sha256": "8ae0eb654b08ca7d135229c739f3d0af251f14956e22b336ed0b7a1630f19306"
+    },
+    {
+      "path": "source/ccb_self/references/ccb-role-and-config-system.md",
+      "sha256": "b9c849bb8ba026d2431bdce86720626bf718b2615d6dbd6476f0f43e379391c0"
+    },
+    {
+      "path": "source/ccb_self/references/ccb-runtime-flows.md",
+      "sha256": "d443adadd4a86777556afcbe6dfaaf70311079e0e37972fd4160e02c013e01f1"
+    },
+    {
+      "path": "source/ccb_self/references/ccb-source-map.md",
+      "sha256": "b678c30011df713264b79b178396c838e5c762bcad674ca18ee27b73b6029d46"
+    },
+    {
+      "path": "source/ccb_self/references/ccb-workflow-orchestration.md",
+      "sha256": "da0db4fac96e78d774217cd31263632c7ac0c0c9146d9b87316525904e124e96"
+    },
+    {
+      "path": "source/ccb_self/references/recovery-runbooks.md",
+      "sha256": "293ed353a84ea2d37c1396d9682c60fa197a53b28b1ccb89ff9cd92a1e2a246c"
+    },
+    {
+      "path": "source/ccb_self/references/runtime-authority.md",
+      "sha256": "a0ce6aa7925c3fd15657c332672c894edd918cf185c4cdd9f312caac4178852a"
+    },
+    {
+      "path": "source/ccb_self/references/tmux-ccb-quickstart.md",
+      "sha256": "8bf65989a289ac9fc276dccd1dddca79fdb20a1cbf300ac6ec203ed07788145b"
+    },
+    {
+      "path": "source/ccb_self/role.toml",
+      "sha256": "93d3323aa629c7a76f294063016da3aa184d0e8395d319f29e7e46cd8b71337a"
+    },
+    {
+      "path": "source/ccb_self/skills/ccb-clear-resume/agents/openai.yaml",
+      "sha256": "d0418edb5703a34289d4a1f9924f79ab3ba86c920cc9e4d3a22e6ef17e981066"
+    },
+    {
+      "path": "source/ccb_self/skills/ccb-clear-resume/SKILL.md",
+      "sha256": "63a0000704287cc87d700ac1b2e0814297400517f8bd18abe3f5a1de76e6585c"
+    },
+    {
+      "path": "source/ccb_self/skills/ccb-comm-reply-recover/SKILL.md",
+      "sha256": "a4fbd475cde3b730f9d22736a2c122c2d810be7111985abb1ea5f4d4bcd16c4d"
+    },
+    {
+      "path": "source/ccb_self/skills/ccb-config/references/config-contracts.md",
+      "sha256": "8936ee2a351545f7567bb33f30c8c4c317cdab84d47770478e0ee8202f299d2f"
+    },
+    {
+      "path": "source/ccb_self/skills/ccb-config/SKILL.md",
+      "sha256": "379a8d2346462bcd9f424bb0daf2be5a283600264d54a57536dae4d888bc5d9d"
+    },
+    {
+      "path": "source/ccb_self/skills/ccb-expert-reference/SKILL.md",
+      "sha256": "7e347f361257f58e262859da534b7016e7ce919ae35b2495e7dd10b88c5ec4d3"
+    },
+    {
+      "path": "source/ccb_self/skills/ccb-mobile-relay-maintain/SKILL.md",
+      "sha256": "39d7faa6440aacfa398c2e423bf22fdb4433b1ae96825d9c82202b9a0a4c2ac3"
+    },
+    {
+      "path": "source/ccb_self/skills/ccb-self-chain/SKILL.md",
+      "sha256": "e1c48ae56eea71dfca4ab71fad77de6a3393fb987adba11251f3d6e889010b85"
+    },
+    {
+      "path": "source/ccb_self/skills/ccb-self-diagnose/SKILL.md",
+      "sha256": "be8a1d30e548388b16a781fb3504ef03caed9af93adf604c1890c078310b8700"
+    },
+    {
+      "path": "source/ccb_self/skills/ccb-self-recover/SKILL.md",
+      "sha256": "fd036b6a2869130f350874f5c690690c0656e07df59ccd2646334079fd3d6be0"
+    },
+    {
+      "path": "source/ccb_self/skills/ccb-workflow-orchestrate/SKILL.md",
+      "sha256": "7e589489c9b40a0657651107e86c355588c7b42bda3bee9b368e00b81e9afe50"
+    },
+    {
+      "path": "source/ccb_self/tests/validation.md",
+      "sha256": "ccb1b7e14811146fbc07cd1f9187ac19bb9eef7c6284824878d3107ba56f70ef"
+    },
+    {
+      "path": "source/ccb_self/tools/README.md",
+      "sha256": "978ea7c59ea91d88c25f682eaa6fdc30a4623e245933dc0706ab780317bb4f93"
+    },
+    {
+      "path": "source/code_reviewer/adapters/ccb/adapter.toml",
+      "sha256": "d5d3ff5c6f6334f8596e83e4dbcc3d1479763303eca5031bd40243b5f5e47b07"
+    },
+    {
+      "path": "source/code_reviewer/adapters/ccb/README.md",
+      "sha256": "8ca445baf1c62ae91bfc92264e4631e2c75e185dab21e6714f4571559393cfdb"
+    },
+    {
+      "path": "source/code_reviewer/memory.md",
+      "sha256": "b7af3af62a5ade983c4ef6e4f1f39b1cbe7520bf331565a50faa17ecf54d7c57"
+    },
+    {
+      "path": "source/code_reviewer/role.toml",
+      "sha256": "3e2b7d1969680bfa1a883fba6058e21db3a7d5193c42695bafc815b656773670"
+    },
+    {
+      "path": "source/coder/adapters/ccb/README.md",
+      "sha256": "f39e3003f697bc7f56844084060a27f7e57664fd9a8a27d8f5e4166e2d42b8c2"
+    },
+    {
+      "path": "source/coder/adapters/claude-code/README.md",
+      "sha256": "23b2fec4f67c778c6fc1fb6e6bc74ec56fed8ebe36bab172783c388dcc304924"
+    },
+    {
+      "path": "source/coder/adapters/codex/README.md",
+      "sha256": "bc13d50129c9ac4a98aa1f2be4a107f9674f391da96e8a9540c693147ea0bbdf"
+    },
+    {
+      "path": "source/coder/adapters/hive/README.md",
+      "sha256": "e6039c25dbf54bb7abb955ec8c2065cdf89211b049b3f1d7775f1e7c03791201"
+    },
+    {
+      "path": "source/coder/memory.md",
+      "sha256": "54ee788d62ebfb99a52ddb374527ff647f31022fdab6b1ec7ece98fb0ae3508f"
+    },
+    {
+      "path": "source/coder/README.md",
+      "sha256": "7cd8a189be636cf46fc1c7050e979917ce7e2290b356afd24897884111fd5ca0"
+    },
+    {
+      "path": "source/coder/references/coding-discipline.md",
+      "sha256": "5bab5f49de3fa0b89ae325e97863a6fe7a127ca9764d6d44d0bcf42e6d16f1d4"
+    },
+    {
+      "path": "source/coder/references/role-boundaries.md",
+      "sha256": "63644cf6df43eae21e9b90d0f674fd1de704a72222cde001fcaa6f0b70261e51"
+    },
+    {
+      "path": "source/coder/role.toml",
+      "sha256": "29d7b5807dbc367038be7a5338a18a836674eb52b006feb15818449a4c2453e9"
+    },
+    {
+      "path": "source/coder/skills/bug-fix-prove-it/SKILL.md",
+      "sha256": "6f32cdc486171d8803884f9e6259a7019c000d4307da9c2684053b385aabee83"
+    },
+    {
+      "path": "source/coder/skills/ci-failure-fix/SKILL.md",
+      "sha256": "9bb8f70e36b1494b469a90d0948cd244fe8ecb4612895e8f44a5764f3f604601"
+    },
+    {
+      "path": "source/coder/skills/code-context-scan/SKILL.md",
+      "sha256": "119e393b914dab1db1cd77f7642debb60c97e1a34c42e9458333517babeb2817"
+    },
+    {
+      "path": "source/coder/skills/fallback-discipline/SKILL.md",
+      "sha256": "4b94972078740d78be589aec89c76602046716d64595ca956ff25969e19df398"
+    },
+    {
+      "path": "source/coder/skills/large-file-control/SKILL.md",
+      "sha256": "7d86ccc2041b55319d4e17cac0760101747d329eee94b93908bfe42106b5293a"
+    },
+    {
+      "path": "source/coder/skills/minimal-implementation/SKILL.md",
+      "sha256": "7d110809c16d61ccb65b5ec0ec0d13d97ed7766d5691ec49ae934d00a0296ac9"
+    },
+    {
+      "path": "source/coder/skills/repo-style-following/SKILL.md",
+      "sha256": "166531edb88fb648a07e73bad80f400463a55de6d59c293604b817966e91b075"
+    },
+    {
+      "path": "source/coder/skills/safe-dependency-change/SKILL.md",
+      "sha256": "ef3e3ccec71f5576f3bd87f73966f17d25267a062b0833d70ae5fd3a9d38ab2b"
+    },
+    {
+      "path": "source/coder/skills/source-check-before-api-use/SKILL.md",
+      "sha256": "0703e74ff3f50859c106a8e19287d8a93357aa46bf3c5b2c5b55d14e291dd2ba"
+    },
+    {
+      "path": "source/coder/skills/test-backed-change/SKILL.md",
+      "sha256": "01e66a8b2f44cc7418e50442383d7adc508522ff79cd26637721eafc1ee1c923"
+    },
+    {
+      "path": "source/coder/templates/change-slice.md",
+      "sha256": "b9e38f02289333036f6b12164a7a395313ec30925c2ffc4b7d922a1a1a085504"
+    },
+    {
+      "path": "source/coder/templates/code-style-contract.md",
+      "sha256": "9bcc217e31d1ba4e8ec75d7a2aff66c1c971101f69d771c5c67ab88d61d9d12e"
+    },
+    {
+      "path": "source/coder/templates/dependency-change-gate.md",
+      "sha256": "bead06aeab8efea631e3b2aad41507e3ab4a63eec0723341c83f6681468858a5"
+    },
+    {
+      "path": "source/coder/templates/fallback-discipline.md",
+      "sha256": "4bd561ec99757e1bdc0a05278965fade66c2ada0130fd7b90c9ba5828c43e588"
+    },
+    {
+      "path": "source/coder/templates/final-report.md",
+      "sha256": "e285fa19be238b9c2190e6610ecb4e000553941124bbb87c5633a99de3cf66e5"
+    },
+    {
+      "path": "source/coder/templates/implementation-brief.md",
+      "sha256": "599c1c0c7dde62c86f1c75872f58c8bda62e3db1a40f7092e421160ddba9ad02"
+    },
+    {
+      "path": "source/coder/templates/large-file-control.md",
+      "sha256": "85a3435c6868cc8bf2b7a8fdb0d0ad3f1c4dc79f49500c0fb2307074c2414e1f"
+    },
+    {
+      "path": "source/coder/templates/test-proof.md",
+      "sha256": "856998ad1444f2d6fc3a40b72d7a6218507079710898e41391f995c6f7729d9a"
+    },
+    {
+      "path": "source/coder/tests/validation.md",
+      "sha256": "a61a385151b04e9bdc401fd616df06d490faac6403c77b03bc3ffb65d598401d"
+    },
+    {
+      "path": "source/frontend_engineer/adapters/ccb/README.md",
+      "sha256": "4fdf3ac50281a73b911531dc0ac6ea305d9adf9069ff1bef6cc5fb00ea371c14"
+    },
+    {
+      "path": "source/frontend_engineer/adapters/claude-code/README.md",
+      "sha256": "c66219a7d56ea3ad2a38b5e2316d1e9152e88a60a60da134ca1ea43b5192bdd8"
+    },
+    {
+      "path": "source/frontend_engineer/adapters/codex/README.md",
+      "sha256": "f219ffd05d303422d779b8512d7c69300e1daadccff73895174e65a30cebbb48"
+    },
+    {
+      "path": "source/frontend_engineer/adapters/hive/README.md",
+      "sha256": "e42fb952f666893c6f736ebda0068c57ec075166ae7cbcee43f50583ac67af95"
+    },
+    {
+      "path": "source/frontend_engineer/memory.md",
+      "sha256": "73c357b3f7875bf1e5bb761f07226f1753f2d75c5847c734b50e9d0fc226f0a0"
+    },
+    {
+      "path": "source/frontend_engineer/plugins/frontend-mcp-toolbox/mcp.json.template",
+      "sha256": "7aa33ef8f4f95036de2d7739debb8148ad425027091869b4ed780dfdb502011f"
+    },
+    {
+      "path": "source/frontend_engineer/plugins/frontend-mcp-toolbox/README.md",
+      "sha256": "31d62ca2c6a994ef2355cbc32e1e0db5c3bd0654d9df7b81752f768e10ead50e"
+    },
+    {
+      "path": "source/frontend_engineer/README.md",
+      "sha256": "86c00e2db7868fab0ca423eafa4f16865f91152854633590061e0b51501611b3"
+    },
+    {
+      "path": "source/frontend_engineer/references/accessibility-and-browser-quality.md",
+      "sha256": "4e6a0286a9c9935bd4dd58a4c5884d857efbbd434ce9a361b8ac71a3dc820535"
+    },
+    {
+      "path": "source/frontend_engineer/references/demo-catalog.md",
+      "sha256": "b91215d42f31604a0698b23ef0a66804a562d58c48e28c45c887dc51185b5a10"
+    },
+    {
+      "path": "source/frontend_engineer/references/design-system-and-tokens.md",
+      "sha256": "83cfcbe000aabc0041b3e73e06ee153005b56f7b5b444dec39368ca704b5c167"
+    },
+    {
+      "path": "source/frontend_engineer/references/mcp-and-agy-workflows.md",
+      "sha256": "5809a13d26f62cbb563b2a40da4033cea5e0793157db15b917b7f15332d26d3b"
+    },
+    {
+      "path": "source/frontend_engineer/references/ui-ux-pro-max-provenance.md",
+      "sha256": "8810f4a2a6c54bbf70744c2d5bbba91421bc8124acf302a1f677fb6f385c0649"
+    },
+    {
+      "path": "source/frontend_engineer/role.toml",
+      "sha256": "b0a2ba575991fd3a39f55264d5ef98476e3970aa3aa007c47f1a5ae4882e3ae3"
+    },
+    {
+      "path": "source/frontend_engineer/skills/agy-frontend-delegate/SKILL.md",
+      "sha256": "2ec40003f69c82e28d7c3098ca7195e6a9c264be1c3264bfda68da03f16d391c"
+    },
+    {
+      "path": "source/frontend_engineer/skills/browser-quality/SKILL.md",
+      "sha256": "6c715b6c5d835cfb7815c4b5ff6785328621dbadd7c1932457595842847b2fd0"
+    },
+    {
+      "path": "source/frontend_engineer/skills/component-composition/SKILL.md",
+      "sha256": "7c411484500b1b60a1c4f117f87d0440c5db8f86df8e99c9d07e282e5eaa01aa"
+    },
+    {
+      "path": "source/frontend_engineer/skills/demo-kb-curation/SKILL.md",
+      "sha256": "0c3743e3043c6adcf130a1a2df76278e28a9b47ee205294c53d589e691f41088"
+    },
+    {
+      "path": "source/frontend_engineer/skills/design-system-tokens/SKILL.md",
+      "sha256": "e26e16c688efd77b94f7ad4541678c2dbb35f289bc1fd9792373bfc75c75bde4"
+    },
+    {
+      "path": "source/frontend_engineer/skills/figma-to-code/SKILL.md",
+      "sha256": "b45e2414733050e50260636ec9ef1b36903f2ab149174eb8ae1f6af6cbedae56"
+    },
+    {
+      "path": "source/frontend_engineer/skills/frontend-brief/SKILL.md",
+      "sha256": "eb51a9adfc137667306bca0495b85f24ecbac890269ee36daa6464e5f1255284"
+    },
+    {
+      "path": "source/frontend_engineer/skills/responsive-accessibility/SKILL.md",
+      "sha256": "c3ecaf897bba930d48bb4ee57a0c75a0ecda58215bad294eef1fa2057ceb4dc1"
+    },
+    {
+      "path": "source/frontend_engineer/skills/role-setup/agents/openai.yaml",
+      "sha256": "e1565f43d1044ac4ef8e8e3340fcb61d11347e62ba244ac3f646133f90a239fd"
+    },
+    {
+      "path": "source/frontend_engineer/skills/role-setup/SKILL.md",
+      "sha256": "9c4a0002e09e7abc3eae4f5bc02ebab89dede58abd97b5b32a540e314bbf3526"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/_sync_all.py",
+      "sha256": "8159557ca10a90dc56b25f04e71772b97e981dbe6400ac3c7dd8cd2816af6280"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/app-interface.csv",
+      "sha256": "a276e55817958075a8dffeb5f5d7be16703b1611e9f0a3527525e1a44df25c46"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/charts.csv",
+      "sha256": "ebb565308115f955791b0431797a89d9b3587c25d5babb9428d10712c4924817"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/colors.csv",
+      "sha256": "69ee8c1147b269599d20ca418bdd6f32563a9aa2d962fb9a9b8dec66bf7b1ba4"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/design.csv",
+      "sha256": "104b62867c07c7d25a559f39db64556437c16efdc5963ebd2773b448ec03bdf0"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/draft.csv",
+      "sha256": "0771917c169cbde667c2e2aa05a6dbfaf22d9437e98c5d0e1ebd8228738423eb"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/google-fonts.csv",
+      "sha256": "2c03a3cd134d126bd9d6a7dc2a6360dc5272219ad6df3eb9315b031f806e1487"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/icons.csv",
+      "sha256": "9da693f818d43e2110e28d949905c85baad1650d383ae9e1568f58c766b0e016"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/landing.csv",
+      "sha256": "080cedbcd61ff8ec9520f33929baa76bee9589e783f83b2f8d824a466b6a46d7"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/products.csv",
+      "sha256": "6ea44a7725d708a25f80626369eb011ec202809b5dfcc8ca7fce2402b5489cf1"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/react-performance.csv",
+      "sha256": "47c0a454cb73bf32378c55eb781dea4c44440ec6a1b52039119afc354315c17e"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/stacks/angular.csv",
+      "sha256": "0c37794e6b6e3d0e3a0bb90eb619608faaa5ce703afe34c27ef6e3c1ac583258"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/stacks/astro.csv",
+      "sha256": "ff7fa30b41464fbe907a99499a32b4395210ef57f3674bef628aeadf767f40a8"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/stacks/flutter.csv",
+      "sha256": "e470e6bc2bcd8562667cc764d1e1afb0be0a30ca4dc9ec12fa18b19d46f156bd"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/stacks/html-tailwind.csv",
+      "sha256": "1f004891dd189f6bc2a7717401e3100244326e7e2f3963a79bf7b2349d85e091"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/stacks/jetpack-compose.csv",
+      "sha256": "8e1995b93414e9d50f8d450bdd15853ff138ca3b8c9d6529cd3171729fa5fa7f"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/stacks/laravel.csv",
+      "sha256": "0f523354dec42df92fc570a408cd1128fd1efc879874ad9163ced4f2b179d2b1"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/stacks/nextjs.csv",
+      "sha256": "06a8e8c13bd44696c6ebb4cb6c4d8dea440e3de8cce77616512529ed29258f0c"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/stacks/nuxt-ui.csv",
+      "sha256": "c1f3c9e438ab89f806a0c2e0be4c37cb34d9370c16207353aa9c972d548f710e"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/stacks/nuxtjs.csv",
+      "sha256": "696ec6df0e5971cd8b69080ee6abea2e9748fb2de47acb2bcc748302684f2030"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/stacks/react-native.csv",
+      "sha256": "a08ca77fcf6b6d9531982dce465366296013bfcf12d2938ac72ad57cf0c4f085"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/stacks/react.csv",
+      "sha256": "b6e3eb0e4c9c01bd00ffb951d5ca224a19d488b4544c75436f48cf92ff12bf45"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/stacks/shadcn.csv",
+      "sha256": "0f9cc6fbfebea8026950c422808bb3aae239185bad770726b331f827f8e1a6de"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/stacks/svelte.csv",
+      "sha256": "bc8d158994a8bdf412830a9dd5e5a5534edd2f367a6e50e0ebd4d76f592dfa3f"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/stacks/swiftui.csv",
+      "sha256": "e87cb9eee208bb753bdab96d4a261c7f830c4317ee90ec098316b248fc32be85"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/stacks/threejs.csv",
+      "sha256": "c182b38b30fa11531796e018d9fa87d63a5a85bee35c1bfb9baf480df098d270"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/stacks/vue.csv",
+      "sha256": "9b793c3f4eec85f77a758c09322f2b62f3b3ca549bb713ccf0849ef885934395"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/styles.csv",
+      "sha256": "b3fabd4e47a91d330411e32c6c68748dc0ab5f67b02404e0c0d26eb517d61814"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/typography.csv",
+      "sha256": "a393558b7acc79193744954b93e8e878b2d7b0a4901e3433995b66a219935d3a"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/ui-reasoning.csv",
+      "sha256": "41976082ecae1100da937c949215dc6694393e03f3c2a7444dd92a9edb43cb11"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/data/ux-guidelines.csv",
+      "sha256": "1870ee048f2a2bdd60709f8f7adf7f3b6dcad560bc005c8b2915a8ac8639820d"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/LICENSE",
+      "sha256": "1b8bd455510cc1f6f9bd510ffe2ec372d1c51fe0e082ddfee8b41825fb7aa055"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/scripts/core.py",
+      "sha256": "378139ed6401c5dcfe8b414b2cc0887660c5b07904ca2e46a079036e0bee7ed9"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/scripts/design_system.py",
+      "sha256": "32d910e6698b665af79f80ec8ae420c3f54b257b0c3f69bfa9efc5b3d956df08"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/scripts/search.py",
+      "sha256": "fcefd1315744ef8c4aabdefbe659a9405f4a780030b3f779a459e656866dc78e"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/SKILL.md",
+      "sha256": "4d89e171a3edc39386ce5df27d4ff1446fc20c2dd41702154c93b5535d4cac31"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/templates/base/quick-reference.md",
+      "sha256": "108f2a0b90f1c0dc195f4bef34efc554563649a1f41402eaa39b9e1ea55b8e97"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/templates/base/skill-content.md",
+      "sha256": "eef7b944a52651804e452b7dc071e92db8a599dcd3e6fa2833701509b293cf20"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/templates/platforms/agent.json",
+      "sha256": "8093dd46594bd774e8af79d3112db81b01d10c27f3214d1fe78e4564437e91a6"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/templates/platforms/augment.json",
+      "sha256": "37204823ab33814cfd835751d7ec251bb8daaf86ce916f0e13f6bb8c6c9d0459"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/templates/platforms/claude.json",
+      "sha256": "0501eef7d64195112318286291a912cde64ad2101c6c6813ea260933a739c888"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/templates/platforms/codebuddy.json",
+      "sha256": "a4af41d9430a557abb34b4fc84f469383b14f67a628c95039cb3bd6e4dcaf252"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/templates/platforms/codex.json",
+      "sha256": "1562e19952e171a0c8b441aebf782419188fdb509c0c546d343088a8571263e3"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/templates/platforms/continue.json",
+      "sha256": "d06ebdf1bf64c32b17baa340eacb0c4fa9409544e64fb60413f920208cd76a70"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/templates/platforms/copilot.json",
+      "sha256": "366971362c700ea01696664930bfdad089e456a5a716509d1dcea3e481c0597e"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/templates/platforms/cursor.json",
+      "sha256": "632706202ea60fe02084dacddf559356b06505ee68f2738cbb8ebac7242df5f3"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/templates/platforms/droid.json",
+      "sha256": "10cba179efa857a287c394a8fbb288e21db846ba82289f5ebb124b86a968ab56"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/templates/platforms/gemini.json",
+      "sha256": "9bbf8d7f4afe472e24e9ccff2dd854f75f237ce686e5646f980410690f3204fe"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/templates/platforms/kilocode.json",
+      "sha256": "96a735fb50dd4bd67d0922cf87b69165e31b9ec8354281abb9de75a37b9a8e0f"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/templates/platforms/kiro.json",
+      "sha256": "d6c9f750076897afb7368241c6021f39f6a28137e35fadf6eae7e4c4aac72759"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/templates/platforms/opencode.json",
+      "sha256": "783469feb70d75e2eb785ce9848118e81267bde641f7449a970d90c9b0b2b3bf"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/templates/platforms/qoder.json",
+      "sha256": "b1da8ebcdadd68ad6569b970696341452f5b86999f3db4f89465032947992da3"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/templates/platforms/roocode.json",
+      "sha256": "8927215a17fef43df2e99a325c42996fb0f1a01c591aed77e6097ca37d6287b4"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/templates/platforms/trae.json",
+      "sha256": "591c95c81b24633c9d7f2da6c58716d5b025ffc40f724138527ddd94110fd800"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/templates/platforms/warp.json",
+      "sha256": "8428bebd79f799367951045998614b17762508584008e59c2a0edf60f9d613bf"
+    },
+    {
+      "path": "source/frontend_engineer/skills/ui-ux-pro-max/templates/platforms/windsurf.json",
+      "sha256": "9445eb6334b6c93dd5498f4555c4972a15f87cdef060f514dc2d23f9aa4346ea"
+    },
+    {
+      "path": "source/frontend_engineer/skills/visual-direction/SKILL.md",
+      "sha256": "390fd26d257866c432ac580bcbfed097da1fd3517fa5e25b3f9d54cdb352172d"
+    },
+    {
+      "path": "source/frontend_engineer/tests/validation.md",
+      "sha256": "d1cd040636f7cc8698e75d4c47fd88fcd384cda8be5fa6dd94398e1827f37174"
+    },
+    {
+      "path": "source/frontend_engineer/tools/mcp-tools.toml",
+      "sha256": "556b156a87acc585f3d5ddb107f8235699aae5be48d0d04bbf96f02c673cd3bd"
+    },
+    {
+      "path": "source/frontend_engineer/tools/README.md",
+      "sha256": "3560fe8e8a798a70c4b96929e27a41d2d98b64b11482d72bfd79fdc2e5ae5397"
+    },
+    {
+      "path": "source/frontend_engineer/tools/role_setup.py",
+      "sha256": "1822d087d27c1d5c9b6aae25f660260611c3305272a265bfc7e5c9d8d1fe4b82"
+    },
+    {
+      "path": "source/simple/adapters/ccb/adapter.toml",
+      "sha256": "88c586edb2131765936af5d825bc04eaa8214629f28f32c1dfa86ddf5d519060"
+    },
+    {
+      "path": "source/simple/memory.md",
+      "sha256": "52b2c3a985fa61e8309e015d4a2cca61fd2e67ce226ff7d0ebc81c6fa479c77e"
+    },
+    {
+      "path": "source/simple/role.toml",
+      "sha256": "c7be559f2fdb1a5fecfb01d794860e4d01840c8c21b2ce7b36e02ca8eb06a8b0"
+    }
+  ]
+}

@@ -1,118 +1,110 @@
 ---
 name: agent-setting-sync
-description: Synchronize portable local Codex, Pi, and CCB configuration with https://github.com/rholin33/agent-setting using a pull, merge, review, commit, and push workflow. Supports an explicit `force` mode that updates the current machine from the validated remote configuration, including an optional project-local `.ccb/ccb.config`. Use when the user explicitly invokes $agent-setting-sync, asks to synchronize the agent-setting repository, or uses the legacy $codex-sync name. Exclude credentials, runtime state, system skills, and unrelated files.
+description: Use when the user invokes agent-setting-sync, asks to synchronize the agent-setting repository, or uses the legacy codex-sync alias. Requires an explicit ccb or orca target; explicit push is required to publish local configuration.
 ---
 
 # Agent Settings Sync
 
-Synchronize only the portable configuration managed by `agent-setting`. Preserve unrelated local changes, stop on ambiguous conflicts or sensitive-file changes, and never force-push.
+Repository: https://github.com/rholin33/agent-setting.git, branch main.
+Preserve unrelated files. Never force-push, copy credentials, or synchronize
+runtime state. Provider CLIs, model services and login are already configured.
 
-Exclude `cad-fill-dimension-report/` from Codex and Pi skill synchronization. Never export or restore `.ccb/agents/`, including agent Pi `settings.json`; `pi/projects/**/agents/` is generated runtime state. Preserve these files locally. Before staging newly exported files, inspect `git log --diff-filter=D -- <path>` and honor intentional remote deletions instead of restoring local remnants.
+## Required Invocation
 
-## Modes
+| Request | Behavior |
+| --- | --- |
+| agent-setting-sync ccb | Pull and merge common Codex/Pi plus CCB into this machine |
+| agent-setting-sync orca | Pull and merge common Codex/Pi plus Orca into this machine |
+| agent-setting-sync ccb force | Back up and apply remote CCB/common files |
+| agent-setting-sync orca force | Back up and apply remote Orca/common files |
+| agent-setting-sync ccb push | Export, review, commit and push CCB/common files |
+| agent-setting-sync orca push | Export, review, commit and push Orca/common files |
 
-- Default: merge the remote configuration into the live local configuration, export reviewed local changes back into the checkout, commit, and push.
-- `force`: make the validated remote configuration authoritative for the current machine. Invoke the sync hook with `--force`; it skips the debounce window, backs up every overwritten local managed file under `$CODEX_HOME/.sync/codex-setting/backups/`, and does not export, commit, or push. The current project's `.ccb/ccb.config` is always included alongside the global CCB config, even when `.ccb/` does not yet exist; a missing project file is seeded from the global remote config. When the project has `pi/`, its portable Pi settings are also restored. It does not delete local files that are absent from the remote.
+Require exactly one target. Missing target: ask "Sync ccb or orca?" before any
+mutation. Both targets, unknown modes, or force plus push: reject the request.
+Do not infer target from the current application, existing folders or past runs.
+Only the literal explicit push request authorizes local export/staging/commit/push.
+"Sync", "update", and force never authorize those steps. A default invocation
+ends after applying and verifying local configuration, even if local edits exist.
 
-## Scope
+## Paths And Scope
 
-Resolve paths from these environment variables, using the defaults when unset:
+Capture the user's original project directory before changing directories.
+Pass it through AGENT_SETTING_PROJECT_ROOT. Resolve CODEX_HOME (default ~/.codex),
+PI_CODING_AGENT_DIR (default ~/.pi/agent), CCB_HOME (default ~/.ccb), and
+ORCA_TEAM_HOME (default ~/.orca/roles/ccb-team). Python 3 runs the shared sync
+implementation on Windows, macOS and Linux; use python on Windows or python3
+where available. No Bash or PowerShell dependency is required for the sync core.
 
-- `CODEX_HOME`: `~/.codex`
-- `PI_CODING_AGENT_DIR`: `~/.pi/agent`
-- `CCB_HOME`: `~/.ccb`
+The managed checkout is $CODEX_HOME/.sync/codex-setting/remote. Verify its origin
+and main branch; clone the canonical remote there if absent. Stop on a dirty
+checkout, detached/non-main branch, staged changes or unresolved merge.
+Do not discard changes to make synchronization proceed.
 
-The checkout is `$CODEX_HOME/.sync/codex-setting/remote`. The local sync directory keeps the historical `codex-setting` name for compatibility; its `origin` must be `https://github.com/rholin33/agent-setting.git` on branch `main`.
+Common scope: codex/AGENTS.md, codex/hooks/, codex/rules/, codex/skills/ excluding
+.system and caches; pi/AGENTS.md, pi/settings.json, pi/skills/, pi/bin/.
+CCB scope: ccb/ccb.config and the current project's ccb/projects configuration
+and pi/projects settings. CCB role bootstrap in roles/ and ccb/roles.json belongs
+only to CCB. Orca mode must not apply CCB config, install CCB roles, or touch
+.ccb provider-state settings. CCB mode must not apply or export orca/.
 
-Managed Codex paths are stored under `codex/` and map to the corresponding paths below `$CODEX_HOME`:
+Orca scope: portable orca/ team package, all original source role resources,
+nine prompt templates, team/layout definitions and portable project layouts.
+Recreate shell launchers and Orca shortcuts for the destination machine.
+Never export generated launchers with absolute local paths, Orca profile data,
+quick-command backups, project state.json, locks, pane IDs, transcript bindings,
+transcripts, logs, auth files or accounts. Existing local historical files remain
+local; no broad directory copy or destructive mirror.
 
-- `codex/AGENTS.md`
-- `codex/hooks/`
-- `codex/rules/`
-- `codex/skills/`
+Bootstrap files (hooks.json, scripts/, install entry points and repository docs)
+are repository-owned: do not overwrite them by exporting arbitrary home files.
+Model names and thinking levels in team.json are portable; service endpoints and
+credentials are not part of the Orca package.
 
-Managed Pi paths are stored under `pi/` and map to `$PI_CODING_AGENT_DIR`:
+## Pull Or Force
 
-- `pi/AGENTS.md`
-- `pi/settings.json`
-- `pi/skills/`
-- `pi/bin/pi`
+1. Verify clean checkout/origin/branch and preserve the original project root.
+2. Run the checkout hook with the selected target:
 
-The managed global `pi/settings.json` keeps the configured HTTP proxy (`httpProxy`, currently `http://127.0.0.1:1087`) so Pi requests use the system proxy by default.
+   python codex/hooks/sync-codex-setting.py --target orca
 
-When the current project has a `pi/` directory, its project Pi scope is stored under `pi/projects/<project-key>/`:
+   Replace orca with ccb when selected; add --force only for explicit force.
+   The hook fetches/fast-forwards, validates, backs up and merges managed files.
+   Do not invoke an older installed hook that lacks target support.
+3. Require exit success and review the current run's sync log at
+   $CODEX_HOME/log/agent-setting-sync.log. Conflicts or incomplete configuration
+   stop the workflow. Do not call export, git add, git commit or git push.
+4. For Orca, follow orca/README.md to register the installed package's local
+   shell/quick-command entries. Registration is distinct from starting agents;
+   never launch a team merely to synchronize configuration. Preserve unrelated
+   shortcuts and user shell profile content.
+5. Report target, applied files, backups and limitations. Explicitly report
+   "no commit or push". Automatic SessionStart without a target is a no-op.
 
-- `pi/projects/<project-key>/settings.json` maps to `<project>/pi/settings.json`.
+## Explicit Push Only
 
-Only global and project-owned Pi `settings.json` files are portable. Never synchronize project Pi `auth.json`, `models.json`, `models-store.json`, npm/package caches, sessions, logs, or generated extension state. Provider credentials remain in the machine's application credential store.
+1. Verify target, clean checkout, origin/main and original project root.
+2. Fetch and fast-forward the checkout. Do NOT apply remote files to the live
+   home first: CCB's authoritative pull could erase the user's intended upload.
+3. Export only the selected/common scope:
 
-The managed global CCB path is `$CCB_HOME/ccb.config`, exported as `ccb/ccb.config`.
+   python scripts/sync-local-config.py --target orca --push
 
-The current project's CCB scope is always managed (unless syncing from the repository checkout itself). The local `.ccb/ccb.config` is stored in the remote as `ccb/projects/<project-key>/ccb.config`, where `<project-key>` comes from `.ccb/project.identity.json` or `ccb/project.identity.json`'s validated `project_slug`, or a deterministic directory-name/path-hash fallback. If `.ccb/` or the local project config is missing, the sync creates the directory and seeds the config from the matching remote project config, falling back to the global remote CCB config. The identity file and the rest of `.ccb/` runtime state are never synchronized.
+   Replace orca with ccb when selected. Pass AGENT_SETTING_PROJECT_ROOT explicitly.
+   Export never commits or pushes itself; it must not mutate source config.
+4. Review git status --short, git diff --check and the full changed-file list.
+   Inspect the actual diff before staging. Reject secrets, runtime state,
+   unselected-target changes, unexplained deletions or unrelated paths.
+   Retain conflicting data/backups; do not resolve silently.
+5. Stage only the exact reviewed changed paths, never git add -A or a blanket
+   root directory. Review git diff --cached and --cached --check. If no changes,
+   report no commit; do not create an empty commit.
+6. Commit with a concise configuration-change message, then git push origin main.
+   Explicit push authorizes this workflow; do not ask a second routine approval.
+   A rejected/non-fast-forward push stops without force or history rewriting.
+7. Verify local commit SHA and git ls-remote origin refs/heads/main. Report the
+   commit, push result and remaining local changes; do not claim success from
+   command launch alone.
 
-`codex/hooks.json`, `ccb/roles.json`, `roles/`, `scripts/`, and `install.sh` are repository-owned bootstrap files. Review them separately and stage them only when their changes are intentional; they are not produced by the local export.
-
-Do not sync or stage `auth.json`, `config.toml`, history, databases, logs, sessions, shell snapshots, temporary files, `ccb/agents/`, `skills/.system/`, Pi npm package caches, authentication files, or generated extension state. Pi extensions are represented by package sources in `pi/settings.json`; restore missing packages with `pi install` rather than copying caches.
-
-## Workflow
-
-1. Resolve `CODEX_HOME`, `PI_CODING_AGENT_DIR`, and `CCB_HOME`. Verify the checkout exists, `origin` points to `rholin33/agent-setting`, and the current branch is `main`.
-2. Check the checkout with `git status --short`. Stop if it has local changes, an unresolved merge, or a detached/non-main branch. Do not overwrite local checkout changes.
-3. Run `git fetch origin` followed by `git pull --ff-only`.
-4. Run the repository's Codex SessionStart sync hook when present:
-
-   ```bash
-   python3 "$CODEX_HOME/hooks/sync-codex-setting.py"
-   ```
-
-   Read `$CODEX_HOME/log/agent-setting-sync.log` afterward. Treat a logged sync failure, incomplete remote or local Pi layout, invalid Pi settings, or an unresolved merge as a stop condition. The hook validates `codex/` and `pi/`, performs three-way text merges, performs a JSON-aware merge of global and discovered project Pi settings, treats global and discovered project CCB configs as remote-authoritative, saves backups, installs packaged/catalog CCB Roles with `--skip-tools`, and installs missing Pi extensions. It never commits, pushes, reloads, or restarts services automatically.
-
-   For an explicit `force` request, run:
-
-   ```bash
-   python3 "$CODEX_HOME/hooks/sync-codex-setting.py" --force
-   ```
-
-   In `force` mode, stop after reviewing the sync log and backup directory. Do not run the export, commit, or push steps below; the purpose is to update the current machine from the remote configuration.
-5. Export the live local managed files into the checkout. Capture the original current execution directory before changing into the remote checkout and pass it as `AGENT_SETTING_PROJECT_ROOT`:
-
-   ```bash
-   PROJECT_ROOT="$(pwd -P)"
-   AGENT_SETTING_PROJECT_ROOT="$PROJECT_ROOT" ./scripts/sync-local-config.sh
-   ```
-
-   The export maps Codex files to `codex/`, global Pi files to `pi/`, `$CCB_HOME/ccb.config` to `ccb/ccb.config`, and `$PROJECT_ROOT/.ccb/ccb.config` to its `ccb/projects/<project-key>/ccb.config` path. Project CCB export always creates a missing `.ccb/` directory and seeds the project copy from the matching remote project config or global CCB config when no local project file exists. When present, project Pi settings are exported to `pi/projects/<project-key>/settings.json`. It excludes system skills, credentials, caches, project identity, and runtime state. Do not use a broad home-directory copy or delete remote files outside the managed allowlist.
-6. Review before staging:
-
-   ```bash
-   git status --short
-   git diff --check
-   git diff --stat
-   git diff -- codex/AGENTS.md codex/hooks codex/rules codex/skills \
-     pi/AGENTS.md pi/settings.json pi/skills pi/bin pi/projects ccb/ccb.config ccb/projects
-   ```
-
-   Confirm every changed path is portable configuration. Stop if a credential, runtime file, unrelated file, or unexpected deletion appears. Resolve conflicts deliberately; do not use `git reset --hard`, `git checkout --`, or `git push --force`.
-7. If there is no diff, do not create an empty commit. Report that the remote is already up to date.
-8. Stage only the managed export allowlist, review `git diff --cached`, and commit with a concise message describing the configuration change. Do not use `git add -A`:
-
-   ```bash
-   git add -- \
-     codex/AGENTS.md codex/hooks codex/rules codex/skills \
-     pi/AGENTS.md pi/settings.json pi/skills pi/bin ccb/ccb.config
-   for scope in pi/projects ccb/projects; do
-     if [ -d "$scope" ]; then git add -- "$scope"; fi
-   done
-   git diff --cached --check
-   git diff --cached
-   git commit -m "chore: sync agent settings"
-   ```
-
-9. Push `main` to `origin`. If HTTPS authentication is unavailable but an already configured GitHub SSH identity succeeds, push once with `git@github.com:rholin33/agent-setting.git` without changing unrelated remotes. Never print or expose credentials.
-10. Verify `git status --short --branch`, the resulting commit, and the remote `main` SHA with `git ls-remote https://github.com/rholin33/agent-setting.git refs/heads/main`.
-
-## Failure Handling
-
-- Keep backups produced by the sync hook and report their paths when a merge cannot be completed. They normally live under `$CODEX_HOME/.sync/codex-setting/backups/`.
-- If authentication, network access, an incomplete configuration, a logged hook failure, or a non-fast-forward update blocks the operation, leave the checkout unchanged and report the exact blocking command and relevant log path.
-- A successful run must state whether a commit was created, the commit SHA when applicable, and whether the remote branch matches it.
+The pre-commit hook validates staged whitespace only. It must never export or
+stage local settings automatically, even during an unrelated development commit.

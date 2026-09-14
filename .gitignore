@@ -30,3 +30,11 @@ pi/skills/cad-fill-dimension-report/
 # Local editor and OS metadata.
 .idea/
 .vscode/
+
+# Orca machine state and generated launch entries are never portable exports.
+orca/projects/
+orca/generated/
+orca/backups/
+orca/bin/orca-team
+orca/bin/orca-team.ps1
+orca/**/*.lock

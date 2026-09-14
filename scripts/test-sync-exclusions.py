@@ -4,6 +4,7 @@
 import os
 import runpy
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -43,6 +44,8 @@ class SyncExclusionsTest(unittest.TestCase):
         for directory in (self.codex / "hooks", self.codex / "rules", self.repo / "ccb", self.repo / "pi/bin"):
             directory.mkdir(parents=True, exist_ok=True)
         self.write(self.pi / "settings.json", SETTINGS)
+        self.write(self.codex / "hooks/example.py", "# Portable hook\n")
+        self.write(self.codex / "rules/example.md", "# Portable rule\n")
         self.write(self.pi / "bin/pi", "#!/bin/sh\nexit 0\n")
         self.write(self.ccb / "ccb.config", "{}\n")
         self.write(self.project / ".ccb/ccb.config", "{}\n")
@@ -65,11 +68,14 @@ class SyncExclusionsTest(unittest.TestCase):
         return result.stdout
 
     def export(self):
-        self.run_command("bash", str(self.repo / "scripts/sync-local-config.sh"))
+        self.run_command(sys.executable, str(ROOT / "scripts/sync-local-config.py"),
+                         '--target', 'ccb', '--push', '--repo', str(self.repo))
 
     def load_hook(self):
         namespace = runpy.run_path(str(ROOT / "codex/hooks/sync-codex-setting.py"))
-        return namespace["merge_managed_files"].__globals__
+        hook = namespace["merge_managed_files"].__globals__
+        hook['TARGET'] = 'ccb'
+        return hook
 
     def assert_local_files_preserved(self):
         for home in (self.codex, self.pi):

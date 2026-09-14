@@ -26,6 +26,11 @@ CODEX_MANAGED_DIRECTORIES = ("hooks", "rules", "skills")
 PI_MANAGED_FILES = ("AGENTS.md", "settings.json")
 PI_MANAGED_DIRECTORIES = ("skills", "bin")
 ROLE_SOURCES_RELATIVE_PATH = Path("roles")
+TARGET: str | None = None
+INCLUDE_UNTRACKED = False
+ORCA_HOME = Path(os.environ.get("ORCA_TEAM_HOME", str(Path.home() / ".orca/roles/ccb-team"))).expanduser()
+ORCA_PACKAGE_DIRECTORIES = {"bin", "lib", "roles", "source", "tests", "docs"}
+ORCA_PACKAGE_FILES = {"team.json", "layout.json", "package.json", "README.md", "FILE-INVENTORY.json"}
 TEXT_EXTENSIONS = {
     ".md",
     ".txt",
@@ -76,10 +81,16 @@ def get_project_root() -> Path:
 
 def get_project_key() -> str:
     project_root = get_project_root()
+    explicit = os.environ.get("AGENT_SETTING_PROJECT_KEY")
+    if explicit is not None:
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", explicit):
+            raise ValueError("AGENT_SETTING_PROJECT_KEY must be a portable identifier")
+        return explicit
     # CCB may keep project identity under `.ccb/` or the portable `ccb/`
     # source directory. The latter lets a fresh checkout resolve its existing
     # remote project scope before `.ccb/` has been generated.
     for identity_path in (
+        *((project_root / ".orca/project.identity.json",) if TARGET == "orca" else ()),
         project_root / ".ccb" / "project.identity.json",
         project_root / "ccb" / "project.identity.json",
     ):
@@ -91,6 +102,14 @@ def get_project_key() -> str:
                 return project_slug
         except (OSError, json.JSONDecodeError, ValueError):
             continue
+
+    if TARGET == "orca":
+        result = subprocess.run(["git", "-C", str(project_root), "remote", "get-url", "origin"],
+                                capture_output=True, text=True, encoding="utf-8", check=False)
+        if result.returncode == 0 and result.stdout.strip():
+            remote = normalize_remote_url(result.stdout.strip())
+            name = re.sub(r"[^A-Za-z0-9._-]+", "-", remote.rsplit("/", 1)[-1]) or "project"
+            return name + "-" + hashlib.sha256(remote.encode("utf-8")).hexdigest()[:16]
 
     project_name = re.sub(r"[^A-Za-z0-9._-]+", "-", project_root.name).strip("-._") or "project"
     project_digest = hashlib.sha256(str(project_root).encode("utf-8")).hexdigest()[:16]
@@ -161,23 +180,54 @@ def get_relative_path(base_path: Path, path: Path) -> Path:
 
 
 def get_managed_remote_pathspecs() -> list[str]:
+    if TARGET not in {"ccb", "orca"}:
+        raise ValueError("an explicit target (ccb or orca) is required")
     pathspecs = [
         *[str(CODEX_CONFIG_DIR / name) for name in CODEX_MANAGED_FILES],
         *[str(CODEX_CONFIG_DIR / name) for name in CODEX_MANAGED_DIRECTORIES],
         *[str(PI_CONFIG_DIR / name) for name in PI_MANAGED_FILES],
         *[str(PI_CONFIG_DIR / name) for name in PI_MANAGED_DIRECTORIES],
-        str(CCB_CONFIG_RELATIVE_PATH),
     ]
+    if TARGET == "orca":
+        return [*pathspecs, "orca"]
+    pathspecs.append(CCB_CONFIG_RELATIVE_PATH.as_posix())
     project_ccb_path = get_project_ccb_relative_path()
     if project_ccb_path is not None:
-        pathspecs.append(str(project_ccb_path))
+        pathspecs.append(project_ccb_path.as_posix())
     project_pi_root = get_project_pi_relative_root()
     if project_pi_root is not None:
-        pathspecs.append(str(project_pi_root))
+        pathspecs.append(project_pi_root.as_posix())
     return pathspecs
 
 
+def is_portable_path(relative_path: Path) -> bool:
+    parts = relative_path.parts
+    if not parts or relative_path.is_absolute() or ".." in parts:
+        return False
+    if parts[:3] in {("codex", "skills", "cad-fill-dimension-report"), ("pi", "skills", "cad-fill-dimension-report")}:
+        return False
+    if parts[:2] == ("pi", "projects") and not is_project_pi_settings_path(relative_path):
+        return False
+    excluded = {".git", ".system", "__pycache__", "node_modules", ".cache", "sessions", "credentials", "logs"}
+    if any(part.lower() in excluded for part in parts):
+        return False
+    name = parts[-1].lower()
+    if name in {"auth.json", "token.json", "tokens.json", "credentials.json", "state.json", ".env", "history.jsonl"} or name.endswith((".pyc", ".lock", ".sqlite", ".sqlite3", ".db", ".log")):
+        return False
+    if parts[0] == "orca":
+        if parts in {("orca", "bin", "orca-team"), ("orca", "bin", "orca-team.ps1")}:
+            return False
+        if len(parts) == 2:
+            return parts[1] in ORCA_PACKAGE_FILES
+        if len(parts) >= 3 and parts[1] in ORCA_PACKAGE_DIRECTORIES:
+            return True
+        return parts == ("orca", "project-configs", get_project_key(), "config.json")
+    return True
+
+
 def is_project_pi_settings_path(relative_path: Path) -> bool:
+    if relative_path.parts[:2] != ("pi", "projects"):
+        return False
     project_pi_root = get_project_pi_relative_root()
     if project_pi_root is None:
         return False
@@ -195,19 +245,17 @@ def is_pi_settings_path(relative_path: Path) -> bool:
 
 
 def get_managed_remote_files() -> list[Path]:
-    output = run_git(["-C", str(REMOTE_REPO), "ls-files", "--", *get_managed_remote_pathspecs()])
+    options = ["--cached", "--others", "--exclude-standard"] if INCLUDE_UNTRACKED else []
+    output = run_git(["-C", str(REMOTE_REPO), "-c", "core.quotepath=false", "ls-files", "-z", *options, "--", *get_managed_remote_pathspecs()])
     files: list[Path] = []
-    for line in output.splitlines():
+    for line in sorted(set(output.split("\0"))):
         if not line.strip():
             continue
         file_path = REMOTE_REPO / line.strip()
-        relative_path = get_relative_path(REMOTE_REPO, file_path)
-        if relative_path.parts[:3] in {
-            ("codex", "skills", "cad-fill-dimension-report"),
-            ("pi", "skills", "cad-fill-dimension-report"),
-        }:
+        if file_path.is_symlink() or any(parent.is_symlink() for parent in file_path.parents):
             continue
-        if file_path.is_file() and (
+        relative_path = get_relative_path(REMOTE_REPO, file_path)
+        if file_path.is_file() and not file_path.is_symlink() and is_portable_path(relative_path) and (
             relative_path.parts[:2] != PROJECT_PI_CONFIG_ROOT.parts or is_project_pi_settings_path(relative_path)
         ):
             files.append(file_path)
@@ -215,13 +263,23 @@ def get_managed_remote_files() -> list[Path]:
 
 
 def get_local_managed_path(relative_path: Path) -> Path:
+    if not is_portable_path(relative_path):
+        raise ValueError(f"non-portable managed path: {relative_path}")
+    if relative_path.parts[0] == "orca":
+        if TARGET != "orca":
+            raise ValueError("Orca path outside selected target")
+        if relative_path.parts[1] == "project-configs":
+            return get_project_root() / ".orca/team.json"
+        return ORCA_HOME.joinpath(*relative_path.parts[1:])
+    if TARGET == "orca" and (relative_path.parts[0] == "ccb" or relative_path.parts[:2] == ("pi", "projects")):
+        raise ValueError("CCB path outside selected target")
     if relative_path == CCB_CONFIG_RELATIVE_PATH:
         return CCB_HOME / "ccb.config"
 
-    if relative_path == get_project_ccb_relative_path():
+    if relative_path.parts[:2] == ("ccb", "projects") and relative_path == get_project_ccb_relative_path():
         return get_project_root() / ".ccb" / "ccb.config"
 
-    project_pi_root = get_project_pi_relative_root()
+    project_pi_root = get_project_pi_relative_root() if relative_path.parts[:2] == ("pi", "projects") else None
     if project_pi_root is not None:
         try:
             project_relative_path = relative_path.relative_to(project_pi_root)
@@ -248,16 +306,22 @@ def copy_with_parents(source: Path, destination: Path) -> None:
 
 def copy_remote_to_local(relative_path: Path, remote_path: Path) -> None:
     local_path = get_local_managed_path(relative_path)
+    if local_path.is_symlink() or any(parent.is_symlink() for parent in local_path.parents):
+        raise ValueError(f"local managed path contains a symlink: {local_path}")
     copy_with_parents(remote_path, local_path)
     if is_ccb_config_path(relative_path):
         local_path.chmod(0o600)
 
 
 def is_ccb_config_path(relative_path: Path) -> bool:
-    return relative_path == CCB_CONFIG_RELATIVE_PATH or relative_path == get_project_ccb_relative_path()
+    return relative_path == CCB_CONFIG_RELATIVE_PATH or (
+        relative_path.parts[:2] == ("ccb", "projects") and relative_path == get_project_ccb_relative_path()
+    )
 
 
 def seed_missing_project_ccb_config() -> bool:
+    if TARGET != "ccb":
+        return False
     project_path = get_project_ccb_relative_path()
     if project_path is None:
         return False
@@ -312,12 +376,30 @@ def copy_remote_snapshot(destination_root: Path) -> None:
         copy_with_parents(remote_file, destination_root / relative_path)
 
 
+def normalize_remote_url(url: str) -> str:
+    url = re.sub(r"^[A-Za-z][A-Za-z0-9+.-]*://", "", url.strip())
+    url = re.sub(r"^[^/@]+@", "", url)
+    url = url.replace(":", "/", 1).rstrip("/")
+    if url.endswith(".git"):
+        url = url[:-4]
+    host, separator, path = url.partition("/")
+    return host.lower() + separator + path
+
+
 def update_remote_checkout() -> None:
     ensure_directory(SYNC_ROOT)
     if (REMOTE_REPO / ".git").is_dir():
+        origin = run_git(["-C", str(REMOTE_REPO), "remote", "get-url", "origin"]).strip()
+        if normalize_remote_url(origin) != normalize_remote_url(REMOTE_URL):
+            raise RuntimeError("sync checkout origin does not match agent-setting")
+        branch = run_git(["-C", str(REMOTE_REPO), "branch", "--show-current"]).strip()
+        if branch != "main":
+            raise RuntimeError("sync checkout must be on main")
+        if run_git(["-C", str(REMOTE_REPO), "status", "--porcelain"]).strip():
+            raise RuntimeError("sync checkout has local changes; resolve them before pulling")
         if (REMOTE_REPO / ".git/shallow").is_file():
             run_git(["-C", str(REMOTE_REPO), "fetch", "--unshallow", "origin"])
-        run_git(["-C", str(REMOTE_REPO), "pull", "--ff-only"])
+        run_git(["-C", str(REMOTE_REPO), "pull", "--ff-only", "origin", "main"])
         return
 
     if REMOTE_REPO.exists() and any(REMOTE_REPO.iterdir()):
@@ -349,6 +431,25 @@ def validate_remote_layout() -> None:
         relative_path = get_relative_path(REMOTE_REPO, remote_file)
         if is_project_pi_settings_path(relative_path):
             load_pi_settings(remote_file)
+    if TARGET == "orca":
+        with (REMOTE_REPO / "orca/team.json").open(encoding="utf-8-sig") as team_file:
+            team = json.load(team_file)
+        if not isinstance(team, list) or not team:
+            raise ValueError("Orca team must be a nonempty role array")
+        names = [role.get("name") for role in team if isinstance(role, dict)]
+        if len(names) != len(team) or len(set(names)) != len(names) or not all(isinstance(name, str) and name for name in names):
+            raise ValueError("Orca role names must be unique nonempty strings")
+        layout = load_json_object(REMOTE_REPO / "orca/layout.json")
+        tabs = layout.get("tabs")
+        if not isinstance(tabs, list) or not tabs:
+            raise ValueError("Orca layout requires tabs")
+        for tab in tabs:
+            if not isinstance(tab, dict) or not isinstance(tab.get("agents"), list) or not 1 <= len(tab["agents"]) <= 2:
+                raise ValueError("Orca tabs require one or two agents")
+            if any(agent not in names for agent in tab["agents"]):
+                raise ValueError("Orca layout references an unknown agent")
+        if not (REMOTE_REPO / "orca/bin/orca-team.mjs").is_file():
+            raise ValueError("Orca command entry is missing")
 
 
 def install_packaged_roles() -> None:
@@ -486,6 +587,14 @@ def merge_text_file(
             copy_with_parents(remote_path, backup_directory / f"{relative_path}.remote")
             write_log(f"merge conflict kept local file: {relative_path}")
             return False
+
+        if relative_path.suffix.lower() == ".json":
+            try:
+                json.loads(ours.read_text(encoding="utf-8"))
+            except (ValueError, UnicodeError):
+                copy_with_parents(remote_path, backup_directory / f"{relative_path}.remote")
+                write_log(f"JSON merge invalid; kept local file: {relative_path}")
+                return False
 
         backup_local_file(relative_path, backup_directory)
         shutil.copy2(ours, local_path)
@@ -686,6 +795,7 @@ def install_pi_extensions() -> None:
 def merge_managed_files() -> None:
     backup_directory = BACKUP_ROOT / datetime.now().strftime("%Y%m%d-%H%M%S")
     changed_count = 0
+    conflicts = []
 
     for remote_file in get_managed_remote_files():
         relative_path = get_relative_path(REMOTE_REPO, remote_file)
@@ -694,6 +804,7 @@ def merge_managed_files() -> None:
 
         if local_path.is_dir():
             write_log(f"kept local directory because remote path is file: {relative_path}")
+            conflicts.append(str(relative_path))
             continue
 
         if is_pi_settings_path(relative_path):
@@ -743,14 +854,19 @@ def merge_managed_files() -> None:
         if is_text_file(local_path) and is_text_file(base_path) and is_text_file(remote_file):
             if merge_text_file(relative_path, local_path, base_path, remote_file, backup_directory):
                 changed_count += 1
+            else:
+                conflicts.append(str(relative_path))
             continue
 
         copy_with_parents(remote_file, backup_directory / f"{relative_path}.remote")
         write_log(f"kept local binary file and saved remote copy: {relative_path}")
+        conflicts.append(str(relative_path))
 
     if seed_missing_project_ccb_config():
         changed_count += 1
 
+    if conflicts:
+        raise RuntimeError("unresolved sync conflicts: " + ", ".join(conflicts))
     copy_remote_snapshot(LAST_REMOTE)
     write_log(f"sync finished; changed files: {changed_count}")
 
@@ -765,8 +881,7 @@ def force_sync_managed_files() -> None:
         local_path = get_local_managed_path(relative_path)
 
         if local_path.is_dir():
-            write_log(f"force sync kept local directory because remote path is file: {relative_path}")
-            continue
+            raise RuntimeError(f"force sync cannot replace local directory with file: {relative_path}")
 
         if local_path.is_file() and hash_file(local_path) == hash_file(remote_file):
             if is_ccb_config_path(relative_path) and local_path.stat().st_mode & 0o777 != 0o600:
@@ -805,8 +920,16 @@ def _debounce(seconds: int = 86400, force: bool = False) -> bool:
         return False
 
 
+class UniqueTarget(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        if getattr(namespace, self.dest, None) is not None:
+            parser.error("--target must be specified exactly once")
+        setattr(namespace, self.dest, values)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Synchronize global Codex, Pi, and CCB configuration")
+    parser.add_argument("--target", choices=("ccb", "orca"), action=UniqueTarget, required=bool(sys.argv[1:]))
     parser.add_argument(
         "--force",
         action="store_true",
@@ -816,35 +939,34 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    global TARGET, LAST_REMOTE
     args = parse_args()
+    if args.target is None:
+        print("Sync skipped: explicitly select --target ccb or --target orca.")
+        return 0
+    TARGET = args.target
     try:
         ensure_directory(SYNC_ROOT)
         ensure_directory(BACKUP_ROOT)
         ensure_directory(MERGE_ROOT)
 
-        if _debounce(force=args.force):
-            return 0
-
         if not shutil.which("git"):
-            write_log("git not found; skipped")
-            return 0
+            raise RuntimeError("git not found")
 
         update_remote_checkout()
         validate_remote_layout()
-
-        if not (LAST_REMOTE / CODEX_CONFIG_DIR / "AGENTS.md").is_file():
-            copy_remote_snapshot(LAST_REMOTE)
-            write_log("initialized remote baseline")
 
         if args.force:
             force_sync_managed_files()
         else:
             merge_managed_files()
-        install_packaged_roles()
-        install_required_roles()
-        install_pi_extensions()
+        if TARGET == "ccb":
+            install_packaged_roles()
+            install_required_roles()
     except Exception as error:
         write_log(f"sync failed: {error}")
+        print(f"sync failed: {error}", file=sys.stderr)
+        return 1
     return 0
 
 
