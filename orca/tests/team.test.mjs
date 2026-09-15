@@ -63,9 +63,17 @@ test('fresh launch creates six tabs/nine roles and rerun has no mutations', asyn
     if (verb === 'switch') return {};
     if (verb === 'create' || verb === 'split') {
       creations++;
+      const pendingState = readJson(projectFiles(home, project).state);
+      const launching = Object.values(pendingState.agents).find(a => a.pending && !a.tabId);
+      const transcriptPath = launching.launchIntent.transcriptPath || path.join(home, `codex-${creations}.jsonl`);
+      fs.mkdirSync(path.dirname(transcriptPath), { recursive: true });
+      fs.writeFileSync(transcriptPath, JSON.stringify(launching.agent === 'pi' ? { type: 'session', id: `s${creations}`, cwd: project } : { type: 'session_meta', payload: { id: `s${creations}`, cwd: project } }) + '\n');
+      launching.session = { id: `s${creations}`, transcriptPath };
       const primary = verb === 'split' ? terminals.find(row => row.handle === val('--terminal')) : null;
       const row = { handle: `term_${creations}`, tabId: primary?.tabId || `tab_${creations}`, leafId: `leaf_${creations}`, worktreePath: project, connected: true, orphaned: false };
       terminals.push(row);
+      Object.assign(launching, { tabId: row.tabId, leafId: row.leafId });
+      bindings[`${row.tabId}:${row.leafId}`] = { agent: launching.agent, worktreeId: `repo::${project}`, providerSession: launching.session };
       const leaf = { type: 'pane-leaf', leafId: row.leafId };
       if (primary) {
         assert.equal(val('--direction'), 'vertical');
@@ -77,7 +85,8 @@ test('fresh launch creates six tabs/nine roles and rerun has no mutations', asyn
     if (verb === 'show') return { terminal: terminals.find(row => row.handle === val('--terminal')) };
     throw new Error(`Unexpected ${noun} ${verb}`);
   };
-  const options = { home, project, action: 'start', cli, inspect: async () => ({ kind: 'agent' }), snapshot: () => ({}), sleep: async () => {}, log: () => {} };
+  const bindings = {};
+  const options = { home, project, action: 'start', cli, inspect: async () => ({ kind: 'agent' }), snapshot: () => ({ sleepingAgentSessionsByPaneKey: bindings }), sleep: async () => {}, log: () => {} };
   await runTeam(options); assert.equal(creations, 9); assert.equal(tabs.length, 6);
   await runTeam(options); assert.equal(creations, 9);
   terminals.pop();
@@ -123,7 +132,7 @@ for (const missing of [['master'], ['loader'], ['master', 'loader']]) {
     const files = await initialize(home, project);
     const config = { workspace: project, tabs: [{ title: 'master', agents: ['master', 'loader'], direction: 'vertical', ratio: 0.5 }] };
     saveJson(files.config, config);
-    const state = { workspace: project, agents: {} }, snap = { terminalSurfaceTombstonesByPaneKey: {} };
+    const state = { workspace: project, agents: {} }, snap = { terminalSurfaceTombstonesByPaneKey: {}, sleepingAgentSessionsByPaneKey: {} };
     const terminals = [], tabs = []; let count = 0;
     for (const name of ['master', 'loader']) {
       const transcriptPath = path.join(temp, `${name}.jsonl`);
@@ -149,6 +158,8 @@ for (const missing of [['master'], ['loader'], ['master', 'loader']]) {
         const primary = terminals.find(row => row.handle === val('--terminal'));
         const row = { handle: `new-${count}`, tabId: primary?.tabId || 'new-tab', leafId: `new-${count}`, worktreePath: project, connected: true };
         terminals.push(row);
+        const roleName = missing[count - 1];
+        snap.sleepingAgentSessionsByPaneKey[`${row.tabId}:${row.leafId}`] = { agent: 'pi', worktreeId: `repo::${project}`, providerSession: state.agents[roleName].session };
         if (primary) {
           const tab = tabs.find(item => item.tabId === primary.tabId);
           tab.panes = { type: 'pane-split', direction: 'vertical', first: tab.panes, second: { type: 'pane-leaf', leafId: row.leafId } };
@@ -184,4 +195,51 @@ test('explicit profile registration is idempotent and preserves unrelated conten
     assert.ok(first.startsWith('# user settings\n'));
     assert.equal(first.split('# >>> orca-team >>>').length, 2);
   }
+});
+
+test('PowerShell profiles on macOS and Linux receive PowerShell syntax', t => {
+  const { home, temp } = fixture(t);
+  for (const platform of ['darwin', 'linux']) {
+    const profile = path.join(temp, `${platform}.ps1`);
+    registerShellProfile(home, profile, platform);
+    const content = fs.readFileSync(profile, 'utf8');
+    assert.match(content, /orca-team\.ps1/);
+    assert.ok(!content.includes('export PATH'));
+  }
+});
+
+test('unconfirmed new pane retains pending and retry never duplicates its launch', async t => {
+  const { home, project } = fixture(t);
+  const files = await initialize(home, project);
+  saveJson(files.config, { workspace: project, tabs: [{ title: 'archi', agents: ['archi'] }] });
+  let created = 0;
+  const terminals = [], tabs = [];
+  const cli = async args => {
+    if (args[1] === 'list') return { terminals, visualLayouts: [{ root: { type: 'group', tabs } }] };
+    if (args[1] === 'create') {
+      created++;
+      const saved = readJson(files.state).agents.archi;
+      assert.equal(saved.pending, true);
+      assert.ok(saved.launchIntent.transcriptPath);
+      const terminal = { handle: 'h', tabId: 't', leafId: 'l', worktreePath: project, connected: true };
+      terminals.push(terminal); tabs.push({ tabId: 't', panes: { leafId: 'l' } });
+      return { terminal };
+    }
+    if (args[1] === 'show') return { terminal: terminals[0] };
+    assert.fail('unexpected mutation');
+  };
+  const options = { home, project, action: 'start', cli, inspect: async () => ({ kind: 'agent' }), snapshot: () => ({}), sleep: async () => {}, log: () => {} };
+  await assert.rejects(runTeam(options), /launch unconfirmed/);
+  const saved = readJson(files.state).agents.archi;
+  assert.equal(saved.pending, true);
+  await assert.rejects(runTeam(options), /interrupted launch/);
+  assert.equal(created, 1);
+  fs.mkdirSync(path.dirname(saved.launchIntent.transcriptPath), { recursive: true });
+  fs.writeFileSync(saved.launchIntent.transcriptPath, JSON.stringify({ type: 'session', id: 'recovered', cwd: project }) + '\n');
+  options.inspect = async () => ({ kind: 'agent', sessionPaths: [saved.launchIntent.transcriptPath] });
+  await runTeam(options);
+  const after = readJson(files.state).agents.archi;
+  assert.equal(after.pending, undefined);
+  assert.equal(after.session.id, 'recovered');
+  assert.equal(created, 1);
 });

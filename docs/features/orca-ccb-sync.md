@@ -66,6 +66,20 @@ attributes protect original role resources across Windows line-ending settings.
 
 ## Limitations
 
+Recovery hardening records new Pi launch intent before terminal creation and
+passes an explicit transcript path plus a no-tools initialization prompt.
+Pending is cleared only after validated transcript and live binding evidence.
+Interrupted startup reconciliation never resends input. Replay of an existing
+role launcher defaults to its saved conversation. `history --role NAME` exposes
+the fixed binding, source and last verification time. No schema migration or
+task-session reassignment is performed. Native Codex fresh binding still depends
+on Orca exposing its provider session; failure remains pending.
+
+This change does not install an Orca application-start hook or provide new
+POSIX process inspection. Users invoke `orca-team`
+after reopening; POSIX recovery still requires complete Orca evidence. Those
+capabilities require additional host integration and real platform acceptance.
+
 Connected-pane recovery now uses `terminal.inspectProcess` with incarnation and
 freshness checks. Only proven idle shells accept an exact resume command;
 unverifiable results are reported and never injected into. Windows Orca 1.4.202
@@ -92,3 +106,40 @@ same origin share a portable layout key unless explicitly overridden. New
 machines do not inherit pane IDs or conversation files. Sync is not transactional
 across all files: a failure preserves backups and does not advance its baseline,
 but earlier successfully merged files can already have been applied.
+
+## Unified Recovery Entry
+
+`orca-team` initializes/reconciles the current project; `status` inspects it;
+`history [ROLE]` shows fixed-role bindings and indexed task sessions; `restart ROLE` gracefully exits
+one idle provider and resumes its exact conversation in the existing pane.
+Restart uses the project lock and persists `restartIntent` before exit input.
+Ambiguous exit is never resent; unconfirmed resume retains pending state.
+PowerShell `.ps1` profile registration works on all three platforms.
+There is no background watcher or application-open hook. Native POSIX inspection
+remains outstanding; macOS/Linux GUI behavior has
+not been validated. Restart tests cover Pi/Codex success, busy refusal, changed
+session refusal, sibling preservation and ambiguous transport without resend.
+
+Windows sewpg acceptance: all nine roles reported live bindings; `restart archi`
+completed in its original pane with unchanged session ID, and `history archi`
+reported process-argument proof with pending=false. 30 Node and 18 Python tests
+passed. Live Codex restart and real macOS/Linux restart remain untested.
+
+## Task Conversation Index
+
+`history` refreshes local `projects/<key>/history.json` under the project lock.
+Run and worker lists are paginated; local workspace identity restricts discovery.
+Pi and Codex JSONL user messages provide exact Task/Dispatch/worker preamble
+associations, including multiple attempts and reused sessions. Fixed roles and
+task sessions stay separate. Role links distinguish task creator from worker;
+unproven roles are not inferred from task titles. `history --cached` works offline.
+Refresh preserves cached discoveries, exposes incomplete metadata and missing
+files, and does not rewrite state.json or transcripts. The existing projects/
+sync exclusion includes this index. No prompt text or capabilities are persisted.
+Standard provider roots, environment overrides and known session directories are
+supported; remote filesystem discovery and symlink traversal are not supported.
+
+Validation: 32 Node tests and two sync exclusion tests pass. Initial sewpg refresh
+found 22 dispatch attempts, all with local transcripts and no scan warnings.
+Path/entry tests cover Windows/macOS/Linux; the history implementation uses
+portable Node APIs, with actual execution verified on Windows only.

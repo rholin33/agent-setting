@@ -24,6 +24,21 @@ The installer generates these entry scripts without rewriting existing shell pro
 
 Run `orca-team` in a project directory. This initializes and starts the team. `orca-team status` only inspects existing state; `orca-team init` only initializes. `--project PATH` selects a different project.
 
+```text
+orca-team
+orca-team status
+orca-team history archi
+orca-team restart archi
+```
+
+Restart accepts one configured role, verifies its original transcript and idle
+agent, sends `/quit` once, waits for a proven shell, then resumes the same
+conversation in the same pane. It shares the project startup lock. An ambiguous
+exit retains `restartIntent` and is not resent. Running `orca-team` after an exit
+recovers the original session; an agent still running with an unconfirmed exit
+is reported as incomplete. Opening Orca alone does not run this manager: run
+`orca-team` once afterward. No watcher or OS startup service is installed.
+
 `orca-team export-config --project PATH` prints the current project configuration without its machine-specific workspace path. This is the read-only interface used when exporting portable project customizations. It prefers runtime config, then `.orca/team.json`, then the default layout.
 
 Default tabs: master / loader, archi, coder1 / coder2, designer, reviewer / test, simple. Slash denotes an equal left/right split (`vertical` in Orca's native representation). The manager activates the primary tab before splitting and validates the actual desktop pane tree afterward. CCB sidebar ratios remain recorded but are not applied because Orca has no matching sidebar API.
@@ -33,6 +48,34 @@ Each project gets `projects/<path-hash>/config.json`, `state.json`, and an exclu
 The portable lock is `start.node.lock`. The predecessor PowerShell manager retained a zero-byte `start.lock` after normal completion; that legacy file is preserved and is not interpreted as an active Node lock. Stop using the old `manage.ps1` entry when adopting the portable entry: the two managers must not be invoked concurrently.
 
 ## Recovery And Limits
+
+New managed Pi roles receive a unique transcript path recorded in `launchIntent`
+before pane creation, plus a minimal no-tools initialization prompt. A launch
+stays pending until its transcript and live provider binding are verified. A
+retry reconciles completed launches without sending again; an unconfirmed launch
+remains blocked. Existing saved conversations are resumed even when Orca replays
+the original `launch` command without `--resume`.
+
+`orca-team history` refreshes `projects/<key>/history.json` and prints fixed-role
+bindings plus task/dispatch conversation history. It paginates all Orca Runs
+and worker attempts, scopes them to the local project, and matches Pi/Codex user
+dispatch preambles to exact Task ID, Dispatch ID and worker handle. Retries and
+multiple tasks in one transcript remain separate entries. `history archi`
+filters by proven role associations; `roleLinks` distinguishes creator from
+worker. Unassociated workers remain visible in the unfiltered output. Titles
+and task wording never determine role identity. Old states need no migration.
+
+`orca-team history --cached` reads the index without Orca or transcript scanning.
+Normal refresh retains old discoveries if Orca is unavailable or files were
+moved/deleted; `cached`, `metadataComplete`, `warnings` and session `available`
+report these limitations. Standard Pi/Codex roots, Orca's Codex runtime home,
+managed session directories and known binding directories are scanned. Custom
+roots follow `PI_CODING_AGENT_DIR` and `CODEX_HOME`. Symlinks are not traversed.
+Only index metadata is saved, never full prompts or dispatch capabilities.
+Remote-host conversations are outside this local index. It does not change
+fixed-role bindings, provider transcripts, Task status or Dispatch authority.
+New transcripts under `projects/<key>/sessions/` are local runtime data and
+are excluded from synchronization.
 
 Connected panes are inspected using Orca's fenced process evidence. A live shell
 with confirmed no children can resume the exact saved conversation in-place;

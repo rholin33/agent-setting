@@ -52,5 +52,6 @@ export async function recoverInPane({ name, saved, handle, command, cli, inspect
   if (receipt.send?.accepted !== true) throw new Error(`${name}: resume input was not confirmed; inspect pending state`);
   await verifyBinding();
   delete saved.pending;
+  delete saved.restartIntent;
   checkpoint();
 }

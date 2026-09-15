@@ -2,8 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { normalizeProject, projectKey, nodeCommand } from './platform.mjs';
 import { binding, sameWorktree, validateTranscript } from './sessions.mjs';
-import { inspectHealth, recoverInPane, provesSession } from './health.mjs';
+import { inspectHealth, recoverInPane } from './health.mjs';
 import { rpc } from './orca.mjs';
+import { prepareLaunch, captureSession } from './launch-state.mjs';
 
 export const readJson = file => JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
 export function saveJson(file, value) {
@@ -115,9 +116,10 @@ export async function runTeam({ home, project, action, cli, snapshot, inspect = 
       if (!saved) continue;
       if (saved.pending) {
         const candidates = inventory.terminals.filter(row => row.tabId === saved.tabId && row.leafId === saved.leafId && row.connected && !row.orphaned && sameWorktree(`local::${row.worktreePath}`, project));
-        if (candidates.length !== 1 || !provesSession(await inspect(candidates[0].handle, saved.agent), saved)) throw new Error(`Role ${name} has an interrupted launch; inspect Orca before retrying`);
+        const live = candidates.length === 1 ? await inspect(candidates[0].handle, saved.agent) : null;
+        if (!live || !captureSession(saved, live, project, binding(snap, saved, project))) throw new Error(`Role ${name} has an interrupted launch; inspect Orca before retrying`);
         validateTranscript(saved, project);
-        if (action === 'start') { delete saved.pending; saveJson(files.state, state); }
+        if (action === 'start') { delete saved.pending; delete saved.restartIntent; saveJson(files.state, state); }
       }
       const foundBinding = binding(snap, saved, project);
       if (foundBinding) saved.session = foundBinding;
@@ -131,13 +133,21 @@ export async function runTeam({ home, project, action, cli, snapshot, inspect = 
         if (matches.length !== 1 || !matches[0].connected || matches[0].orphaned) throw new Error(`Cannot verify running role ${name}`);
         resolved[name] = matches[0];
         health[name] = await inspect(matches[0].handle, saved.agent);
+        if (health[name].kind === 'agent') captureSession(saved, health[name], project, foundBinding);
       }
     }
     if (action === 'start') saveJson(files.state, state);
     for (const tab of config.tabs) for (const name of tab.agents) {
       if (resolved[name]) {
         const status = health[name];
-        if (status.kind === 'agent') { log(`${name}: agent running`); continue; }
+        if (status.kind === 'agent') {
+          if (state.agents[name].restartIntent) {
+            issues.push(`${name}: previous exit unconfirmed; no duplicate input sent`);
+            log(`${name}: restart incomplete; agent still running`); continue;
+          }
+          if (!state.agents[name].session) issues.push(`${name}: agent running but conversation binding unavailable`);
+          log(`${name}: agent running${state.agents[name].session ? '; conversation bound' : '; conversation unbound'}`); continue;
+        }
         if (action === 'status') { log(`${name}: ${status.kind} (${status.reason || 'agent not running'})`); continue; }
         if (status.kind !== 'shell') { issues.push(`${name}: process unverifiable (${status.reason})`); continue; }
         const saved = state.agents[name];
@@ -149,17 +159,19 @@ export async function runTeam({ home, project, action, cli, snapshot, inspect = 
             for (let attempt = 0; attempt < 30; attempt++) {
               const found = binding(await snapshot(), saved, project);
               const live = await inspect(resolved[name].handle, saved.agent);
-              if ((found?.id === saved.session.id && live.kind === 'agent') || provesSession(live, saved)) return;
+              if (captureSession(saved, live, project, found)) return;
               await sleep(500);
             }
             throw new Error(`${name}: original conversation recovery is unconfirmed; pending retained`);
           } });
         log(`${name}: original conversation restored in existing pane`);
+        delete saved.restartIntent; saveJson(files.state, state);
         continue;
       }
       if (action === 'status') { log(`${name}: not running`); continue; }
       const role = catalog.find(row => row.name === name);
       const saved = state.agents[name] ||= {};
+      if (!resume[name]) prepareLaunch(saved, role, files.directory);
       saved.pending = true; saveJson(files.state, state);
       const command = nodeCommand([path.join(home, 'bin', 'orca-team.mjs'), 'launch', '--home', home, '--project', project, '--role', name, ...(resume[name] ? ['--resume'] : [])]);
       const sibling = tab.agents.find(other => other !== name && resolved[other]);
@@ -183,17 +195,19 @@ export async function runTeam({ home, project, action, cli, snapshot, inspect = 
       if (!sameWorktree(`local::${row.worktreePath}`, project)) throw new Error('Created terminal belongs to a different project');
       Object.assign(saved, { tabId: row.tabId, leafId: row.leafId });
       if (!resume[name]) Object.assign(saved, { model: role.model, agent: role.agent, thinking: role.thinking });
-      delete saved.pending; saveJson(files.state, state); resolved[name] = row;
+      saveJson(files.state, state); resolved[name] = row;
       let found;
       for (let attempt = 0; attempt < 20; attempt++) {
         found = binding(await snapshot(), saved, project);
-        if (found) {
-          if (resume[name] && found.id !== saved.session.id) throw new Error(`Unexpected conversation after resuming ${name}`);
-          saved.session = found; saveJson(files.state, state); break;
+        const live = await inspect(handle, saved.agent);
+        if (captureSession(saved, live, project, found)) {
+          found = saved.session;
+          delete saved.pending; saveJson(files.state, state); break;
         }
         await sleep(500);
       }
       log(`${name}: ${resume[name] ? 'resume launched' : 'created'}${found ? '' : '; conversation unconfirmed, rerun before closing'}`);
+      if (saved.pending) issues.push(`${name}: launch unconfirmed; pending retained, no automatic resend`);
     }
     if (action === 'start') {
       assertLayout(await list(), config, state); saveJson(files.state, state);

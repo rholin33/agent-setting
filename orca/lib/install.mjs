@@ -40,7 +40,7 @@ export function registerShellProfile(home, profile, platform = process.platform)
   const existing = fs.existsSync(profile) ? fs.readFileSync(profile, 'utf8') : '';
   const begin = existing.indexOf(start), finish = existing.indexOf(end);
   if ((begin === -1) !== (finish === -1) || (begin !== -1 && finish < begin)) throw new Error('Malformed orca-team profile markers');
-  const entry = platform === 'win32'
+  const entry = platform === 'win32' || /\.ps1$/i.test(profile)
     ? `. ${quote(path.join(home, 'bin', 'orca-team.ps1'), 'win32')}`
     : `export PATH=${quote(path.join(home, 'bin'), platform)}:"$PATH"`;
   const block = `${start}\n${entry}\n${end}`;
