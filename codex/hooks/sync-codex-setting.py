@@ -208,10 +208,18 @@ def is_portable_path(relative_path: Path) -> bool:
         return False
     if parts[:2] == ("pi", "projects") and not is_project_pi_settings_path(relative_path):
         return False
-    excluded = {".git", ".system", "__pycache__", "node_modules", ".cache", "sessions", "credentials", "logs"}
+    excluded = {".git", ".system", "__pycache__", "node_modules", ".cache", "sessions", "credentials", "logs", "log", "shell_snapshots", "tmp", ".tmp"}
     if any(part.lower() in excluded for part in parts):
         return False
     name = parts[-1].lower()
+    if parts in {("codex", "rules", "default.rules"), ("codex", "hooks", "sync-codex-setting.ps1")}:
+        return False
+    if parts[:2] == ("pi", "bin") and parts != ("pi", "bin", "pi"):
+        return False
+    if name.startswith((".env.", "local-legacy")) or name == ".coverage" or (name.startswith("coverage") and name.endswith(".json")):
+        return False
+    if name in {"models.json", "models-store.json"}:
+        return False
     if name in {"auth.json", "token.json", "tokens.json", "credentials.json", "state.json", ".env", "history.jsonl"} or name.endswith((".pyc", ".lock", ".sqlite", ".sqlite3", ".db", ".log")):
         return False
     if parts[0] == "orca":
@@ -308,6 +316,7 @@ def copy_remote_to_local(relative_path: Path, remote_path: Path) -> None:
     local_path = get_local_managed_path(relative_path)
     if local_path.is_symlink() or any(parent.is_symlink() for parent in local_path.parents):
         raise ValueError(f"local managed path contains a symlink: {local_path}")
+    validate_managed_content(relative_path, remote_path.read_bytes())
     copy_with_parents(remote_path, local_path)
     if is_ccb_config_path(relative_path):
         local_path.chmod(0o600)
@@ -429,6 +438,7 @@ def validate_remote_layout() -> None:
     load_pi_settings(REMOTE_REPO / PI_CONFIG_DIR / "settings.json")
     for remote_file in get_managed_remote_files():
         relative_path = get_relative_path(REMOTE_REPO, remote_file)
+        validate_managed_content(relative_path, remote_file.read_bytes())
         if is_project_pi_settings_path(relative_path):
             load_pi_settings(remote_file)
     if TARGET == "orca":
@@ -557,6 +567,22 @@ def install_required_roles() -> None:
         write_log(f"installed CCB Role: {role}")
 
 
+def validate_managed_content(relative_path: Path, content: bytes) -> None:
+    if relative_path.suffix.lower() == ".py":
+        compile(content, str(relative_path), "exec")
+    elif relative_path.suffix.lower() == ".json":
+        json.loads(content)
+        if is_pi_settings_path(relative_path):
+            settings = json.loads(content)
+            if not isinstance(settings, dict):
+                raise ValueError(f"{relative_path} must contain a JSON object")
+            get_pi_package_sources(settings, relative_path)
+    elif relative_path.name == "SKILL.md":
+        text = content.decode("utf-8-sig").replace("\r\n", "\n")
+        if len(re.findall(r"(?m)^---\s*\nname:", text)) > 1:
+            raise ValueError(f"concatenated skill documents: {relative_path}")
+
+
 def merge_text_file(
     relative_path: Path,
     local_path: Path,
@@ -570,12 +596,11 @@ def merge_text_file(
         ours = work_path / "ours"
         base = work_path / "base"
         theirs = work_path / "theirs"
-        shutil.copy2(local_path, ours)
-        shutil.copy2(base_path, base)
-        shutil.copy2(remote_path, theirs)
+        for source, destination in ((local_path, ours), (base_path, base), (remote_path, theirs)):
+            destination.write_bytes(source.read_bytes().replace(b"\r\n", b"\n"))
 
         result = subprocess.run(
-            ["git", "merge-file", "--union", str(ours), str(base), str(theirs)],
+            ["git", "merge-file", str(ours), str(base), str(theirs)],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -588,13 +613,12 @@ def merge_text_file(
             write_log(f"merge conflict kept local file: {relative_path}")
             return False
 
-        if relative_path.suffix.lower() == ".json":
-            try:
-                json.loads(ours.read_text(encoding="utf-8"))
-            except (ValueError, UnicodeError):
-                copy_with_parents(remote_path, backup_directory / f"{relative_path}.remote")
-                write_log(f"JSON merge invalid; kept local file: {relative_path}")
-                return False
+        try:
+            validate_managed_content(relative_path, ours.read_bytes())
+        except (ValueError, SyntaxError, UnicodeError):
+            copy_with_parents(remote_path, backup_directory / f"{relative_path}.remote")
+            write_log(f"invalid merge kept local file: {relative_path}")
+            return False
 
         backup_local_file(relative_path, backup_directory)
         shutil.copy2(ours, local_path)

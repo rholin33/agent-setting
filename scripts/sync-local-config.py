@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import subprocess
@@ -48,7 +49,7 @@ def export_candidates():
 
 
 def export_configuration(destination: Path) -> int:
-    count = 0
+    pending = []
     for relative, source in export_candidates():
         if not source.is_file() or source.is_symlink() or not sync.is_portable_path(relative):
             continue
@@ -62,27 +63,38 @@ def export_configuration(destination: Path) -> int:
             config = sync.load_json_object(source)
             for key in ('workspace', 'project', 'projectPath', 'state', 'sessions'):
                 config.pop(key, None)
-            sync.ensure_directory(target.parent)
-            target.write_text(json.dumps(config, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
-        elif source.resolve() != target.resolve():
-            sync.copy_with_parents(source, target)
-        count += 1
+            content = (json.dumps(config, indent=2, ensure_ascii=False) + '\n').encode('utf-8')
+        else:
+            content = source.read_bytes()
+        sync.validate_managed_content(relative, content)
+        if source.resolve() != target.resolve():
+            pending.append((target, content))
     if sync.TARGET == 'orca':
         entry = REPO_ROOT / 'orca/bin/orca-team.mjs'
-        if entry.is_file():
+        project = sync.get_project_root().resolve()
+        normalized = project.as_posix()
+        if sync.os.name == 'nt':
+            normalized = normalized.lower()
+        project_hash = hashlib.sha256(normalized.encode('utf-8')).hexdigest()[:16]
+        runtime_config = sync.ORCA_HOME / 'projects' / project_hash / 'config.json'
+        has_project_config = runtime_config.is_file() or (project / '.orca/team.json').is_file()
+        if entry.is_file() and has_project_config:
             result = subprocess.run(['node', str(entry), 'export-config', '--home', str(sync.ORCA_HOME),
                                      '--project', str(sync.get_project_root())],
                                     capture_output=True, text=True, encoding='utf-8', check=True)
             config = json.loads(result.stdout)
             if not isinstance(config, dict):
                 raise ValueError('Orca export-config must return an object')
+            for key in ('workspace', 'project', 'projectPath', 'state', 'sessions'):
+                config.pop(key, None)
             target = destination / 'orca/project-configs' / sync.get_project_key() / 'config.json'
             if target.is_symlink() or any(parent.is_symlink() for parent in target.parents):
                 raise ValueError(f'export destination contains a symlink: {target}')
-            sync.ensure_directory(target.parent)
-            target.write_text(json.dumps(config, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
-            count += 1
-    return count
+            pending.append((target, (json.dumps(config, indent=2, ensure_ascii=False) + '\n').encode('utf-8')))
+    for target, content in pending:
+        sync.ensure_directory(target.parent)
+        target.write_bytes(content)
+    return len(pending)
 
 
 def main() -> int:

@@ -81,6 +81,18 @@ The exporter itself never commits or pushes. Review the exact changed files,
 stage only approved portable paths, commit, then push. Never apply remote CCB
 configuration to the live home before exporting intended local changes.
 
+Export validates all candidate Python, JSON and skill documents before writing
+any files, including the sync hook itself. Invalid or concatenated documents stop
+the export. Machine approval rules, legacy sync launchers, Pi tool binaries,
+coverage output and local legacy backups are excluded. Orca project layouts are
+exported only when the invoking project has a saved runtime config or an explicit
+`.orca/team.json`; a global layout fallback does not create a project entry.
+
+Text merges normalize CRLF/LF before a regular three-way merge. Conflicts retain
+the local file and save the remote candidate in the backup directory without
+advancing the baseline. Merged Python, JSON and skill documents are validated
+before installation. An untargeted SessionStart remains an intentional no-op.
+
 ## Verification
 
 ```text
