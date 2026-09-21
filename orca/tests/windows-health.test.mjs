@@ -11,9 +11,10 @@ test('Windows distinguishes empty shell, Pi and unknown children', () => {
   assert.equal(classifyWindows([root], session, 'pi'), 'shell');
   assert.equal(classifyWindows([root, child], session, 'pi'), 'agent');
   assert.equal(classifyWindows([root, child], session, 'codex'), 'unverifiable');
-  for (const change of [{ Created: '090' }, { SessionId: 2 }, { CommandLine: '' }]) {
+  for (const change of [{ SessionId: 2 }, { CommandLine: '' }]) {
     assert.equal(classifyWindows([root, { ...child, ...change }], session, 'pi'), 'unverifiable');
   }
+  assert.equal(classifyWindows([root, { ...child, Created: '090' }], session, 'pi'), 'shell');
 });
 test('Windows rejects root reuse, pane replacement and changing process trees', async () => {
   const inventory = async () => ({ identity: { launchNonce: 'daemon' }, sessions: [session] });

@@ -5,6 +5,8 @@ import { binding, sameWorktree, validateTranscript } from './sessions.mjs';
 import { inspectHealth, recoverInPane } from './health.mjs';
 import { rpc } from './orca.mjs';
 import { prepareLaunch, captureSession } from './launch-state.mjs';
+import { pinGroupTabs } from './tabs.mjs';
+import { verifyWindowsAbsence } from './windows-health.mjs';
 
 export const readJson = file => JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
 export function saveJson(file, value) {
@@ -82,9 +84,13 @@ export function validateConfig(config, catalog) {
     catalogNames.add(role.name);
   }
   const names = new Set();
+  const titles = new Set();
+  if (config.pinTabs !== undefined && typeof config.pinTabs !== 'boolean') throw new Error('pinTabs must be a boolean');
   if (!Array.isArray(config.tabs) || !config.tabs.length) throw new Error('Missing tabs');
   for (const tab of config.tabs) {
     if (typeof tab.title !== 'string' || !tab.title.trim()) throw new Error('Tab title is required');
+    if (titles.has(tab.title)) throw new Error(`Duplicate group title: ${tab.title}`);
+    titles.add(tab.title);
     if (!Array.isArray(tab.agents) || ![1, 2].includes(tab.agents.length)) throw new Error('Each tab requires one or two agents');
     if (tab.agents.length === 2 && (tab.direction !== 'vertical' || tab.ratio !== 0.5)) throw new Error('Only equal left/right splits are supported');
     for (const name of tab.agents) {
@@ -94,14 +100,21 @@ export function validateConfig(config, catalog) {
   }
   return [...names];
 }
-export async function runTeam({ home, project, action, cli, snapshot, inspect = (handle, provider) => inspectHealth(cli, rpc, handle, provider), sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), log = console.log }) {
+export async function runTeam({ home, project, action, group, cli, snapshot, pin = pinGroupTabs, verifyAbsent = verifyWindowsAbsence, inspect = (handle, provider) => inspectHealth(cli, rpc, handle, provider), sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), log = console.log }) {
   project = normalizeProject(project);
   const files = projectFiles(home, project);
   if (action === 'start') await initialize(home, project);
   if (!fs.existsSync(files.config)) throw new Error('Project is not initialized');
   const execute = async () => {
-    const config = readJson(files.config), state = readJson(files.state), catalog = readJson(path.join(home, 'team.json'));
+    let config = readJson(files.config);
+    const state = readJson(files.state), catalog = readJson(path.join(home, 'team.json'));
     if (config.workspace !== project || state.workspace !== project) throw new Error('Project state path mismatch');
+    validateConfig(config, catalog);
+    if (group !== undefined) {
+      const tabs = config.tabs.filter(tab => tab.title === group);
+      if (tabs.length !== 1) throw new Error(`Unknown group: ${group}`);
+      config = { ...config, tabs };
+    }
     const names = validateConfig(config, catalog);
     const list = () => cli(['terminal', 'list', '--worktree', `path:${project}`, '--include-visual-layouts']);
     let inventory;
@@ -109,7 +122,7 @@ export async function runTeam({ home, project, action, cli, snapshot, inspect = 
       if (error.code !== 'selector_not_found' || error.selector !== `path:${project}` || action !== 'start') throw error;
       await cli(['repo', 'add', '--path', project]); inventory = await list();
     }
-    const resolved = {}, resume = {}, health = {}, issues = [];
+    const resolved = {}, resume = {}, health = {}, issues = [], missing = [];
     const snap = await snapshot();
     for (const name of names) {
       const saved = state.agents[name];
@@ -127,14 +140,23 @@ export async function runTeam({ home, project, action, cli, snapshot, inspect = 
       if (!matches.length) {
         if (action === 'status') { log(`${name}: missing`); continue; }
         const close = snap.terminalSurfaceTombstonesByPaneKey?.[`${saved.tabId}:${saved.leafId}`];
-        if (!close || !sameWorktree(close.worktreeId, project)) throw new Error(`No confirmed close record for ${name}; no duplicate launched`);
-        validateTranscript(saved, project); resume[name] = true;
+        validateTranscript(saved, project);
+        if (!close || !sameWorktree(close.worktreeId, project)) missing.push({ name, saved });
+        resume[name] = true;
       } else {
         if (matches.length !== 1 || !matches[0].connected || matches[0].orphaned) throw new Error(`Cannot verify running role ${name}`);
         resolved[name] = matches[0];
         health[name] = await inspect(matches[0].handle, saved.agent);
         if (health[name].kind === 'agent') captureSession(saved, health[name], project, foundBinding);
       }
+    }
+    if (missing.length) {
+      try {
+        if (await verifyAbsent({ project, missing, cli }) !== true) throw new Error('Absence was not verified');
+      } catch (error) {
+        throw new Error(`No confirmed close record for ${missing.map(role => role.name).join(', ')}; ${error.message}; no duplicate launched`);
+      }
+      log(`Verified original processes absent: ${missing.map(role => role.name).join(', ')}; resuming saved conversations`);
     }
     if (action === 'start') saveJson(files.state, state);
     for (const tab of config.tabs) for (const name of tab.agents) {
@@ -212,6 +234,12 @@ export async function runTeam({ home, project, action, cli, snapshot, inspect = 
     if (action === 'start') {
       assertLayout(await list(), config, state); saveJson(files.state, state);
       if (issues.length) throw new Error(issues.join('\n'));
+      if (group !== undefined) await cli(['terminal', 'switch', '--terminal', resolved[config.tabs[0].agents[0]].handle]);
+      const pinTabs = config.pinTabs ?? readJson(path.join(home, 'layout.json')).pinTabs ?? false;
+      if (pinTabs) {
+        try { await pin({ project, config, state }); }
+        catch (error) { log(`Warning: optional tab pinning failed: ${error.message}`); }
+      }
       log('Verified configured desktop layout; new launches report conversation readiness separately');
     }
     return state;

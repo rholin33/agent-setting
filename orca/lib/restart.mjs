@@ -18,6 +18,8 @@ export async function restartRole({ home, project, role, cli, snapshot,
     const saved = state.agents[role];
     if (!saved) throw new Error(`${role}: run orca-team first`);
     validateTranscript(saved, project);
+    const catalogRole = readJson(path.join(home, 'team.json')).find(item => item.name === role);
+    if (catalogRole) { saved.model = catalogRole.model; saved.thinking = catalogRole.thinking; saved.agent = catalogRole.agent; }
     const checkpoint = () => saveJson(files.state, state);
     const rows = (await cli(['terminal', 'list', '--worktree', `path:${project}`])).terminals.filter(row =>
       row.tabId === saved.tabId && row.leafId === saved.leafId && sameWorktree(`local::${row.worktreePath}`, project));

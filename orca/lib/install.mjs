@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { nodeCommand, quote } from './platform.mjs';
-import { readJson, saveJson } from './team.mjs';
+import { readJson, saveJson, validateConfig } from './team.mjs';
 
 export function deploy(source, home) {
   fs.mkdirSync(home, { recursive: true });
@@ -21,17 +21,25 @@ export function deploy(source, home) {
 }
 export async function installQuickCommands(home, rpc) {
   const team = readJson(path.join(home, 'team.json'));
-  const commands = team.map(role => ({ id: `ccb-team-${role.name}`, label: `CCB / ${role.name}`, action: 'terminal-command', scope: { type: 'global' }, command: nodeCommand([path.join(home, 'bin', 'orca-team.mjs'), 'launch', '--home', home, '--role', role.name]), appendEnter: true }));
+  const layout = readJson(path.join(home, 'layout.json'));
+  validateConfig(layout, team);
+  const commands = layout.tabs.map(tab => ({ id: `ccb-team-${tab.title}`, label: `CCB / ${tab.agents.join(' + ')}`, action: 'terminal-command', scope: { type: 'global' }, command: nodeCommand([path.join(home, 'bin', 'orca-team.mjs'), 'start', '--home', home, '--group', tab.title]), appendEnter: true }));
+  const owned = new Set([...team.map(role => `ccb-team-${role.name}`), ...commands.map(command => command.id)]);
   const previous = await rpc('settings.getTerminalQuickCommands');
-  if (previous.terminalQuickCommands.filter(command => !commands.some(item => item.id === command.id)).length + commands.length > 40) throw new Error('Orca quick command limit exceeded');
+  if (previous.terminalQuickCommands.filter(command => !owned.has(command.id)).length + commands.length > 40) throw new Error('Orca quick command limit exceeded');
   fs.mkdirSync(path.join(home, 'backups'), { recursive: true });
   saveJson(path.join(home, 'backups', `quick-commands-${Date.now()}.json`), previous);
+  const obsolete = previous.terminalQuickCommands.filter(command => owned.has(command.id) && !commands.some(item => item.id === command.id));
+  const replaced = previous.terminalQuickCommands.filter(command => owned.has(command.id));
+  for (const command of replaced) await rpc('settings.updateTerminalQuickCommands', { mutation: { type: 'delete', id: command.id } });
   for (const command of commands) await rpc('settings.updateTerminalQuickCommands', { mutation: { type: 'upsert', command } });
   const after = await rpc('settings.getTerminalQuickCommands');
   for (const command of commands) {
     const actual = after.terminalQuickCommands.find(item => item.id === command.id);
     if (!actual || actual.command !== command.command || actual.label !== command.label) throw new Error(`Quick command readback mismatch: ${command.id}`);
   }
+  if (after.terminalQuickCommands.some(command => obsolete.some(item => item.id === command.id))) throw new Error('Obsolete role quick command remains registered');
+  saveJson(path.join(home, 'quick-commands.json'), commands);
   return commands.length;
 }
 

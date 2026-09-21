@@ -1,5 +1,6 @@
 {
   "entry": "master",
+  "pinTabs": true,
   "tabs": [
     {
       "title": "master",

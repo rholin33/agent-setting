@@ -15,13 +15,14 @@ import { deploy, installQuickCommands, registerShellProfile } from '../lib/insta
 
 const source = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 try {
-  const { values, positionals } = parseArgs({ allowPositionals: true, options: { home: { type: 'string' }, project: { type: 'string' }, role: { type: 'string' }, cached: { type: 'boolean' }, resume: { type: 'boolean' }, 'quick-commands': { type: 'boolean' }, 'shell-profile': { type: 'string' }, help: { type: 'boolean' } } });
+  const { values, positionals } = parseArgs({ allowPositionals: true, options: { home: { type: 'string' }, project: { type: 'string' }, role: { type: 'string' }, group: { type: 'string' }, cached: { type: 'boolean' }, resume: { type: 'boolean' }, 'quick-commands': { type: 'boolean' }, 'shell-profile': { type: 'string' }, help: { type: 'boolean' } } });
   const action = positionals[0] || 'start';
   const roleName = values.role || positionals[1];
   if (positionals.length > (['restart', 'history'].includes(action) ? 2 : 1)) throw new Error('Unexpected positional arguments');
   if (values.role && positionals[1] && values.role !== positionals[1]) throw new Error('Conflicting role arguments');
+  if (values.group !== undefined && !['start', 'status'].includes(action)) throw new Error('--group is only supported for start/status');
   if (values.help) {
-    console.log('orca-team [start|init|status|history [ROLE]|restart ROLE|install|export-config] [--project PATH] [--home PATH]\nDefault: initialize and recover current project. Restart resumes one exact conversation in its existing pane.\ninstall --quick-commands registers Orca global shortcuts.');
+    console.log('orca-team [start|init|status|history [ROLE]|restart ROLE|install|export-config] [--project PATH] [--home PATH]\nstart/status --group TITLE selects one configured group, e.g. master (master + loader).\nDefault: initialize and recover current project. Restart resumes one exact conversation in its existing pane.\ninstall --quick-commands registers Orca grouped global shortcuts.');
   } else {
     const home = path.resolve(values.home || process.env.ORCA_TEAM_HOME || path.join(os.homedir(), '.orca', 'roles', 'ccb-team'));
     const project = normalizeProject(fs.realpathSync(values.project || process.cwd()));
@@ -46,7 +47,7 @@ try {
       if (!roleName) throw new Error('Usage: orca-team restart ROLE');
       await restartRole({ home, project, role: roleName, cli: orca, snapshot });
     } else if (action === 'start' || action === 'status') {
-      await runTeam({ home, project, action, cli: orca, snapshot });
+      await runTeam({ home, project, action, group: values.group, cli: orca, snapshot });
     } else if (action === 'launch') {
       const role = readJson(path.join(home, 'team.json')).find(item => item.name === values.role);
       if (!role) throw new Error('Unknown role');
@@ -57,7 +58,28 @@ try {
       const current = fs.existsSync(stateFile) ? readJson(stateFile).agents[role.name] : null;
       const saved = values.resume || current?.session ? current : null;
       if (values.resume && !saved?.session) throw new Error('Original session is unavailable');
-      const launch = launchArguments(saved || role, prompt, saved?.session, project);
+      const launchRole = saved ? { ...saved, model: role.model, thinking: role.thinking, agent: role.agent } : role;
+      const launch = launchArguments(launchRole, prompt, saved?.session, project);
+      if (role.agent === 'codex' && role.piProvider) {
+        const provider = readJson(path.join(os.homedir(), '.pi', 'agent', 'models.json')).providers?.[role.piProvider];
+        if (!provider || provider.api !== 'openai-responses' || !provider.models?.some(model => model.id === role.model)) {
+          throw new Error('Codex Pi provider binding is missing or incompatible');
+        }
+        if (typeof provider.apiKey !== 'string' || !provider.apiKey || provider.apiKey.startsWith('!') ||
+            !provider.baseUrl?.startsWith('https://')) {
+          throw new Error('Codex Pi provider binding requires an HTTPS endpoint and a literal API key');
+        }
+        launch.env.ORCA_TEAM_CODEX_PROVIDER_KEY = provider.apiKey;
+        const overrides = {
+          model_provider: 'orca_team_pi',
+          'model_providers.orca_team_pi.name': `Pi ${role.piProvider}`,
+          'model_providers.orca_team_pi.base_url': provider.baseUrl,
+          'model_providers.orca_team_pi.wire_api': 'responses',
+          'model_providers.orca_team_pi.env_key': 'ORCA_TEAM_CODEX_PROVIDER_KEY',
+          'model_providers.orca_team_pi.requires_openai_auth': false,
+        };
+        for (const [key, value] of Object.entries(overrides)) launch.args.push('-c', `${key}=${JSON.stringify(value)}`);
+      }
       if (!saved?.session && current?.launchIntent && role.agent === 'pi') {
         const transcript = current.launchIntent.transcriptPath;
         if (fs.existsSync(transcript)) throw new Error('Launch intent already has a transcript; rerun start to reconcile it');

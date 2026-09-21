@@ -86,9 +86,37 @@ test('fresh launch creates six tabs/nine roles and rerun has no mutations', asyn
     throw new Error(`Unexpected ${noun} ${verb}`);
   };
   const bindings = {};
-  const options = { home, project, action: 'start', cli, inspect: async () => ({ kind: 'agent' }), snapshot: () => ({ sleepingAgentSessionsByPaneKey: bindings }), sleep: async () => {}, log: () => {} };
+  const pinned = [];
+  const options = { home, project, action: 'start', cli, pin: async ({ config }) => pinned.push(config.tabs.map(tab => tab.title)), inspect: async () => ({ kind: 'agent' }), snapshot: () => ({ sleepingAgentSessionsByPaneKey: bindings }), sleep: async () => {}, log: () => {} };
+  await runTeam({ ...options, group: 'master' });
+  assert.equal(creations, 2); assert.equal(tabs.length, 1);
+  assert.deepEqual(pinned, [['master']]);
+  await runTeam({ ...options, group: 'master' }); assert.equal(creations, 2);
+  await assert.rejects(runTeam({ ...options, group: 'missing' }), /Unknown group/);
+  const stateFile = projectFiles(home, project).state;
+  const withUnrelatedPending = readJson(stateFile);
+  withUnrelatedPending.agents.archi = { pending: true };
+  saveJson(stateFile, withUnrelatedPending);
+  await runTeam({ ...options, group: 'master' }); assert.equal(creations, 2);
+  delete withUnrelatedPending.agents.archi;
+  saveJson(stateFile, withUnrelatedPending);
   await runTeam(options); assert.equal(creations, 9); assert.equal(tabs.length, 6);
+  assert.deepEqual(pinned.at(-1), ['master', 'archi', 'coder', 'designer', 'reviewer', 'simple']);
   await runTeam(options); assert.equal(creations, 9);
+  const stateBeforeStatus = fs.readFileSync(stateFile, 'utf8');
+  const pinCount = pinned.length;
+  await runTeam({ ...options, action: 'status', group: 'master' });
+  assert.equal(fs.readFileSync(stateFile, 'utf8'), stateBeforeStatus);
+  assert.equal(pinned.length, pinCount);
+  const configFile = projectFiles(home, project).config;
+  saveJson(configFile, { ...readJson(configFile), pinTabs: false });
+  await runTeam(options);
+  assert.equal(pinned.length, pinCount);
+  saveJson(configFile, { ...readJson(configFile), pinTabs: true });
+  const warnings = [];
+  await runTeam({ ...options, log: line => warnings.push(line), pin: async () => { throw new Error('pin not applied'); } });
+  assert.ok(warnings.some(line => /Warning:.*pin not applied/.test(line)));
+  assert.equal(creations, 9);
   terminals.pop();
   await assert.rejects(runTeam(options), /No confirmed close record/);
   assert.equal(creations, 9);
@@ -117,17 +145,28 @@ test('installation retains runtime state and quick commands preserve unrelated e
   assert.ok(fs.existsSync(path.join(home, 'bin', 'orca-team')));
   assert.ok(fs.readFileSync(path.join(home, 'bin', 'orca-team'), 'utf8').includes('--home'));
   assert.ok(fs.readFileSync(path.join(home, 'bin', 'orca-team.ps1'), 'utf8').includes('--home'));
-  const commands = [{ id: 'user-command', command: 'hello' }];
+  const commands = [{ id: 'user-command', command: 'hello' }, ...['master', 'loader', 'archi', 'coder1', 'coder2', 'designer', 'reviewer', 'test', 'simple'].map(name => ({ id: `ccb-team-${name}`, command: 'old' }))];
   const rpc = async (method, params) => {
     if (method === 'settings.getTerminalQuickCommands') return { terminalQuickCommands: commands };
+    if (params.mutation.type === 'delete') {
+      const index = commands.findIndex(row => row.id === params.mutation.id);
+      if (index !== -1) commands.splice(index, 1);
+      return;
+    }
     const index = commands.findIndex(row => row.id === params.mutation.command.id);
     if (index === -1) commands.push(params.mutation.command); else commands[index] = params.mutation.command;
   };
   await installQuickCommands(home, rpc); await installQuickCommands(home, rpc);
-  assert.equal(commands.length, 10); assert.equal(commands[0].command, 'hello');
+  assert.equal(commands.length, 7); assert.equal(commands[0].command, 'hello');
+  assert.deepEqual(commands.slice(1).map(row => row.label).sort(), ['CCB / master + loader', 'CCB / archi', 'CCB / coder1 + coder2', 'CCB / designer', 'CCB / reviewer + test', 'CCB / simple'].sort());
+  for (const row of commands.slice(1)) {
+    const text = process.platform === 'win32' ? Buffer.from(row.command.split(' ').at(-1), 'base64').toString('utf16le') : row.command;
+    assert.match(text, /'start'.*'--group'/);
+    assert.doesNotMatch(text, /'launch'/);
+  }
 });
-for (const missing of [['master'], ['loader'], ['master', 'loader']]) {
-  test(`confirmed closure restores ${missing.join(' and ')} without replacing sibling`, async t => {
+for (const tombstones of [true, false]) for (const missing of [['master'], ['loader'], ['master', 'loader']]) {
+  test(`${tombstones ? 'confirmed closure' : 'verified absence'} restores ${missing.join(' and ')} without replacing sibling`, async t => {
     const { home, project, temp } = fixture(t);
     const files = await initialize(home, project);
     const config = { workspace: project, tabs: [{ title: 'master', agents: ['master', 'loader'], direction: 'vertical', ratio: 0.5 }] };
@@ -138,7 +177,9 @@ for (const missing of [['master'], ['loader'], ['master', 'loader']]) {
       const transcriptPath = path.join(temp, `${name}.jsonl`);
       fs.writeFileSync(transcriptPath, JSON.stringify({ type: 'session', id: name, cwd: project }) + '\n');
       state.agents[name] = { tabId: 'old-tab', leafId: name, agent: 'pi', model: 'model', session: { id: name, transcriptPath } };
-      if (missing.includes(name)) snap.terminalSurfaceTombstonesByPaneKey[`old-tab:${name}`] = { worktreeId: `repo::${project}` };
+      if (missing.includes(name)) {
+        if (tombstones) snap.terminalSurfaceTombstonesByPaneKey[`old-tab:${name}`] = { worktreeId: `repo::${project}` };
+      }
       else {
         terminals.push({ tabId: 'old-tab', leafId: name, handle: name, worktreePath: project, connected: true });
         tabs.push({ tabId: 'old-tab', panes: { type: 'pane-leaf', leafId: name } });
@@ -168,7 +209,18 @@ for (const missing of [['master'], ['loader'], ['master', 'loader']]) {
       }
       throw new Error(`Unexpected ${verb}`);
     };
-    const result = await runTeam({ home, project, action: 'start', cli, inspect: async () => ({ kind: 'agent' }), snapshot: () => snap, sleep: async () => {}, log: () => {} });
+    let checked = 0;
+    const options = { home, project, action: 'start', cli, pin: async () => {}, inspect: async () => ({ kind: 'agent' }), snapshot: () => snap, sleep: async () => {}, log: () => {} };
+    if (!tombstones) {
+      await assert.rejects(runTeam({ ...options, verifyAbsent: async () => { throw new Error('process still running'); } }), /process still running/);
+      assert.equal(count, 0);
+    }
+    const result = await runTeam({ ...options, verifyAbsent: async ({ missing: roles }) => {
+      checked++;
+      assert.deepEqual(roles.map(role => role.name), missing);
+      return true;
+    } });
+    assert.equal(checked, tombstones ? 0 : 1);
     assert.equal(count, missing.length);
     for (const name of ['master', 'loader']) assert.equal(result.agents[name].session.id, name);
     for (const name of ['master', 'loader'].filter(name => !missing.includes(name))) assert.equal(result.agents[name].leafId, name);
@@ -228,7 +280,7 @@ test('unconfirmed new pane retains pending and retry never duplicates its launch
     if (args[1] === 'show') return { terminal: terminals[0] };
     assert.fail('unexpected mutation');
   };
-  const options = { home, project, action: 'start', cli, inspect: async () => ({ kind: 'agent' }), snapshot: () => ({}), sleep: async () => {}, log: () => {} };
+  const options = { home, project, action: 'start', cli, pin: async () => {}, inspect: async () => ({ kind: 'agent' }), snapshot: () => ({}), sleep: async () => {}, log: () => {} };
   await assert.rejects(runTeam(options), /launch unconfirmed/);
   const saved = readJson(files.state).agents.archi;
   assert.equal(saved.pending, true);
