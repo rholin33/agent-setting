@@ -41,8 +41,10 @@ and main branch; clone the canonical remote there if absent. Stop on a dirty
 checkout, detached/non-main branch, staged changes or unresolved merge.
 Do not discard changes to make synchronization proceed.
 
-Common scope: codex/AGENTS.md, codex/hooks/, codex/rules/, codex/skills/ excluding
-.system and caches; pi/AGENTS.md, pi/settings.json, pi/skills/, pi/bin/.
+Common scope: target-selected Codex AGENTS.md variants codex/AGENTS.ccb.md and
+codex/AGENTS.orca.md (each run syncs only its own variant to the global
+~/.codex/AGENTS.md), codex/hooks/, codex/rules/, codex/skills/ excluding .system
+and caches; pi/AGENTS.md, pi/settings.json, pi/skills/, pi/bin/.
 CCB scope: ccb/ccb.config and the current project's ccb/projects configuration
 and pi/projects settings. CCB role bootstrap in roles/ and ccb/roles.json belongs
 only to CCB. Orca mode must not apply CCB config, install CCB roles, or touch
@@ -70,7 +72,8 @@ credentials are not part of the Orca package.
 
    Replace orca with ccb when selected; add --force only for explicit force.
    The hook fetches/fast-forwards, validates, backs up and merges managed files.
-   Do not invoke an older installed hook that lacks target support.
+   It applies `codex/AGENTS.<target>.md`, the selected target's variant, to the
+   global Codex `AGENTS.md`. Do not invoke an older installed hook that lacks target support.
 3. Require exit success and review the current run's sync log at
    $CODEX_HOME/log/agent-setting-sync.log. Conflicts or incomplete configuration
    stop the workflow. Do not call export, git add, git commit or git push.
@@ -91,7 +94,10 @@ credentials are not part of the Orca package.
    python scripts/sync-local-config.py --target orca --push
 
    Replace orca with ccb when selected. Pass AGENT_SETTING_PROJECT_ROOT explicitly.
-   Export never commits or pushes itself; it must not mutate source config.
+   Export never commits or pushes itself; it must not mutate source config. The
+   exporter writes the global Codex `AGENTS.md` to `codex/AGENTS.<target>.md` for
+   the selected target and skips it when the global file matches the other
+   target's variant.
 4. Review git status --short, git diff --check and the full changed-file list.
    Inspect the actual diff before staging. Reject secrets, runtime state,
    unselected-target changes, unexplained deletions or unrelated paths.

@@ -16,13 +16,24 @@ sync = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(sync)
 
 
+def agents_export_would_clobber(relative, content, destination) -> bool:
+    """True when writing content would overwrite the other target's distinct variant."""
+    other = next(target for target in ('ccb', 'orca') if target != sync.TARGET)
+    other_path = destination / sync.codex_agents_variant_relative(other)
+    own_path = destination / relative
+    return other_path.is_file() and other_path.read_bytes() == content and own_path.is_file() and own_path.read_bytes() != content
+
+
 def export_candidates():
     for prefix, home, files, directories in (
         (Path('codex'), sync.CODEX_HOME, sync.CODEX_MANAGED_FILES, sync.CODEX_MANAGED_DIRECTORIES),
         (Path('pi'), sync.PI_HOME, sync.PI_MANAGED_FILES, sync.PI_MANAGED_DIRECTORIES),
     ):
         for name in files:
-            yield prefix / name, home / name
+            relative = prefix / name
+            if prefix == sync.CODEX_CONFIG_DIR and name == 'AGENTS.md':
+                relative = sync.codex_agents_variant_relative(sync.TARGET)
+            yield relative, home / name
         for directory in directories:
             root = home / directory
             if root.is_symlink():
@@ -66,6 +77,9 @@ def export_configuration(destination: Path) -> int:
             content = (json.dumps(config, indent=2, ensure_ascii=False) + '\n').encode('utf-8')
         else:
             content = source.read_bytes()
+        if sync.codex_agents_variant_target(relative) is not None and agents_export_would_clobber(relative, content, destination):
+            print(f'Warning: global Codex AGENTS.md matches the other target variant; skipped {relative} to preserve it.')
+            continue
         sync.validate_managed_content(relative, content)
         if source.resolve() != target.resolve():
             pending.append((target, content))

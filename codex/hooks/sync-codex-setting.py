@@ -27,6 +27,21 @@ PI_MANAGED_FILES = ("AGENTS.md", "settings.json")
 PI_MANAGED_DIRECTORIES = ("skills", "bin")
 ROLE_SOURCES_RELATIVE_PATH = Path("roles")
 TARGET: str | None = None
+CODEX_AGENTS_VARIANTS = ("ccb", "orca")
+
+
+def codex_agents_variant_target(relative_path: Path) -> str | None:
+    """Return the target of a codex/AGENTS.<target>.md variant path, else None."""
+    if relative_path.parts[:1] != (CODEX_CONFIG_DIR.name,):
+        return None
+    match = re.fullmatch(r"AGENTS\.(ccb|orca)\.md", relative_path.name)
+    return match.group(1) if match else None
+
+
+def codex_agents_variant_relative(target: str) -> Path:
+    if target not in CODEX_AGENTS_VARIANTS:
+        raise ValueError(f"unknown AGENTS.md variant target: {target}")
+    return CODEX_CONFIG_DIR / f"AGENTS.{target}.md"
 INCLUDE_UNTRACKED = False
 ORCA_HOME = Path(os.environ.get("ORCA_TEAM_HOME", str(Path.home() / ".orca/roles/ccb-team"))).expanduser()
 ORCA_PACKAGE_DIRECTORIES = {"bin", "lib", "roles", "source", "tests", "docs"}
@@ -183,7 +198,7 @@ def get_managed_remote_pathspecs() -> list[str]:
     if TARGET not in {"ccb", "orca"}:
         raise ValueError("an explicit target (ccb or orca) is required")
     pathspecs = [
-        *[str(CODEX_CONFIG_DIR / name) for name in CODEX_MANAGED_FILES],
+        *[str(codex_agents_variant_relative(TARGET) if name == "AGENTS.md" else CODEX_CONFIG_DIR / name) for name in CODEX_MANAGED_FILES],
         *[str(CODEX_CONFIG_DIR / name) for name in CODEX_MANAGED_DIRECTORIES],
         *[str(PI_CONFIG_DIR / name) for name in PI_MANAGED_FILES],
         *[str(PI_CONFIG_DIR / name) for name in PI_MANAGED_DIRECTORIES],
@@ -298,6 +313,11 @@ def get_local_managed_path(relative_path: Path) -> Path:
         if project_relative_path is not None:
             raise ValueError(f"unsupported project Pi path: {relative_path}")
 
+    variant_target = codex_agents_variant_target(relative_path)
+    if variant_target is not None:
+        if variant_target != TARGET:
+            raise ValueError("Codex AGENTS.md variant outside selected target")
+        return CODEX_HOME / "AGENTS.md"
     if relative_path.parts and relative_path.parts[0] == CODEX_CONFIG_DIR.name:
         return CODEX_HOME.joinpath(*relative_path.parts[1:])
 
@@ -419,7 +439,8 @@ def update_remote_checkout() -> None:
 
 def validate_remote_layout() -> None:
     required_paths = [
-        REMOTE_REPO / CODEX_CONFIG_DIR / "AGENTS.md",
+        REMOTE_REPO / codex_agents_variant_relative("ccb"),
+        REMOTE_REPO / codex_agents_variant_relative("orca"),
         REMOTE_REPO / CODEX_CONFIG_DIR / "hooks",
         REMOTE_REPO / CODEX_CONFIG_DIR / "rules",
         REMOTE_REPO / CODEX_CONFIG_DIR / "skills",
@@ -825,6 +846,10 @@ def merge_managed_files() -> None:
         relative_path = get_relative_path(REMOTE_REPO, remote_file)
         local_path = get_local_managed_path(relative_path)
         base_path = LAST_REMOTE / relative_path
+        if not base_path.is_file() and codex_agents_variant_target(relative_path) is not None:
+            legacy_base = LAST_REMOTE / CODEX_CONFIG_DIR / "AGENTS.md"
+            if legacy_base.is_file():
+                base_path = legacy_base
 
         if local_path.is_dir():
             write_log(f"kept local directory because remote path is file: {relative_path}")
