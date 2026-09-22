@@ -24,6 +24,25 @@ The installer generates these entry scripts without rewriting existing shell pro
 
 Run `orca-team` in a project directory. This initializes and starts the team. `orca-team status` only inspects existing state; `orca-team init` only initializes. `--project PATH` selects a different project.
 
+`start` first makes sure the Orca app is running: when the runtime metadata is
+missing it launches Orca and waits until the CLI answers. It then syncs role
+models before launching. Codex roles without a `piProvider` take the top-level
+`model` from the local Codex config (`$CODEX_HOME/config.toml`, else
+`~/.codex/config.toml`) instead of the model last used by that role. Pi roles are
+configured through an interactive picker in the terminal: presets and the last
+confirmed selection live in `pi-models.json` next to `team.json` and can be
+edited by hand. Starts without a terminal (Orca quick commands, CI) and
+`--no-pick` never open the picker and keep `team.json` values unchanged.
+
+Finally `start` reloads the project. Roles whose applied model configuration
+(catalogued per role in the project `state.json` as `appliedModel`) differs from
+the freshly synced configuration are restarted concurrently under one project
+lock and resume their exact conversation; roles already running the current
+configuration are kept as-is, so a start with no config change does not restart
+anything. Busy, timed-out or unverifiable roles are skipped with a warning so no
+in-flight work is lost, and roles whose panes are absent are created or resumed
+by the normal startup pass.
+
 ```text
 orca-team
 orca-team status

@@ -10,19 +10,22 @@ import { orca, snapshot, rpc } from '../lib/orca.mjs';
 import { initialize, runTeam, readJson, projectFiles } from '../lib/team.mjs';
 import { launchArguments } from '../lib/sessions.mjs';
 import { restartRole } from '../lib/restart.mjs';
+import { ensureOrca } from '../lib/orca-boot.mjs';
+import { syncModels } from '../lib/model-sync.mjs';
+import { reloadRunning } from '../lib/reload.mjs';
 import { taskHistory } from '../lib/history.mjs';
 import { deploy, installQuickCommands, registerShellProfile } from '../lib/install.mjs';
 
 const source = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 try {
-  const { values, positionals } = parseArgs({ allowPositionals: true, options: { home: { type: 'string' }, project: { type: 'string' }, role: { type: 'string' }, group: { type: 'string' }, cached: { type: 'boolean' }, resume: { type: 'boolean' }, 'quick-commands': { type: 'boolean' }, 'shell-profile': { type: 'string' }, help: { type: 'boolean' } } });
+  const { values, positionals } = parseArgs({ allowPositionals: true, options: { home: { type: 'string' }, project: { type: 'string' }, role: { type: 'string' }, group: { type: 'string' }, cached: { type: 'boolean' }, resume: { type: 'boolean' }, 'quick-commands': { type: 'boolean' }, 'shell-profile': { type: 'string' }, 'no-pick': { type: 'boolean' }, help: { type: 'boolean' } } });
   const action = positionals[0] || 'start';
   const roleName = values.role || positionals[1];
   if (positionals.length > (['restart', 'history'].includes(action) ? 2 : 1)) throw new Error('Unexpected positional arguments');
   if (values.role && positionals[1] && values.role !== positionals[1]) throw new Error('Conflicting role arguments');
   if (values.group !== undefined && !['start', 'status'].includes(action)) throw new Error('--group is only supported for start/status');
   if (values.help) {
-    console.log('orca-team [start|init|status|history [ROLE]|restart ROLE|install|export-config] [--project PATH] [--home PATH]\nstart/status --group TITLE selects one configured group, e.g. master (master + loader).\nDefault: initialize and recover current project. Restart resumes one exact conversation in its existing pane.\ninstall --quick-commands registers Orca grouped global shortcuts.');
+    console.log('orca-team [start|init|status|history [ROLE]|restart ROLE|install|export-config] [--project PATH] [--home PATH] [--no-pick]\nstart/status --group TITLE selects one configured group, e.g. master (master + loader).\nDefault: start Orca when it is not running, sync role models (Codex follows the local Codex config model; Pi opens a model/thinking picker in a terminal), then reload in parallel only the running roles whose applied model config changed (busy roles are skipped; unchanged roles are kept), and recover or create every group.\nRestart resumes one exact conversation in its existing pane. --no-pick skips the Pi picker (non-terminal starts never pick).\ninstall --quick-commands registers Orca grouped global shortcuts.');
   } else {
     const home = path.resolve(values.home || process.env.ORCA_TEAM_HOME || path.join(os.homedir(), '.orca', 'roles', 'ccb-team'));
     const project = normalizeProject(fs.realpathSync(values.project || process.cwd()));
@@ -46,7 +49,22 @@ try {
     } else if (action === 'restart') {
       if (!roleName) throw new Error('Usage: orca-team restart ROLE');
       await restartRole({ home, project, role: roleName, cli: orca, snapshot });
-    } else if (action === 'start' || action === 'status') {
+    } else if (action === 'start') {
+      if (await ensureOrca({ cli: orca })) console.log('Orca was started automatically');
+      const files = projectFiles(home, project);
+      let names;
+      if (values.group !== undefined) {
+        const candidates = [files.config, path.join(project, '.orca', 'team.json'), path.join(home, 'layout.json')];
+        const file = candidates.find(candidate => fs.existsSync(candidate));
+        if (!file) throw new Error(`Unknown group: ${values.group}`);
+        const tab = readJson(file).tabs.find(item => item.title === values.group);
+        if (!tab) throw new Error(`Unknown group: ${values.group}`);
+        names = tab.agents;
+      }
+      await syncModels({ home, names, pick: !values['no-pick'] });
+      await reloadRunning({ home, project, names, cli: orca, snapshot });
+      await runTeam({ home, project, action, group: values.group, cli: orca, snapshot });
+    } else if (action === 'status') {
       await runTeam({ home, project, action, group: values.group, cli: orca, snapshot });
     } else if (action === 'launch') {
       const role = readJson(path.join(home, 'team.json')).find(item => item.name === values.role);

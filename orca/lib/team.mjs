@@ -186,6 +186,8 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pin
             }
             throw new Error(`${name}: original conversation recovery is unconfirmed; pending retained`);
           } });
+        const restoredRole = catalog.find(item => item.name === name);
+        if (restoredRole) saved.appliedModel = { agent: restoredRole.agent, model: restoredRole.model, thinking: restoredRole.thinking ?? null };
         log(`${name}: original conversation restored in existing pane`);
         delete saved.restartIntent; saveJson(files.state, state);
         continue;
@@ -224,7 +226,9 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pin
         const live = await inspect(handle, saved.agent);
         if (captureSession(saved, live, project, found)) {
           found = saved.session;
-          delete saved.pending; saveJson(files.state, state); break;
+          delete saved.pending;
+          saved.appliedModel = { agent: role.agent, model: role.model, thinking: role.thinking ?? null };
+          saveJson(files.state, state); break;
         }
         await sleep(500);
       }

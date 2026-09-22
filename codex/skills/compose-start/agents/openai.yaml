@@ -1,0 +1,6 @@
+interface:
+  display_name: "Compose Startup"
+  short_description: "Discover, start, and update a project's Compose stack"
+  default_prompt: "Use $compose-start to discover this project's Docker Compose deployment, start its services, and rebuild or restart them when required."
+policy:
+  allow_implicit_invocation: false

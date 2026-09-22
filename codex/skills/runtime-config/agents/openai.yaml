@@ -1,0 +1,4 @@
+interface:
+  display_name: "Runtime Config"
+  short_description: "Move safe frontend env values into runtime-config.js."
+  default_prompt: "Use $runtime-config to externalize safe frontend .env values into runtime-config.js."
