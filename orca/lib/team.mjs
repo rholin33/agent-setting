@@ -1,3 +1,5 @@
+import { verifyMacAbsence } from './macos-health.mjs';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { normalizeProject, projectKey, nodeCommand } from './platform.mjs';
@@ -100,7 +102,12 @@ export function validateConfig(config, catalog) {
   }
   return [...names];
 }
-export async function runTeam({ home, project, action, group, cli, snapshot, pin = pinGroupTabs, verifyAbsent = verifyWindowsAbsence, inspect = (handle, provider) => inspectHealth(cli, rpc, handle, provider), sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), log = console.log }) {
+export async function focusDesktop(handle) {
+  // macOS can defer renderer work while the app is hidden/backgrounded.
+  if (process.platform === 'darwin') execFileSync('/usr/bin/open', ['-a', 'Orca']);
+  return rpc('terminal.focus', { terminal: handle, navigation: 'host' });
+}
+export async function runTeam({ home, project, action, group, cli, snapshot, pin = pinGroupTabs, focus = focusDesktop, verifyAbsent = process.platform === 'darwin' ? verifyMacAbsence : verifyWindowsAbsence, inspect = (handle, provider) => inspectHealth(cli, rpc, handle, provider), sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), log = console.log }) {
   project = normalizeProject(project);
   const files = projectFiles(home, project);
   if (action === 'start') await initialize(home, project);
@@ -128,6 +135,16 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pin
       const saved = state.agents[name];
       if (!saved) continue;
       if (saved.pending) {
+        if (!saved.leafId && (saved.launchIntent?.transcriptPath || saved.creationIntent)) {
+          const candidates = inventory.terminals.filter(row => {
+            if (!row.connected || row.orphaned || !sameWorktree(`local::${row.worktreePath}`, project)) return false;
+            const record = snap.sleepingAgentSessionsByPaneKey?.[`${row.tabId}:${row.leafId}`];
+            if (record?.agent !== saved.agent) return false;
+            const found = binding(snap, { ...saved, tabId: row.tabId, leafId: row.leafId }, project);
+            return found && (saved.launchIntent?.transcriptPath ? found.transcriptPath === saved.launchIntent.transcriptPath : row.tabId === saved.creationIntent.tabId && !saved.creationIntent.leafIds.includes(row.leafId));
+          });
+          if (candidates.length === 1) Object.assign(saved, { tabId: candidates[0].tabId, leafId: candidates[0].leafId });
+        }
         const candidates = inventory.terminals.filter(row => row.tabId === saved.tabId && row.leafId === saved.leafId && row.connected && !row.orphaned && sameWorktree(`local::${row.worktreePath}`, project));
         const live = candidates.length === 1 ? await inspect(candidates[0].handle, saved.agent) : null;
         if (!live || !captureSession(saved, live, project, binding(snap, saved, project))) throw new Error(`Role ${name} has an interrupted launch; inspect Orca before retrying`);
@@ -204,7 +221,9 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pin
         created = await cli(['terminal', 'create', '--worktree', `path:${project}`, '--title', tab.title, '--command', command]); handle = created.terminal.handle;
       } else {
         const primary = resolved[sibling];
+        await focus(primary.handle);
         await cli(['terminal', 'switch', '--terminal', primary.handle]);
+        await sleep(1000);
         let mounted = false;
         for (let attempt = 0; attempt < 20; attempt++) {
           const check = await list();
@@ -213,7 +232,27 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pin
           await sleep(250);
         }
         if (!mounted) throw new Error('Primary pane is not visible; split was not started');
-        created = await cli(['terminal', 'split', '--terminal', primary.handle, '--direction', 'vertical', '--command', command]); handle = created.split.handle;
+        const beforeSplit = await list();
+        saved.creationIntent = { tabId: primary.tabId, leafIds: beforeSplit.terminals.filter(row => row.tabId === primary.tabId).map(row => row.leafId) };
+        saveJson(files.state, state);
+        try {
+          created = await cli(['terminal', 'split', '--terminal', primary.handle, '--direction', 'vertical', '--command', command]); handle = created.split.handle;
+        } catch (error) {
+          // A timed-out mutation may already have succeeded. Never send it twice.
+          if (!/Timed out waiting for split pane handle/.test(error.message)) throw error;
+          for (let attempt = 0; attempt < 120; attempt++) {
+            if (attempt % 10 === 0) await focus(primary.handle);
+            const current = await list(), snap = await snapshot();
+            const candidates = current.terminals.filter(row => {
+              if (row.tabId !== primary.tabId || row.leafId === primary.leafId || !row.connected || row.orphaned) return false;
+              const found = binding(snap, { ...saved, tabId: row.tabId, leafId: row.leafId }, project);
+              return found && (saved.session ? found.id === saved.session.id : saved.launchIntent?.transcriptPath ? found.transcriptPath === saved.launchIntent.transcriptPath : !saved.creationIntent.leafIds.includes(row.leafId));
+            });
+            if (candidates.length === 1) { handle = candidates[0].handle; break; }
+            await sleep(500);
+          }
+          if (!handle) throw error;
+        }
       }
       const row = (await cli(['terminal', 'show', '--terminal', handle])).terminal;
       if (!sameWorktree(`local::${row.worktreePath}`, project)) throw new Error('Created terminal belongs to a different project');
@@ -221,7 +260,7 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pin
       if (!resume[name]) Object.assign(saved, { model: role.model, agent: role.agent, thinking: role.thinking });
       saveJson(files.state, state); resolved[name] = row;
       let found;
-      for (let attempt = 0; attempt < 20; attempt++) {
+      for (let attempt = 0; attempt < 60; attempt++) {
         found = binding(await snapshot(), saved, project);
         const live = await inspect(handle, saved.agent);
         if (captureSession(saved, live, project, found)) {

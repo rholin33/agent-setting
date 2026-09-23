@@ -34,6 +34,10 @@ confirmed selection live in `pi-models.json` next to `team.json` and can be
 edited by hand. Starts without a terminal (Orca quick commands, CI) and
 `--no-pick` never open the picker and keep `team.json` values unchanged.
 
+Pi roles also load their packaged skills from `source/<role>/skills/` at each
+fresh launch and exact-session resume. Roles without packaged skills retain
+Pi's default skill discovery; global Pi settings remain unchanged.
+
 Finally `start` reloads the project. Roles whose applied model configuration
 (catalogued per role in the project `state.json` as `appliedModel`) differs from
 the freshly synced configuration are restarted concurrently under one project
@@ -53,11 +57,14 @@ orca-team status --group master
 ```
 
 Restart accepts one configured role, verifies its original transcript and idle
-agent, sends `/quit` once, waits for a proven shell, then resumes the same
-conversation in the same pane. It shares the project startup lock. An ambiguous
-exit retains `restartIntent` and is not resent. Running `orca-team` after an exit
-recovers the original session; an agent still running with an unconfirmed exit
-is reported as incomplete. Opening Orca alone does not run this manager: run
+agent, checks for an empty terminal draft, clears residual editor input, sends
+`/quit`, waits for a proven shell, then resumes the same conversation in the
+same pane. It shares the project startup lock. An ambiguous exit retains
+`restartIntent`: the next attempt only retries when native process evidence
+proves the same provider has been running since before the prior exit request.
+Otherwise it refuses another send. Running `orca-team` after an exit recovers
+the original session; an agent still running with an unconfirmed exit is
+reported as incomplete. Opening Orca alone does not run this manager: run
 `orca-team` once afterward. No watcher or OS startup service is installed.
 
 `orca-team export-config --project PATH` prints the current project configuration without its machine-specific workspace path. This is the read-only interface used when exporting portable project customizations. It prefers runtime config, then `.orca/team.json`, then the default layout.
@@ -151,3 +158,19 @@ Sync only source resources, prompts, catalog/layout, manager code, documentation
 `docs/history.md` inventories predecessor helpers. Historical runtime backups are deliberately retained on the original machine rather than published with personal paths and terminal IDs.
 
 Run verification with `node --test orca/tests/*.test.mjs` from the repository root.
+
+## macOS initialization repair (2026-09-21)
+
+Initialization activates the local Orca application and focuses the primary pane before splitting. macOS may defer renderer split requests while Orca is in the background. A split timeout is reconciled against the saved launch intent, pre-split pane inventory, and persisted provider bindings; the mutation is never automatically resent. Interrupted Pi launches recover by exact transcript path. Interrupted Codex splits require exactly one new bound pane in the original tab.
+
+For local macOS, when Orca reports incomplete process fences, the manager reads authenticated terminal-host v36 inventory and takes two native process snapshots. It requires stable daemon identity, PTY incarnation, root PID creation time, same-TTY descendants, and one foreground provider process. Uncertain evidence still blocks recovery. This adapter proves running agents, not idle shells or absent processes.
+
+Validation: six configured tabs and nine bound roles on macOS; repeated initialization must retain all pane and conversation identities. Model service availability and optional Orca tab pinning are reported separately from layout initialization.
+
+### Restoring a closed team on macOS
+
+When all project terminals have been closed, two authenticated native/desktop inventories, original transcript validation, open-file ownership checks and exact conversation argument checks establish absence before resuming the original nine sessions. Hidden terminals, incomplete inventories, open transcripts and host identity changes block recovery. Partial-project absence remains conservative and requires inspection; this change does not claim general idle-shell recovery. Native Codex resume arguments prove the original conversation while Orca binding records are still catching up.
+
+## Reload local keys
+
+After updating local provider credentials, run `orca-team restart` in the project to restart all configured roles in their original panes and conversations. `orca-team restart ROLE` restarts one role. Busy roles are skipped and reported; other roles continue. Any incomplete role makes the command exit nonzero. Credentials are reread by the launch path and are never printed or copied by restart. Keys inherited from an unchanged parent shell must be refreshed at their source first.

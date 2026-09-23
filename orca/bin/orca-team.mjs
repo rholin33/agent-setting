@@ -9,7 +9,7 @@ import { normalizeProject, quote } from '../lib/platform.mjs';
 import { orca, snapshot, rpc } from '../lib/orca.mjs';
 import { initialize, runTeam, readJson, projectFiles } from '../lib/team.mjs';
 import { launchArguments } from '../lib/sessions.mjs';
-import { restartRole } from '../lib/restart.mjs';
+import { restartTeam } from '../lib/restart.mjs';
 import { ensureOrca } from '../lib/orca-boot.mjs';
 import { syncModels } from '../lib/model-sync.mjs';
 import { reloadRunning } from '../lib/reload.mjs';
@@ -21,11 +21,11 @@ try {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: { home: { type: 'string' }, project: { type: 'string' }, role: { type: 'string' }, group: { type: 'string' }, cached: { type: 'boolean' }, resume: { type: 'boolean' }, 'quick-commands': { type: 'boolean' }, 'shell-profile': { type: 'string' }, 'no-pick': { type: 'boolean' }, help: { type: 'boolean' } } });
   const action = positionals[0] || 'start';
   const roleName = values.role || positionals[1];
-  if (positionals.length > (['restart', 'history'].includes(action) ? 2 : 1)) throw new Error('Unexpected positional arguments');
-  if (values.role && positionals[1] && values.role !== positionals[1]) throw new Error('Conflicting role arguments');
+  if (action !== 'restart' && positionals.length > (action === 'history' ? 2 : 1)) throw new Error('Unexpected positional arguments');
+  if (values.role && positionals[1] && action !== 'restart' && values.role !== positionals[1]) throw new Error('Conflicting role arguments');
   if (values.group !== undefined && !['start', 'status'].includes(action)) throw new Error('--group is only supported for start/status');
   if (values.help) {
-    console.log('orca-team [start|init|status|history [ROLE]|restart ROLE|install|export-config] [--project PATH] [--home PATH] [--no-pick]\nstart/status --group TITLE selects one configured group, e.g. master (master + loader).\nDefault: start Orca when it is not running, sync role models (Codex follows the local Codex config model; Pi opens a model/thinking picker in a terminal), then reload in parallel only the running roles whose applied model config changed (busy roles are skipped; unchanged roles are kept), and recover or create every group.\nRestart resumes one exact conversation in its existing pane. --no-pick skips the Pi picker (non-terminal starts never pick).\ninstall --quick-commands registers Orca grouped global shortcuts.');
+    console.log('orca-team [start|init|status|history [ROLE]|restart [ROLE|GROUP ...]|install|export-config] [--project PATH] [--home PATH] [--no-pick]\nstart/status --group TITLE selects one configured group, e.g. master (master + loader).\nDefault: start Orca when it is not running, sync role models (Codex follows the local Codex config model; Pi opens a model/thinking picker in a terminal), then reload in parallel only the running roles whose applied model config changed (busy roles are skipped; unchanged roles are kept), and recover or create every group.\nRestart reloads all roles or selected roles/groups in their original conversations. --no-pick skips the Pi picker (non-terminal starts never pick).\ninstall --quick-commands registers Orca grouped global shortcuts.');
   } else {
     const home = path.resolve(values.home || process.env.ORCA_TEAM_HOME || path.join(os.homedir(), '.orca', 'roles', 'ccb-team'));
     const project = normalizeProject(fs.realpathSync(values.project || process.cwd()));
@@ -47,8 +47,7 @@ try {
     } else if (action === 'history') {
       console.log(JSON.stringify(await taskHistory({ home, project, role: roleName, cli: orca, cached: values.cached }), null, 2));
     } else if (action === 'restart') {
-      if (!roleName) throw new Error('Usage: orca-team restart ROLE');
-      await restartRole({ home, project, role: roleName, cli: orca, snapshot });
+      await restartTeam({ home, project, targets: [...(values.role ? [values.role] : []), ...positionals.slice(1)], cli: orca, snapshot });
     } else if (action === 'start') {
       if (await ensureOrca({ cli: orca })) console.log('Orca was started automatically');
       const files = projectFiles(home, project);
@@ -77,7 +76,7 @@ try {
       const saved = values.resume || current?.session ? current : null;
       if (values.resume && !saved?.session) throw new Error('Original session is unavailable');
       const launchRole = saved ? { ...saved, model: role.model, thinking: role.thinking, agent: role.agent } : role;
-      const launch = launchArguments(launchRole, prompt, saved?.session, project);
+      const launch = launchArguments({ ...launchRole, role: role.role }, prompt, saved?.session, project, home);
       if (role.agent === 'codex' && role.piProvider) {
         const provider = readJson(path.join(os.homedir(), '.pi', 'agent', 'models.json')).providers?.[role.piProvider];
         if (!provider || provider.api !== 'openai-responses' || !provider.models?.some(model => model.id === role.model)) {

@@ -86,7 +86,8 @@ export async function daemonSessions() {
   const token = fs.readFileSync(path.join(directory, `daemon-v${version}.token`), 'utf8').trim();
   const suffix = createHash('sha256').update(directory).digest('hex').slice(0, 12);
   return new Promise((resolve, reject) => {
-    const socket = net.createConnection(`\\\\?\\pipe\\orca-terminal-host-v${version}-${suffix}`);
+    const endpoint = process.platform === 'win32' ? `\\\\?\\pipe\\orca-terminal-host-v${version}-${suffix}` : path.join(directory, `daemon-v${version}.sock`);
+    const socket = net.createConnection(endpoint);
     let buffer = '', hello = false, identity;
     const id = randomUUID();
     const fail = () => { clearTimeout(timer); socket.destroy(); reject(new Error('windows_daemon_inventory_unavailable')); };

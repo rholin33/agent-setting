@@ -87,7 +87,7 @@ test('fresh launch creates six tabs/nine roles and rerun has no mutations', asyn
   };
   const bindings = {};
   const pinned = [];
-  const options = { home, project, action: 'start', cli, pin: async ({ config }) => pinned.push(config.tabs.map(tab => tab.title)), inspect: async () => ({ kind: 'agent' }), snapshot: () => ({ sleepingAgentSessionsByPaneKey: bindings }), sleep: async () => {}, log: () => {} };
+  const options = { home, project, action: 'start', cli, focus: async () => {}, pin: async ({ config }) => pinned.push(config.tabs.map(tab => tab.title)), inspect: async () => ({ kind: 'agent' }), snapshot: () => ({ sleepingAgentSessionsByPaneKey: bindings }), sleep: async () => {}, log: () => {} };
   await runTeam({ ...options, group: 'master' });
   assert.equal(creations, 2); assert.equal(tabs.length, 1);
   assert.deepEqual(pinned, [['master']]);
@@ -134,6 +134,22 @@ test('exact resume checks ID, project, file and original Codex home', t => {
   assert.throws(() => validateTranscript({ ...role, session: { ...role.session, id: 'wrong' } }, project), /mismatch/);
   assert.throws(() => validateTranscript(role, project + '-other'), /mismatch/);
   assert.throws(() => validateTranscript({ ...role, session: null }, project), /unavailable/);
+});
+test('Pi launches discover only their role skills on fresh and resumed sessions', t => {
+  const { home, project } = fixture(t);
+  const skills = path.join(home, 'source', 'archi', 'skills');
+  fs.mkdirSync(path.join(skills, 'archi-advice'), { recursive: true });
+  fs.writeFileSync(path.join(skills, 'archi-advice', 'SKILL.md'), '---\nname: archi-advice\ndescription: Review architecture.\n---\n');
+  const role = { agent: 'pi', model: 'model', role: 'agentroles.archi' };
+  const prompt = path.join(home, 'generated', 'archi.md');
+  const fresh = launchArguments(role, prompt, null, project, home);
+  assert.deepEqual(fresh.args, ['--model', 'model', '--append-system-prompt', prompt, '--skill', skills]);
+  const transcriptPath = path.join(home, 'archi.jsonl');
+  fs.writeFileSync(transcriptPath, JSON.stringify({ type: 'session', id: 'original', cwd: project }) + '\n');
+  const resumed = launchArguments(role, prompt, { id: 'original', transcriptPath }, project, home);
+  assert.deepEqual(resumed.args, ['--model', 'model', '--session', transcriptPath, '--append-system-prompt', prompt, '--skill', skills]);
+  assert.equal(launchArguments({ ...role, role: 'agentroles.simple' }, prompt, null, project, home).args.includes('--skill'), false);
+  assert.throws(() => launchArguments({ ...role, role: 'agentroles../archi' }, prompt, null, project, home), /Invalid Pi role/);
 });
 test('installation retains runtime state and quick commands preserve unrelated entries', async t => {
   const { home, project } = fixture(t);
@@ -210,7 +226,7 @@ for (const tombstones of [true, false]) for (const missing of [['master'], ['loa
       throw new Error(`Unexpected ${verb}`);
     };
     let checked = 0;
-    const options = { home, project, action: 'start', cli, pin: async () => {}, inspect: async () => ({ kind: 'agent' }), snapshot: () => snap, sleep: async () => {}, log: () => {} };
+    const options = { home, project, action: 'start', cli, focus: async () => {}, pin: async () => {}, inspect: async () => ({ kind: 'agent' }), snapshot: () => snap, sleep: async () => {}, log: () => {} };
     if (!tombstones) {
       await assert.rejects(runTeam({ ...options, verifyAbsent: async () => { throw new Error('process still running'); } }), /process still running/);
       assert.equal(count, 0);
@@ -280,7 +296,7 @@ test('unconfirmed new pane retains pending and retry never duplicates its launch
     if (args[1] === 'show') return { terminal: terminals[0] };
     assert.fail('unexpected mutation');
   };
-  const options = { home, project, action: 'start', cli, pin: async () => {}, inspect: async () => ({ kind: 'agent' }), snapshot: () => ({}), sleep: async () => {}, log: () => {} };
+  const options = { home, project, action: 'start', cli, focus: async () => {}, pin: async () => {}, inspect: async () => ({ kind: 'agent' }), snapshot: () => ({}), sleep: async () => {}, log: () => {} };
   await assert.rejects(runTeam(options), /launch unconfirmed/);
   const saved = readJson(files.state).agents.archi;
   assert.equal(saved.pending, true);
@@ -294,4 +310,74 @@ test('unconfirmed new pane retains pending and retry never duplicates its launch
   assert.equal(after.pending, undefined);
   assert.equal(after.session.id, 'recovered');
   assert.equal(created, 1);
+});
+
+test('split receipt timeout reconciles six groups without duplicate launches', async t => {
+  const { home, project } = fixture(t);
+  const terminals = [], tabs = []; let creations = 0;
+  const cli = async args => {
+    const [noun, verb] = args;
+    const val = flag => args[args.indexOf(flag) + 1];
+    if (verb === 'list') return { terminals, visualLayouts: [{ root: { type: 'group', tabs } }] };
+    if (verb === 'switch') return {};
+    if (verb === 'create' || verb === 'split') {
+      creations++;
+      const pendingState = readJson(projectFiles(home, project).state);
+      const launching = Object.values(pendingState.agents).find(a => a.pending && !a.tabId);
+      const transcriptPath = launching.launchIntent.transcriptPath || path.join(home, `codex-${creations}.jsonl`);
+      fs.mkdirSync(path.dirname(transcriptPath), { recursive: true });
+      fs.writeFileSync(transcriptPath, JSON.stringify(launching.agent === 'pi' ? { type: 'session', id: `s${creations}`, cwd: project } : { type: 'session_meta', payload: { id: `s${creations}`, cwd: project } }) + '\n');
+      launching.session = { id: `s${creations}`, transcriptPath };
+      const primary = verb === 'split' ? terminals.find(row => row.handle === val('--terminal')) : null;
+      const row = { handle: `term_${creations}`, tabId: primary?.tabId || `tab_${creations}`, leafId: `leaf_${creations}`, worktreePath: project, connected: true, orphaned: false };
+      terminals.push(row);
+      Object.assign(launching, { tabId: row.tabId, leafId: row.leafId });
+      bindings[`${row.tabId}:${row.leafId}`] = { agent: launching.agent, worktreeId: `repo::${project}`, providerSession: launching.session };
+      const leaf = { type: 'pane-leaf', leafId: row.leafId };
+      if (primary) {
+        assert.equal(val('--direction'), 'vertical');
+        const tab = tabs.find(item => item.tabId === primary.tabId);
+        tab.panes = { type: 'pane-split', direction: 'vertical', first: tab.panes, second: leaf };
+      } else tabs.push({ tabId: row.tabId, panes: leaf });
+      if (verb === 'split') throw new Error('Timed out waiting for split pane handle');
+      return { terminal: row };
+    }
+    if (verb === 'show') return { terminal: terminals.find(row => row.handle === val('--terminal')) };
+    throw new Error(`Unexpected ${noun} ${verb}`);
+  };
+  const bindings = {};
+  const pinned = [];
+  const options = { home, project, action: 'start', cli, focus: async () => {}, pin: async ({ config }) => pinned.push(config.tabs.map(tab => tab.title)), inspect: async () => ({ kind: 'agent' }), snapshot: () => ({ sleepingAgentSessionsByPaneKey: bindings }), sleep: async () => {}, log: () => {} };
+  await runTeam({ ...options, group: 'master' });
+  assert.equal(creations, 2); assert.equal(tabs.length, 1);
+  assert.deepEqual(pinned, [['master']]);
+  await runTeam({ ...options, group: 'master' }); assert.equal(creations, 2);
+  await assert.rejects(runTeam({ ...options, group: 'missing' }), /Unknown group/);
+  const stateFile = projectFiles(home, project).state;
+  const withUnrelatedPending = readJson(stateFile);
+  withUnrelatedPending.agents.archi = { pending: true };
+  saveJson(stateFile, withUnrelatedPending);
+  await runTeam({ ...options, group: 'master' }); assert.equal(creations, 2);
+  delete withUnrelatedPending.agents.archi;
+  saveJson(stateFile, withUnrelatedPending);
+  await runTeam(options); assert.equal(creations, 9); assert.equal(tabs.length, 6);
+  assert.deepEqual(pinned.at(-1), ['master', 'archi', 'coder', 'designer', 'reviewer', 'simple']);
+  await runTeam(options); assert.equal(creations, 9);
+  const stateBeforeStatus = fs.readFileSync(stateFile, 'utf8');
+  const pinCount = pinned.length;
+  await runTeam({ ...options, action: 'status', group: 'master' });
+  assert.equal(fs.readFileSync(stateFile, 'utf8'), stateBeforeStatus);
+  assert.equal(pinned.length, pinCount);
+  const configFile = projectFiles(home, project).config;
+  saveJson(configFile, { ...readJson(configFile), pinTabs: false });
+  await runTeam(options);
+  assert.equal(pinned.length, pinCount);
+  saveJson(configFile, { ...readJson(configFile), pinTabs: true });
+  const warnings = [];
+  await runTeam({ ...options, log: line => warnings.push(line), pin: async () => { throw new Error('pin not applied'); } });
+  assert.ok(warnings.some(line => /Warning:.*pin not applied/.test(line)));
+  assert.equal(creations, 9);
+  terminals.pop();
+  await assert.rejects(runTeam(options), /No confirmed close record/);
+  assert.equal(creations, 9);
 });

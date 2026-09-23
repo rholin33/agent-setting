@@ -2,8 +2,8 @@
   {
     "name": "master",
     "agent": "pi",
-    "model": "local/deepseek-v4.1-flash",
-    "thinking": "medium",
+    "model": "pay/gpt-6-astra",
+    "thinking": "xhigh",
     "role": "agentroles.ccb_self"
   },
   {
@@ -16,21 +16,21 @@
   {
     "name": "archi",
     "agent": "pi",
-    "model": "local/deepseek-v4.1-flash",
-    "thinking": "medium",
+    "model": "pay/gpt-6-sol",
+    "thinking": "xhigh",
     "role": "agentroles.archi"
   },
   {
     "name": "coder1",
     "agent": "codex",
-    "model": "deepseek-v4.1-flash",
+    "model": "gpt-6-sol",
     "thinking": "medium",
     "role": "agentroles.coder"
   },
   {
     "name": "coder2",
     "agent": "codex",
-    "model": "deepseek-v4.1-flash",
+    "model": "gpt-6-sol",
     "thinking": "medium",
     "role": "agentroles.coder"
   },
@@ -44,7 +44,7 @@
   {
     "name": "reviewer",
     "agent": "codex",
-    "model": "deepseek-v4.1-flash",
+    "model": "gpt-6-sol",
     "thinking": "xhigh",
     "role": "agentroles.code_reviewer"
   },

@@ -1,3 +1,4 @@
+import { inspectMac } from './macos-health.mjs';
 import { inspectWindows } from './windows-health.mjs';
 import path from 'node:path';
 
@@ -31,6 +32,10 @@ export async function inspectHealth(cli, rpc, handle, provider, { platform = pro
     terminal: handle, expectedIncarnationId: terminal.incarnationId, scanChildProcesses: true,
   });
   const observed = reply.process;
+  if (platform === 'darwin' && terminal.executionHostId === 'local' && classifyProcess(observed, terminal, provider) === 'unverifiable') {
+    try { return await inspectMac(terminal, provider, { show: async () => (await cli(['terminal', 'show', '--terminal', handle])).terminal }); }
+    catch { return { terminal, kind: 'unverifiable', reason: 'macos_native_inspection_failed' }; }
+  }
   return { kind: classifyProcess(observed, terminal, provider), terminal,
     reason: observed?.foregroundProcessEvidence?.reason || observed?.reason || 'provider_not_proven' };
 }

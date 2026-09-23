@@ -34,13 +34,18 @@ export function validateTranscript(saved, project) {
   if (!meta || meta.id !== session.id || !sameWorktree(`local::${meta.cwd}`, project)) throw new Error('Original conversation identity/project mismatch');
   return session;
 }
-export function launchArguments(role, prompt, session, project) {
+export function launchArguments(role, prompt, session, project, home) {
   const args = ['--model', role.model];
   const env = {};
   if (session) validateTranscript({ ...role, session }, project);
   if (role.agent === 'pi') {
     if (session) args.push('--session', session.transcriptPath);
     args.push('--append-system-prompt', prompt);
+    if (role.role) {
+      if (!home || !/^agentroles\.[a-zA-Z0-9_-]+$/.test(role.role)) throw new Error(`Invalid Pi role: ${role.role}`);
+      const skills = path.join(home, 'source', role.role.slice('agentroles.'.length), 'skills');
+      if (fs.existsSync(skills)) args.push('--skill', skills);
+    }
     if (role.thinking) args.push('--thinking', role.thinking);
   } else if (role.agent === 'codex') {
     if (session) {
