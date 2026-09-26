@@ -5,6 +5,21 @@ import os from 'node:os';
 import path from 'node:path';
 import { prepareLaunch, captureSession } from '../lib/launch-state.mjs';
 
+test('a pre-created empty transcript is not a conversation until Pi writes its header', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'launch-intent-empty-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const saved = {}, role = { name: 'archi', agent: 'pi', model: 'model' };
+  prepareLaunch(saved, role, dir);
+  const transcript = saved.launchIntent.transcriptPath;
+  fs.mkdirSync(path.dirname(transcript), { recursive: true });
+  fs.writeFileSync(transcript, '');
+  assert.equal(captureSession(saved, { kind: 'agent', sessionPaths: [transcript] }, dir), false);
+  assert.equal(saved.session, undefined);
+  fs.writeFileSync(transcript, JSON.stringify({ type: 'session', id: 'session', cwd: dir }) + '\n');
+  assert.equal(captureSession(saved, { kind: 'agent', sessionPaths: [transcript] }, dir), true);
+  assert.equal(saved.session.id, 'session');
+});
+
 test('durable launch intent survives retries and binds only a persisted live conversation', t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'launch-intent-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));

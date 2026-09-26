@@ -38,14 +38,11 @@ Pi roles also load their packaged skills from `source/<role>/skills/` at each
 fresh launch and exact-session resume. Roles without packaged skills retain
 Pi's default skill discovery; global Pi settings remain unchanged.
 
-Finally `start` reloads the project. Roles whose applied model configuration
-(catalogued per role in the project `state.json` as `appliedModel`) differs from
-the freshly synced configuration are restarted concurrently under one project
-lock and resume their exact conversation; roles already running the current
-configuration are kept as-is, so a start with no config change does not restart
-anything. Busy, timed-out or unverifiable roles are skipped with a warning so no
-in-flight work is lost, and roles whose panes are absent are created or resumed
-by the normal startup pass.
+Finally `start` recovers missing roles and creates new ones. It never exits a
+running role just because its selected model or thinking level changed. Use
+`restart ROLE` to apply those settings to an existing conversation explicitly.
+This prevents a `start` command issued from a project terminal from closing
+the role that launched it.
 
 ```text
 orca-team
@@ -69,7 +66,7 @@ reported as incomplete. Opening Orca alone does not run this manager: run
 
 `orca-team export-config --project PATH` prints the current project configuration without its machine-specific workspace path. This is the read-only interface used when exporting portable project customizations. It prefers runtime config, then `.orca/team.json`, then the default layout.
 
-Default tabs: master / loader, archi, coder1 / coder2, designer, reviewer / test, simple. Slash denotes an equal left/right split (`vertical` in Orca's native representation). The manager activates the primary tab before splitting and validates the actual desktop pane tree afterward. CCB sidebar ratios remain recorded but are not applied because Orca has no matching sidebar API.
+Default tabs: master / loader, archi, coder1 / coder2, designer, reviewer, simple. Slash denotes an equal left/right split (`vertical` in Orca's native representation). The manager activates the primary tab before splitting and validates the actual desktop pane tree afterward. CCB sidebar ratios remain recorded but are not applied because Orca has no matching sidebar API.
 
 Quick commands use `start --group TITLE`, not the internal single-role `launch` action.
 They start/recover only the selected group, reuse its existing panes and exact
@@ -90,18 +87,37 @@ Native pins disable context-menu close and skip bulk UI closes, but are NOT a
 hard lock: unpinning or confirming a close shortcut can still close the tab.
 This package does not patch Orca, suppress its dialogs, or install a watcher.
 
-Each project gets `projects/<path-hash>/config.json`, `state.json`, and an exclusive startup lock. Config is seeded from `layout.json`. When the project's `.orca/team.json` exists, it is the portable authoritative layout: initialization/start validates it, backs up differing local config, and applies it without replacing state. Without this override, existing project config remains independent of template updates. Windows project keys ignore path case; macOS/Linux keys preserve it. Runtime state records pane IDs, model settings, and exact provider conversation bindings. Locks are removed after successful or failed normal execution. After a process crash, inspect the recorded PID and Orca before manually removing a stale lock; there is no automatic stale-lock takeover.
+Pi roles use the selected `provider/model`. Before startup, Codex role models
+sync from the machine's Codex configuration. Role `thinking` maps to the
+provider's reasoning setting.
+
+`orca-team start` runs `pi update --all` before model selection or role startup
+when the selected project has no running Pi role. If a Pi pane is already live,
+the update is deferred so its installed package files are not replaced during
+that conversation. Run the update from an idle project before starting roles.
+The picker reads per-role model and thinking selections from local `pi-models.json`;
+`,` and `.` change the selected role's thinking level, and Enter saves it.
+A failed update stops startup. Existing Pi processes must be restarted after
+package files change, or they can import bundle chunks that the update removed.
+
+Each project gets `projects/<path-hash>/config.json`, `state.json`, and an exclusive startup lock. Config is seeded from `layout.json`. When the project's `.orca/team.json` exists, it is the portable authoritative layout: initialization/start validates it, backs up differing local config, and applies it without replacing state. Without this override, existing project config remains independent of template updates. Windows project keys ignore path case; macOS/Linux keys preserve it. Runtime state records pane IDs, model settings, and exact provider conversation bindings. Locks are removed after successful or failed normal execution. A lock owned by a live PID blocks another start or restart; a lock whose PID has exited is preserved with a stale suffix and replaced automatically.
 
 The portable lock is `start.node.lock`. The predecessor PowerShell manager retained a zero-byte `start.lock` after normal completion; that legacy file is preserved and is not interpreted as an active Node lock. Stop using the old `manage.ps1` entry when adopting the portable entry: the two managers must not be invoked concurrently.
 
 ## Recovery And Limits
 
 New managed Pi roles receive a unique transcript path recorded in `launchIntent`
-before pane creation, plus a minimal no-tools initialization prompt. A launch
-stays pending until its transcript and live provider binding are verified. A
-retry reconciles completed launches without sending again; an unconfirmed launch
-remains blocked. Existing saved conversations are resumed even when Orca replays
-the original `launch` command without `--resume`.
+before pane creation, plus a minimal no-tools initialization prompt. That path is
+pre-created as an empty file: Pi writes its session header immediately for an
+existing empty `--session` file, but only persists a brand-new file after the
+first assistant turn. Without the placeholder Pi stays file-less until its first
+reply, Orca never records a pane binding, and the role reports
+`conversation binding unavailable` even though it is healthy. An empty
+placeholder is never treated as a conversation; only a file with Pi's session
+header binds. A launch stays pending until its transcript and live provider
+binding are verified. A retry reconciles completed launches without sending
+again; an unconfirmed launch remains blocked. Existing saved conversations are
+resumed even when Orca replays the original `launch` command without `--resume`.
 
 `orca-team history` refreshes `projects/<key>/history.json` and prints fixed-role
 bindings plus task/dispatch conversation history. It paginates all Orca Runs
@@ -130,7 +146,14 @@ the prompt and incarnation are rechecked before sending. Input acceptance alone
 does not complete recovery: the original binding and agent process must appear.
 Unconfirmed recovery retains pending state and is never automatically resent.
 Unverifiable process tables (including older Windows hosts returning false child
-booleans) block startup success and command injection. A connected shell is not
+booleans) block startup success and command injection. One exception is
+`ambiguous_foreground_group`: when a CLI is launched through an npm wrapper, the
+wrapper and the real vendor binary share the foreground process group, so Orca's
+fence cannot name a single foreground process even though the pane is healthy.
+For that reason only, the manager falls back to Orca's own `terminal.agentStatus`
+for the pane. It can only upgrade the verdict to a running agent, never to an idle
+shell, so the injection path stays closed and the fallback cannot paste into a
+live TUI. A connected shell is not
 reported as a running agent. Local Windows uses a read-only terminal-host v36
 inventory plus two native CIM snapshots, checking pane incarnation, PID creation
 time, session boundaries and recognized provider processes. Unknown protocol
@@ -165,11 +188,11 @@ Initialization activates the local Orca application and focuses the primary pane
 
 For local macOS, when Orca reports incomplete process fences, the manager reads authenticated terminal-host v36 inventory and takes two native process snapshots. It requires stable daemon identity, PTY incarnation, root PID creation time, same-TTY descendants, and one foreground provider process. Uncertain evidence still blocks recovery. This adapter proves running agents, not idle shells or absent processes.
 
-Validation: six configured tabs and nine bound roles on macOS; repeated initialization must retain all pane and conversation identities. Model service availability and optional Orca tab pinning are reported separately from layout initialization.
+Validation: six configured tabs and eight bound roles on macOS; repeated initialization must retain all pane and conversation identities. Model service availability and optional Orca tab pinning are reported separately from layout initialization.
 
 ### Restoring a closed team on macOS
 
-When all project terminals have been closed, two authenticated native/desktop inventories, original transcript validation, open-file ownership checks and exact conversation argument checks establish absence before resuming the original nine sessions. Hidden terminals, incomplete inventories, open transcripts and host identity changes block recovery. Partial-project absence remains conservative and requires inspection; this change does not claim general idle-shell recovery. Native Codex resume arguments prove the original conversation while Orca binding records are still catching up.
+When all project terminals have been closed, two authenticated native/desktop inventories, original transcript validation, open-file ownership checks and exact conversation argument checks establish absence before resuming saved sessions. Hidden terminals, incomplete inventories, open transcripts and host identity changes block recovery. Partial-project absence remains conservative and requires inspection; this change does not claim general idle-shell recovery. Native Codex resume arguments prove the original conversation while Orca binding records are still catching up.
 
 ## Reload local keys
 

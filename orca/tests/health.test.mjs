@@ -25,11 +25,51 @@ test('only local Windows calls native inspection; POSIX and remote hosts use Orc
     const result = await inspectHealth(async () => ({ terminal: pane }), async () => {
       remote++;
       return { process: { foregroundProcessEvidence: { verdict: 'live', processName: 'pi', ptyIncarnationId: 'i', capturedAgeMs: 0 } } };
-    }, 'handle', 'pi', { platform, nativeInspect: async () => { native++; return { kind: 'agent', terminal: pane }; } });
+    }, 'handle', 'pi', { platform, nativeInspect: async () => { native++; return { kind: 'agent', terminal: pane }; }, macInspect: async () => ({ kind: 'agent', terminal: pane }) });
     assert.equal(result.kind, 'agent');
     assert.equal(native, platform === 'win32' && executionHostId === 'local' ? 1 : 0);
     assert.equal(remote, 1 - native);
   }
+});
+
+test('ambiguous foreground groups fall back to Orca agent status without opening shell recovery', async () => {
+  const pane = { incarnationId: 'i', handle: 'h', executionHostId: 'local' };
+  const ambiguous = { verdict: 'unverifiable', reason: 'ambiguous_foreground_group', ptyIncarnationId: 'i', capturedAgeMs: 0 };
+  const calls = [];
+  const rpc = async (method, params) => {
+    calls.push(method);
+    return method === 'terminal.agentStatus' ? { agentStatus: { isRunningAgent: params.terminal === 'h' } } : { process: { foregroundProcessEvidence: ambiguous } };
+  };
+  const cli = async () => ({ terminal: pane });
+  const running = await inspectHealth(cli, rpc, 'h', 'codex', { platform: 'darwin' });
+  assert.equal(running.kind, 'agent');
+  assert.equal(running.reason, 'ambiguous_foreground_group_agent_status');
+  assert.deepEqual(calls, ['terminal.inspectProcess', 'terminal.agentStatus']);
+  calls.length = 0;
+  // A pane Orca does not recognize as an agent stays unverifiable; it must never become an injectable shell.
+  const idle = await inspectHealth(cli, async (method, params) => {
+    calls.push(method);
+    return method === 'terminal.agentStatus' ? { agentStatus: { isRunningAgent: false } } : { process: { foregroundProcessEvidence: ambiguous } };
+  }, 'other', 'codex', { platform: 'linux' });
+  assert.equal(idle.kind, 'unverifiable');
+  assert.equal(idle.reason, 'ambiguous_foreground_group');
+  assert.deepEqual(calls, ['terminal.inspectProcess', 'terminal.agentStatus']);
+  // An Orca build without the agent-status RPC keeps the original unverifiable verdict.
+  const unsupported = await inspectHealth(cli, async method => {
+    if (method === 'terminal.agentStatus') throw new Error('Unknown method');
+    return { process: { foregroundProcessEvidence: ambiguous } };
+  }, 'h', 'codex', { platform: 'linux' });
+  assert.equal(unsupported.kind, 'unverifiable');
+  assert.equal(unsupported.reason, 'ambiguous_foreground_group');
+  // Other unverifiable reasons keep their own evidence and never call the agent-status fallback.
+  calls.length = 0;
+  const unreadable = await inspectHealth(cli, async (method, params) => {
+    calls.push(method);
+    return { process: { foregroundProcessEvidence: { ...ambiguous, reason: 'process_table_unreadable' } } };
+  }, 'h', 'codex', { platform: 'linux' });
+  assert.equal(unreadable.kind, 'unverifiable');
+  assert.equal(unreadable.reason, 'process_table_unreadable');
+  assert.deepEqual(calls, ['terminal.inspectProcess']);
 });
 
 const terminal = { incarnationId: 'current' };

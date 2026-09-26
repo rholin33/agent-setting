@@ -24,8 +24,21 @@ export function projectFiles(home, project) {
 export function withLock(file, action) {
   let fd;
   try { fd = fs.openSync(file, 'wx'); } catch (error) {
-    if (error.code === 'EEXIST') throw new Error(`Project is locked: ${file}. Check the owning process before removing a stale lock.`);
-    throw error;
+    if (error.code !== 'EEXIST') throw error;
+    const lock = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (!Number.isSafeInteger(lock.pid) || lock.pid <= 0) throw new Error(`Project lock has an invalid owner: ${file}`);
+    let ownerAlive = true;
+    try {
+      process.kill(lock.pid, 0);
+    } catch (ownerError) {
+      if (ownerError.code === 'ESRCH') ownerAlive = false;
+      else throw ownerError;
+    }
+    if (ownerAlive) throw new Error(`Project is locked by live process ${lock.pid}: ${file}`);
+    const stale = `${file}.stale-${lock.pid}-${Date.now()}`;
+    fs.renameSync(file, stale);
+    try { fd = fs.openSync(file, 'wx'); }
+    catch (retryError) { throw new Error(`Project lock changed during stale lock recovery: ${file}; preserved ${stale}`, { cause: retryError }); }
   }
   fs.writeFileSync(fd, JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() }));
   return Promise.resolve().then(action).finally(() => { fs.closeSync(fd); fs.unlinkSync(file); });
@@ -147,15 +160,28 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pin
         }
         const candidates = inventory.terminals.filter(row => row.tabId === saved.tabId && row.leafId === saved.leafId && row.connected && !row.orphaned && sameWorktree(`local::${row.worktreePath}`, project));
         const live = candidates.length === 1 ? await inspect(candidates[0].handle, saved.agent) : null;
-        if (!live || !captureSession(saved, live, project, binding(snap, saved, project))) throw new Error(`Role ${name} has an interrupted launch; inspect Orca before retrying`);
-        validateTranscript(saved, project);
-        if (action === 'start') { delete saved.pending; delete saved.restartIntent; saveJson(files.state, state); }
+        if (live) {
+          if (!captureSession(saved, live, project, binding(snap, saved, project))) throw new Error(`Role ${name} has an interrupted launch; inspect Orca before retrying`);
+          validateTranscript(saved, project);
+          if (action === 'start') { delete saved.pending; delete saved.restartIntent; saveJson(files.state, state); }
+        } else if (candidates.length || !saved.session || action !== 'start') {
+          throw new Error(`Role ${name} has an interrupted launch; inspect Orca before retrying`);
+        }
       }
       const foundBinding = binding(snap, saved, project);
       if (foundBinding) saved.session = foundBinding;
       const matches = inventory.terminals.filter(row => sameWorktree(`local::${row.worktreePath}`, project) && row.tabId === saved.tabId && row.leafId === saved.leafId);
       if (!matches.length) {
         if (action === 'status') { log(`${name}: missing`); continue; }
+        if (!saved.session && !saved.pending && !foundBinding) {
+          // 旧记录没有可恢复的会话；完整本地终端清单确认原窗格已不在时按首次启动处理。
+          if (inventory.truncated !== false || inventory.totalCount !== inventory.terminals.length ||
+              inventory.hostScope?.hostIds?.length !== 1 || inventory.hostScope.hostIds[0] !== 'local' ||
+              inventory.hostScope.omittedHostIds?.length !== 0) throw new Error(`${name}: incomplete terminal inventory; fresh launch refused`);
+          delete saved.tabId; delete saved.leafId;
+          log(`${name}: old pane absent without a saved conversation; starting a new session`);
+          continue;
+        }
         const close = snap.terminalSurfaceTombstonesByPaneKey?.[`${saved.tabId}:${saved.leafId}`];
         validateTranscript(saved, project);
         if (!close || !sameWorktree(close.worktreeId, project)) missing.push({ name, saved });
@@ -190,6 +216,25 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pin
         if (action === 'status') { log(`${name}: ${status.kind} (${status.reason || 'agent not running'})`); continue; }
         if (status.kind !== 'shell') { issues.push(`${name}: process unverifiable (${status.reason})`); continue; }
         const saved = state.agents[name];
+        if (!saved.session) {
+          prepareLaunch(saved, catalog.find(item => item.name === name), files.directory);
+          const command = nodeCommand([path.join(home, 'bin', 'orca-team.mjs'), 'launch', '--home', home, '--project', project, '--role', name]);
+          await recoverInPane({ name, saved, handle: resolved[name].handle, command, cli, inspect,
+            checkpoint: () => saveJson(files.state, state), verifyBinding: async () => {
+              for (let attempt = 0; attempt < 30; attempt++) {
+                const found = binding(await snapshot(), saved, project);
+                const live = await inspect(resolved[name].handle, saved.agent);
+                if (captureSession(saved, live, project, found)) return;
+                await sleep(500);
+              }
+              throw new Error(`${name}: new conversation is unconfirmed; pending retained`);
+            } });
+          const role = catalog.find(item => item.name === name);
+          saved.appliedModel = { agent: role.agent, model: role.model, thinking: role.thinking ?? null };
+          saveJson(files.state, state);
+          log(`${name}: new conversation started in existing pane`);
+          continue;
+        }
         try { validateTranscript(saved, project); }
         catch (error) { issues.push(`${name}: ${error.message}`); continue; }
         const command = nodeCommand([path.join(home, 'bin', 'orca-team.mjs'), 'launch', '--home', home, '--project', project, '--role', name, '--resume']);

@@ -79,7 +79,7 @@ export async function syncModels({ home, names, pick = true, log = console.log, 
     catch (error) { if (interactive) throw error; log(`Warning: ${error.message}`); }
     config = loaded?.config ?? null;
     if (config && interactive) {
-      const selection = await pickPiModels({ roles: piRoles, presets: config.presets, stdin, stdout });
+      const selection = await pickPiModels({ roles: piRoles, presets: config.presets, initial: config.roles, stdin, stdout });
       if (selection) {
         selectionMade = true;
         for (const role of piRoles) {

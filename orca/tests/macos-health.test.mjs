@@ -27,7 +27,7 @@ test('macOS full-team close restores only after complete stable absence proof', 
  const options={project,missing,inventory:async()=>({identity:{launchNonce:'stable'},sessions:[]}),cli:async()=>({terminals:[],totalCount:0,truncated:false,hostScope:{hostIds:['local'],omittedHostIds:[]}}),processes:async()=>[{pid:process.pid}],conversationUsers:async()=>{}};
  assert.equal(await verifyMacAbsence(options),true);
  await assert.rejects(verifyMacAbsence({...options,conversationUsers:async()=>{throw Error('still open');}}),/still open/);
- await assert.rejects(verifyMacAbsence({...options,inventory:async()=>({identity:{launchNonce:'stable'},sessions:[{sessionId:`repo::${project}@@a`,isAlive:true}]})}),/live terminals/);
+ await assert.rejects(verifyMacAbsence({...options,inventory:async()=>({identity:{launchNonce:'stable'},sessions:[{sessionId:`repo::${project}@@a`,isAlive:true}]})}),/Hidden or unverifiable project PTY/);
  await assert.rejects(verifyMacAbsence({...options,cli:async()=>({terminals:[],totalCount:0,truncated:true,hostScope:{hostIds:['local'],omittedHostIds:[]}})}),/Incomplete/);
  let n=0;
  await assert.rejects(verifyMacAbsence({...options,inventory:async()=>({identity:{launchNonce:String(n++)},sessions:[]})}),/host changed/);

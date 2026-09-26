@@ -12,7 +12,7 @@ import { launchArguments } from '../lib/sessions.mjs';
 import { restartTeam } from '../lib/restart.mjs';
 import { ensureOrca } from '../lib/orca-boot.mjs';
 import { syncModels } from '../lib/model-sync.mjs';
-import { reloadRunning } from '../lib/reload.mjs';
+import { updatePiBeforeStart } from '../lib/pi-update.mjs';
 import { taskHistory } from '../lib/history.mjs';
 import { deploy, installQuickCommands, registerShellProfile } from '../lib/install.mjs';
 
@@ -25,7 +25,7 @@ try {
   if (values.role && positionals[1] && action !== 'restart' && values.role !== positionals[1]) throw new Error('Conflicting role arguments');
   if (values.group !== undefined && !['start', 'status'].includes(action)) throw new Error('--group is only supported for start/status');
   if (values.help) {
-    console.log('orca-team [start|init|status|history [ROLE]|restart [ROLE|GROUP ...]|install|export-config] [--project PATH] [--home PATH] [--no-pick]\nstart/status --group TITLE selects one configured group, e.g. master (master + loader).\nDefault: start Orca when it is not running, sync role models (Codex follows the local Codex config model; Pi opens a model/thinking picker in a terminal), then reload in parallel only the running roles whose applied model config changed (busy roles are skipped; unchanged roles are kept), and recover or create every group.\nRestart reloads all roles or selected roles/groups in their original conversations. --no-pick skips the Pi picker (non-terminal starts never pick).\ninstall --quick-commands registers Orca grouped global shortcuts.');
+    console.log('orca-team [start|init|status|history [ROLE]|restart [ROLE|GROUP ...]|install|export-config] [--project PATH] [--home PATH] [--no-pick]\nstart/status --group TITLE selects one configured group, e.g. master (master + loader).\nDefault: start Orca when it is not running, run pi update --all only when no project Pi pane is live, sync role models (Codex follows the local Codex config model; Pi opens a model/thinking picker in a terminal), then recover or create every group. Existing running roles are not restarted by start.\nRestart reloads all roles or selected roles/groups in their original conversations. --no-pick skips the Pi picker (non-terminal starts never pick).\ninstall --quick-commands registers Orca grouped global shortcuts.');
   } else {
     const home = path.resolve(values.home || process.env.ORCA_TEAM_HOME || path.join(os.homedir(), '.orca', 'roles', 'ccb-team'));
     const project = normalizeProject(fs.realpathSync(values.project || process.cwd()));
@@ -51,17 +51,18 @@ try {
     } else if (action === 'start') {
       if (await ensureOrca({ cli: orca })) console.log('Orca was started automatically');
       const files = projectFiles(home, project);
+      const candidates = [path.join(project, '.orca', 'team.json'), files.config, path.join(home, 'layout.json')];
+      const file = candidates.find(candidate => fs.existsSync(candidate));
+      if (!file) throw new Error('No project or default layout configuration found');
+      const tabs = readJson(file).tabs;
       let names;
       if (values.group !== undefined) {
-        const candidates = [files.config, path.join(project, '.orca', 'team.json'), path.join(home, 'layout.json')];
-        const file = candidates.find(candidate => fs.existsSync(candidate));
-        if (!file) throw new Error(`Unknown group: ${values.group}`);
-        const tab = readJson(file).tabs.find(item => item.title === values.group);
+        const tab = tabs.find(item => item.title === values.group);
         if (!tab) throw new Error(`Unknown group: ${values.group}`);
         names = tab.agents;
-      }
+      } else names = tabs.flatMap(tab => tab.agents);
+      await updatePiBeforeStart({ home, project, names, cli: orca, snapshot });
       await syncModels({ home, names, pick: !values['no-pick'] });
-      await reloadRunning({ home, project, names, cli: orca, snapshot });
       await runTeam({ home, project, action, group: values.group, cli: orca, snapshot });
     } else if (action === 'status') {
       await runTeam({ home, project, action, group: values.group, cli: orca, snapshot });
@@ -99,8 +100,13 @@ try {
       }
       if (!saved?.session && current?.launchIntent && role.agent === 'pi') {
         const transcript = current.launchIntent.transcriptPath;
-        if (fs.existsSync(transcript)) throw new Error('Launch intent already has a transcript; rerun start to reconcile it');
+        // 只有非空 transcript 才证明本次启动已经发生；空文件是下面预创建的占位。
+        if (fs.existsSync(transcript) && fs.statSync(transcript).size > 0) throw new Error('Launch intent already has a transcript; rerun start to reconcile it');
         fs.mkdirSync(path.dirname(transcript), { recursive: true });
+        // Pi 只在首个 assistant 消息后才落盘，缺失文件在启动阶段不会写 session header。
+        // 预创建空文件让 Pi 立即写入 header，Orca 才能在 session_start 时记下
+        // session_file/session_id，角色启动后无需等待首轮对话即可完成会话绑定。
+        if (!fs.existsSync(transcript)) fs.writeFileSync(transcript, '');
         launch.args.push('--session', transcript,
           `Initialize the fixed ${role.name} role using the loaded instructions. Reply only "${role.name} ready". Do not call tools or start tasks.`);
       }

@@ -17,11 +17,14 @@ export function captureSession(saved, live, project, observed) {
   const explicit = saved.launchIntent?.transcriptPath;
   if (!session && saved.agent === 'pi') {
     const candidates = explicit ? [explicit] : [...new Set(paths)];
-    if (candidates.length === 1 && fs.existsSync(candidates[0])) {
+    // 预创建的空 transcript 只占位；Pi 写入 session header 后才有会话身份。
+    const persisted = candidates.filter(file => fs.existsSync(file) && fs.statSync(file).size > 0);
+    if (candidates.length === 1 && persisted.length === 1) {
       const header = JSON.parse(fs.readFileSync(candidates[0], 'utf8').split('\n')[0]);
       session = { key: 'session_id', id: header.id, transcriptPath: candidates[0] };
     }
   }
+  if (session && explicit && session.transcriptPath !== explicit) throw new Error('Launch intent transcript differs from Orca binding');
   if (!session) return false;
   if (saved.session && saved.session.id !== session.id) throw new Error('Conversation changed; original binding retained');
   validateTranscript({ ...saved, session }, project);

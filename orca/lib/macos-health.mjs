@@ -88,8 +88,14 @@ export async function verifyMacAbsence({ project, missing, cli, inventory = daem
     const desktop = await cli(['terminal', 'list', '--worktree', `path:${project}`, '--include-visual-layouts']);
     if (!native.identity?.launchNonce || !Array.isArray(native.sessions) || !Array.isArray(desktop.terminals) || desktop.truncated !== false || desktop.totalCount !== desktop.terminals.length || desktop.hostScope?.hostIds?.length !== 1 || desktop.hostScope.hostIds[0] !== 'local' || desktop.hostScope.omittedHostIds?.length !== 0) throw new Error('Incomplete local terminal inventory');
     const active = native.sessions.filter(s => sameWorktree(s.sessionId?.split('@@')[0], project) && s.isAlive !== false);
-    // Refuse partial/hidden project processes until their conversation ownership is known.
-    if (active.length || desktop.terminals.length) throw new Error('Project still has live terminals; missing-role absence is not proven');
+    for (const session of active) {
+      const matches = desktop.terminals.filter(row => row.handle === session.terminalHandle && row.ptyId === session.sessionId && row.incarnationId === session.incarnationId);
+      if (session.isAlive !== true || matches.length !== 1 || !matches[0].connected || matches[0].orphaned || matches[0].executionHostId !== 'local') throw new Error('Hidden or unverifiable project PTY');
+    }
+    for (const row of desktop.terminals) {
+      if (active.filter(session => session.terminalHandle === row.handle).length !== 1) throw new Error('Desktop/native terminal inventory mismatch');
+      if (missing.some(({ saved }) => saved.tabId === row.tabId && saved.leafId === row.leafId)) throw new Error('Original pane is still present');
+    }
     const rows = await processes();
     if (!rows.some(row => row.pid === process.pid)) throw new Error('Incomplete native process table');
     await conversationUsers(missing);

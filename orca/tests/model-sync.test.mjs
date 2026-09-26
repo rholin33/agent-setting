@@ -80,6 +80,15 @@ test('syncModels applies a confirmed picker selection to Pi roles', async t => {
   assert.equal(fs.existsSync(path.join(home, 'pi-models.json')), false);
 });
 
+test('picker starts from saved per-role model and thinking', () => {
+  const state = createPickerState({
+    roles: [{ name: 'designer', model: 'pay/gpt-6-sol', thinking: 'xhigh' }],
+    presets: [{ model: 'local/gemini-3.8-flash-high', thinking: 'xhigh' }],
+    initial: { designer: { model: 'local/gemini-3.8-flash-high', thinking: 'medium' } },
+  });
+  assert.deepEqual([state.rows[0].model, state.rows[0].thinking], ['local/gemini-3.8-flash-high', 'medium']);
+});
+
 test('picker state machine navigates, switches presets and cycles thinking', () => {
   const state = createPickerState({
     roles: [{ name: 'master', model: 'pay/gpt-6-astra', thinking: null }, { name: 'designer', model: 'unknown/model', thinking: 'high' }],
