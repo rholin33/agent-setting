@@ -27,9 +27,7 @@ export async function reloadRunning({ home, project, names, cli, snapshot, log =
   const state = readJson(files.state);
   const catalog = readJson(path.join(home, 'team.json'));
   const scope = names || config.tabs.flatMap(tab => tab.agents);
-  let inventory;
-  try { inventory = await cli(['terminal', 'list', '--worktree', `path:${project}`]); }
-  catch { return { reloaded: [], skipped: [], current: [] }; }
+  const inventory = await cli(['terminal', 'list', '--worktree', `path:${project}`]);
   const stale = [], current = [];
   for (const name of scope) {
     const saved = state.agents[name];

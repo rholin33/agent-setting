@@ -22,9 +22,9 @@ The installer generates these entry scripts without rewriting existing shell pro
 
 ## Projects
 
-Run `orca-team` in a project directory. This initializes and starts the team. `orca-team status` only inspects existing state; `orca-team init` only initializes. `--project PATH` selects a different project.
+Run `orca-team` in a project directory. It reconciles the team: creates missing roles, resumes original conversations in idle panes, and applies changed model or thinking settings to running roles when they can be safely restarted. `orca-team status` only inspects existing state; `orca-team init` only initializes. `--project PATH` selects a different project.
 
-`start` first makes sure the Orca app is running: when the runtime metadata is
+The default command first makes sure the Orca app is running: when the runtime metadata is
 missing it launches Orca and waits until the CLI answers. It then syncs role
 models before launching. Codex roles without a `piProvider` take the top-level
 `model` from the local Codex config (`$CODEX_HOME/config.toml`, else
@@ -38,11 +38,11 @@ Pi roles also load their packaged skills from `source/<role>/skills/` at each
 fresh launch and exact-session resume. Roles without packaged skills retain
 Pi's default skill discovery; global Pi settings remain unchanged.
 
-Finally `start` recovers missing roles and creates new ones. It never exits a
-running role just because its selected model or thinking level changed. Use
-`restart ROLE` to apply those settings to an existing conversation explicitly.
-This prevents a `start` command issued from a project terminal from closing
-the role that launched it.
+Finally the command recovers missing roles and creates new ones, then applies
+model or thinking changes to running roles through exact-session restart.
+Busy, ambiguous, or unverified roles are left running and reported as incomplete;
+rerun `orca-team` after they become idle. `start` is an alias for this default
+behavior. `restart ROLE` remains available for an explicit forced restart.
 
 ```text
 orca-team
@@ -68,7 +68,7 @@ reported as incomplete. Opening Orca alone does not run this manager: run
 
 Default tabs: master / loader, archi, coder1 / coder2, designer, reviewer, simple. Slash denotes an equal left/right split (`vertical` in Orca's native representation). The manager activates the primary tab before splitting and validates the actual desktop pane tree afterward. CCB sidebar ratios remain recorded but are not applied because Orca has no matching sidebar API.
 
-Quick commands use `start --group TITLE`, not the internal single-role `launch` action.
+Quick commands use `--group TITLE`, not the internal single-role `launch` action.
 They start/recover only the selected group, reuse its existing panes and exact
 conversations, and focus it after verification. Group titles must be unique.
 Global shortcuts come from `layout.json`; a project that renames/omits a group
@@ -91,7 +91,7 @@ Pi roles use the selected `provider/model`. Before startup, Codex role models
 sync from the machine's Codex configuration. Role `thinking` maps to the
 provider's reasoning setting.
 
-`orca-team start` runs `pi update --all` before model selection or role startup
+`orca-team` runs `pi update --all` before model selection or role startup
 when the selected project has no running Pi role. If a Pi pane is already live,
 the update is deferred so its installed package files are not replaced during
 that conversation. Run the update from an idle project before starting roles.

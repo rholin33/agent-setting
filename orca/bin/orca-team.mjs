@@ -13,6 +13,7 @@ import { restartTeam } from '../lib/restart.mjs';
 import { ensureOrca } from '../lib/orca-boot.mjs';
 import { syncModels } from '../lib/model-sync.mjs';
 import { updatePiBeforeStart } from '../lib/pi-update.mjs';
+import { reloadRunning } from '../lib/reload.mjs';
 import { taskHistory } from '../lib/history.mjs';
 import { deploy, installQuickCommands, registerShellProfile } from '../lib/install.mjs';
 
@@ -25,7 +26,7 @@ try {
   if (values.role && positionals[1] && action !== 'restart' && values.role !== positionals[1]) throw new Error('Conflicting role arguments');
   if (values.group !== undefined && !['start', 'status'].includes(action)) throw new Error('--group is only supported for start/status');
   if (values.help) {
-    console.log('orca-team [start|init|status|history [ROLE]|restart [ROLE|GROUP ...]|install|export-config] [--project PATH] [--home PATH] [--no-pick]\nstart/status --group TITLE selects one configured group, e.g. master (master + loader).\nDefault: start Orca when it is not running, run pi update --all only when no project Pi pane is live, sync role models (Codex follows the local Codex config model; Pi opens a model/thinking picker in a terminal), then recover or create every group. Existing running roles are not restarted by start.\nRestart reloads all roles or selected roles/groups in their original conversations. --no-pick skips the Pi picker (non-terminal starts never pick).\ninstall --quick-commands registers Orca grouped global shortcuts.');
+    console.log('orca-team [status|history [ROLE]|init|install|export-config] [--group TITLE] [--project PATH] [--home PATH] [--no-pick]\nDefault: reconcile the selected project. Start missing roles, resume original conversations in idle panes, and restart running roles only when their applied model or thinking differs. Busy or unverifiable roles are reported as incomplete.\nstart is an alias for the default command; restart [ROLE|GROUP ...] remains available for explicit forced restarts.\n--no-pick skips the Pi model picker. install --quick-commands registers Orca grouped global shortcuts.');
   } else {
     const home = path.resolve(values.home || process.env.ORCA_TEAM_HOME || path.join(os.homedir(), '.orca', 'roles', 'ccb-team'));
     const project = normalizeProject(fs.realpathSync(values.project || process.cwd()));
@@ -64,6 +65,8 @@ try {
       await updatePiBeforeStart({ home, project, names, cli: orca, snapshot });
       await syncModels({ home, names, pick: !values['no-pick'] });
       await runTeam({ home, project, action, group: values.group, cli: orca, snapshot });
+      const { skipped } = await reloadRunning({ home, project, names, cli: orca, snapshot });
+      if (skipped.length) throw new Error(`Model changes remain pending: ${skipped.map(item => `${item.name}: ${item.reason}`).join('; ')}`);
     } else if (action === 'status') {
       await runTeam({ home, project, action, group: values.group, cli: orca, snapshot });
     } else if (action === 'launch') {

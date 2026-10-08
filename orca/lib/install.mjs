@@ -23,7 +23,7 @@ export async function installQuickCommands(home, rpc) {
   const team = readJson(path.join(home, 'team.json'));
   const layout = readJson(path.join(home, 'layout.json'));
   validateConfig(layout, team);
-  const commands = layout.tabs.map(tab => ({ id: `ccb-team-${tab.title}`, label: `CCB / ${tab.agents.join(' + ')}`, action: 'terminal-command', scope: { type: 'global' }, command: nodeCommand([path.join(home, 'bin', 'orca-team.mjs'), 'start', '--home', home, '--group', tab.title]), appendEnter: true }));
+  const commands = layout.tabs.map(tab => ({ id: `ccb-team-${tab.title}`, label: `CCB / ${tab.agents.join(' + ')}`, action: 'terminal-command', scope: { type: 'global' }, command: nodeCommand([path.join(home, 'bin', 'orca-team.mjs'), '--home', home, '--group', tab.title]), appendEnter: true }));
   const owned = new Set([...team.map(role => `ccb-team-${role.name}`), ...commands.map(command => command.id)]);
   const previous = await rpc('settings.getTerminalQuickCommands');
   if (previous.terminalQuickCommands.filter(command => !owned.has(command.id)).length + commands.length > 40) throw new Error('Orca quick command limit exceeded');

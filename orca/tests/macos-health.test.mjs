@@ -5,6 +5,7 @@ const root = { pid: 1, parent: 0, group: 1, foreground: 2, tty: 'ttys001', creat
 const agent = { ...root, pid: 2, parent: 1, group: 2, name: 'pi' };
 test('macOS requires one foreground provider in the same PTY descendant tree', () => {
  assert.ok(macTree([root,agent],1,'pi'));
+ assert.equal(macTree([root,agent,{...agent,pid:4,parent:2,name:'ps'}],1,'pi'),macTree([root,agent],1,'pi'));
  for (const replacement of [{...agent,tty:'ttys002'},{...agent,group:3},{...agent,name:'node'},{...agent,parent:99}]) assert.equal(macTree([root,replacement],1,'pi'),null);
  assert.equal(macTree([root,agent,{...agent,pid:3}],1,'pi'),null);
 });

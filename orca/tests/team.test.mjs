@@ -182,7 +182,8 @@ test('installation retains runtime state and quick commands preserve unrelated e
   assert.deepEqual(commands.slice(1).map(row => row.label).sort(), ['CCB / master + loader', 'CCB / archi', 'CCB / coder1 + coder2', 'CCB / designer', 'CCB / reviewer', 'CCB / simple'].sort());
   for (const row of commands.slice(1)) {
     const text = process.platform === 'win32' ? Buffer.from(row.command.split(' ').at(-1), 'base64').toString('utf16le') : row.command;
-    assert.match(text, /'start'.*'--group'/);
+    assert.match(text, /'--group'/);
+    assert.doesNotMatch(text, /'start'/);
     assert.doesNotMatch(text, /'launch'/);
   }
 });

@@ -15,7 +15,8 @@ export function macTree(rows, pid, provider) {
   const root = rows.find(r => r.pid === pid);
   if (!root || root.tty === '??') return null;
   const tree = [root], seen = new Set([pid]);
-  for (let i = 0; i < tree.length; i++) for (const row of rows.filter(r => r.parent === tree[i].pid)) {
+  // Pi/Codex 执行工具时会短暂派生子进程；它们不属于启动身份链。
+  for (let i = 0; i < tree.length; i++) for (const row of rows.filter(r => r.parent === tree[i].pid && tree[i].name !== provider)) {
     if (seen.has(row.pid) || row.tty !== root.tty || Date.parse(row.created) < Date.parse(tree[i].created)) return null;
     seen.add(row.pid); tree.push(row);
   }
