@@ -6,9 +6,18 @@ import { normalizeProject } from './platform.mjs';
 export function binding(snapshot, saved, project) {
   const record = snapshot.sleepingAgentSessionsByPaneKey?.[`${saved.tabId}:${saved.leafId}`];
   if (!record) return null;
-  if (record.connectionId || record.agent !== saved.agent || !sameWorktree(record.worktreeId, project)) throw new Error('Session binding does not match role/project');
+  if (record.connectionId || !sameWorktree(record.worktreeId, project)) throw new Error('Session binding does not match role/project');
+  // 面板记录可能来自同标签另一窗格或过期探针；agent 不一致时以实时进程检查为准，
+  // 不能据此判定角色会话冲突，否则会让整个团队无法对账。
+  if (record.agent !== saved.agent) return null;
   if (saved.session?.id && record.providerSession?.id && saved.session.id !== record.providerSession.id) throw new Error('Provider conversation identity changed; original binding retained');
-  return record.providerSession || null;
+  // Orca 的 Codex 面板记录可能只带 session id（没有 transcript 路径）；
+  // 同一会话已保存的绑定保留路径，避免因缺少路径而误判原会话不可用。
+  const observed = record.providerSession || null;
+  if (observed && !observed.transcriptPath && saved.session?.transcriptPath && saved.session.id === observed.id) {
+    return { ...saved.session, ...observed, transcriptPath: saved.session.transcriptPath };
+  }
+  return observed;
 }
 export function sameWorktree(worktree, project) {
   const actual = worktree?.split('::').slice(1).join('::');
@@ -35,6 +44,8 @@ export function validateTranscript(saved, project) {
   return session;
 }
 export function launchArguments(role, prompt, session, project, home) {
+  // 模型来自账本；Codex 账本在每次 start 时同步为本机 Codex 配置，显式传入
+  // 可避免 resume 恢复会话内记录的旧模型和推理强度。
   const args = ['--model', role.model];
   const env = {};
   if (session) validateTranscript({ ...role, session }, project);

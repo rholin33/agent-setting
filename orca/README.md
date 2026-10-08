@@ -22,27 +22,31 @@ The installer generates these entry scripts without rewriting existing shell pro
 
 ## Projects
 
-Run `orca-team` in a project directory. It reconciles the team: creates missing roles, resumes original conversations in idle panes, and applies changed model or thinking settings to running roles when they can be safely restarted. `orca-team status` only inspects existing state; `orca-team init` only initializes. `--project PATH` selects a different project.
+Run `orca-team` in a project directory. It reconciles the team: restarts every role that is currently running with the configured agent, model, and thinking level (keeping each original conversation), then creates missing roles and resumes stopped conversations in idle panes. `orca-team status` only inspects existing state; `orca-team init` only initializes. `--project PATH` selects a different project.
 
 The default command first makes sure the Orca app is running: when the runtime metadata is
 missing it launches Orca and waits until the CLI answers. It then syncs role
 models before launching. Codex roles without a `piProvider` take the top-level
-`model` from the local Codex config (`$CODEX_HOME/config.toml`, else
-`~/.codex/config.toml`) instead of the model last used by that role. Pi roles are
+`model` and `model_reasoning_effort` from the local Codex config (`$CODEX_HOME/config.toml`, else
+`~/.codex/config.toml`). Codex launches explicitly pass these synced model and thinking values. All selected roles appear in the picker; Codex rows are read-only. Pi roles are
 configured through an interactive picker in the terminal: presets and the last
 confirmed selection live in `pi-models.json` next to `team.json` and can be
-edited by hand. Starts without a terminal (Orca quick commands, CI) and
+edited by hand. Newly configured Pi provider models are added to existing presets automatically, preserving saved role choices and custom labels. Starts without a terminal (Orca quick commands, CI) and
 `--no-pick` never open the picker and keep `team.json` values unchanged.
 
 Pi roles also load their packaged skills from `source/<role>/skills/` at each
 fresh launch and exact-session resume. Roles without packaged skills retain
 Pi's default skill discovery; global Pi settings remain unchanged.
 
-Finally the command recovers missing roles and creates new ones, then applies
-model or thinking changes to running roles through exact-session restart.
-Busy, ambiguous, or unverified roles are left running and reported as incomplete;
-rerun `orca-team` after they become idle. `start` is an alias for this default
+Running roles are restarted through exact-session restart first, so after Orca
+itself resumes panes, one `orca-team` call brings all of them back to the
+configured agent, model, and thinking level. The command then recovers missing
+roles and creates new ones. Busy, ambiguous, or unverified roles are left running
+and reported as incomplete; rerun `orca-team` after they become idle. `start` is an alias for this default
 behavior. `restart ROLE` remains available for an explicit forced restart.
+When Orca has dropped a stopped role's pane and its saved conversation must not
+be resumed, `orca-team start --fresh ROLE` (repeatable) clears that role's pane
+binding and starts a new session. It refuses while the role is running.
 
 ```text
 orca-team
@@ -50,6 +54,7 @@ orca-team status
 orca-team history archi
 orca-team restart archi
 orca-team start --group master
+orca-team start --fresh simple
 orca-team status --group master
 ```
 
@@ -66,7 +71,7 @@ reported as incomplete. Opening Orca alone does not run this manager: run
 
 `orca-team export-config --project PATH` prints the current project configuration without its machine-specific workspace path. This is the read-only interface used when exporting portable project customizations. It prefers runtime config, then `.orca/team.json`, then the default layout.
 
-Default tabs: master / loader, archi, coder1 / coder2, designer, reviewer, simple. Slash denotes an equal left/right split (`vertical` in Orca's native representation). The manager activates the primary tab before splitting and validates the actual desktop pane tree afterward. CCB sidebar ratios remain recorded but are not applied because Orca has no matching sidebar API.
+Default tabs: master / loader, archi, coder1 / coder2, designer, reviewer / test, simple (six groups, nine roles). Slash denotes an equal left/right split (`vertical` in Orca's native representation). The manager activates the primary tab before splitting and validates the actual desktop pane tree afterward. CCB sidebar ratios remain recorded but are not applied because Orca has no matching sidebar API.
 
 Quick commands use `--group TITLE`, not the internal single-role `launch` action.
 They start/recover only the selected group, reuse its existing panes and exact

@@ -9,7 +9,8 @@
         "loader"
       ],
       "direction": "vertical",
-      "ratio": 0.5
+      "ratio": 0.5,
+      "displayTitle": "master · loader"
     },
     {
       "title": "archi",
@@ -24,7 +25,8 @@
         "coder2"
       ],
       "direction": "vertical",
-      "ratio": 0.5
+      "ratio": 0.5,
+      "displayTitle": "coder1 · coder2"
     },
     {
       "title": "designer",
@@ -35,8 +37,12 @@
     {
       "title": "reviewer",
       "agents": [
-        "reviewer"
-      ]
+        "reviewer",
+        "test"
+      ],
+      "direction": "vertical",
+      "ratio": 0.5,
+      "displayTitle": "reviewer · test"
     },
     {
       "title": "simple",

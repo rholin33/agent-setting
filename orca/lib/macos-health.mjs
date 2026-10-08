@@ -2,6 +2,8 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
 import { daemonSessions } from './windows-health.mjs';
+import { snapshot as readSnapshot } from './orca.mjs';
+import { assertConversationAbsent } from './recovery-guards.mjs';
 
 export async function macProcesses() {
   const { stdout } = await promisify(execFile)('/bin/ps', ['-axo', 'pid=,ppid=,pgid=,tpgid=,tty=,lstart=,comm='], { encoding: 'utf8', timeout: 5000 });
@@ -80,7 +82,7 @@ export async function macConversationUsers(missing) {
   }
 }
 
-export async function verifyMacAbsence({ project, missing, cli, inventory = daemonSessions, processes = macProcesses, conversationUsers = macConversationUsers }) {
+export async function verifyMacAbsence({ project, missing, cli, inventory = daemonSessions, processes = macProcesses, conversationUsers = macConversationUsers, snapshot = readSnapshot }) {
   const { sameWorktree, validateTranscript } = await import('./sessions.mjs');
   for (const { saved } of missing) validateTranscript(saved, project);
   const proofs = [];
@@ -99,6 +101,19 @@ export async function verifyMacAbsence({ project, missing, cli, inventory = daem
     }
     const rows = await processes();
     if (!rows.some(row => row.pid === process.pid)) throw new Error('Incomplete native process table');
+    const snap = await snapshot();
+    assertConversationAbsent(snap, project, missing, desktop.terminals);
+    for (const session of active) {
+      const terminal = desktop.terminals.find(row => row.handle === session.terminalHandle);
+      const tree = macTree(rows, session.pid, terminal.agentIdentity === 'codex' ? 'codex' : 'pi');
+      if (!tree) throw new Error('Unverifiable project process tree; absence refused');
+      if (JSON.parse(tree).some(row => row[5] === 'pi')) {
+        const record = snap.sleepingAgentSessionsByPaneKey?.[`${terminal.tabId}:${terminal.leafId}`];
+        if (record?.agent !== 'pi' || !record.providerSession?.id || record.connectionId || !sameWorktree(record.worktreeId, project)) {
+          throw new Error('Live Pi conversation is unbound; absence refused');
+        }
+      }
+    }
     await conversationUsers(missing);
     proofs.push(native.identity.launchNonce);
   }

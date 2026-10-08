@@ -3,8 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { reloadRunning, sameAppliedConfig, desiredModelOf } from '../lib/reload.mjs';
-import { appliedModelOf } from '../lib/restart.mjs';
+import { reloadRunning } from '../lib/reload.mjs';
 import { projectKey } from '../lib/platform.mjs';
 
 function fixture(t) {
@@ -39,55 +38,55 @@ function fixture(t) {
   return { home, project, cli, catalog };
 }
 
-test('sameAppliedConfig compares agent, model and thinking', () => {
-  const role = { agent: 'codex', model: 'm', thinking: 'medium' };
-  assert.equal(sameAppliedConfig({ appliedModel: appliedModelOf(role) }, role), true);
-  assert.equal(sameAppliedConfig({ appliedModel: { ...appliedModelOf(role), thinking: null } }, role), false);
-  assert.equal(sameAppliedConfig({}, role), false);
-  assert.deepEqual(desiredModelOf(role), { agent: 'codex', model: 'm', thinking: 'medium' });
-});
-
-test('reload restarts only stale running roles and keeps current ones', async t => {
+test('reload restarts every running role with the current configuration', async t => {
   const { home, project, cli } = fixture(t);
   const logs = [];
   const calls = [];
   const result = await reloadRunning({
-    home, project, cli, snapshot: async () => ({}), log: msg => logs.push(msg),
+    home, project, cli, snapshot: async () => ({}), inspect: async () => ({ kind: 'agent' }), log: msg => logs.push(msg),
     restart: async options => { calls.push(options.roles); return { reloaded: options.roles, failed: [] }; },
   });
-  assert.deepEqual(calls, [['coder1', 'idle']]);
-  assert.deepEqual(result.reloaded, ['coder1', 'idle']);
-  assert.deepEqual(result.current, ['master']);
-  assert.ok(logs.some(line => line.includes('kept as-is')));
+  assert.deepEqual(calls, [['master', 'coder1', 'idle']]);
+  assert.deepEqual(result.reloaded, ['master', 'coder1', 'idle']);
+  assert.deepEqual(result.current, []);
+  assert.ok(logs.some(line => line.includes('Restarting 3 running role(s)')));
 });
 
-test('reload without stale roles performs no restarts', async t => {
-  const { home, project, cli } = fixture(t);
-  const stateFile = path.join(home, 'projects', projectKey('D:/Code/sample'), 'state.json');
-  const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
-  state.agents.coder1.appliedModel = { agent: 'codex', model: 'deepseek-v4.1-flash', thinking: 'medium' };
-  state.agents.idle.appliedModel = { agent: 'pi', model: 'local/deepseek-v4.1-flash', thinking: 'medium' };
-  fs.writeFileSync(stateFile, JSON.stringify(state));
+test('reload without running panes performs no restarts', async t => {
+  const { home, project } = fixture(t);
   const logs = [];
   let restarts = 0;
   const result = await reloadRunning({
-    home, project, cli, snapshot: async () => ({}), log: msg => logs.push(msg),
+    home, project, cli: async () => ({ terminals: [] }), snapshot: async () => ({}), inspect: async () => ({ kind: 'agent' }), log: msg => logs.push(msg),
     restart: async () => { restarts += 1; return { reloaded: [], failed: [] }; },
   });
   assert.equal(restarts, 0);
   assert.equal(result.reloaded.length, 0);
-  assert.equal(result.current.length, 3);
-  assert.ok(logs.some(line => line.includes('3 running role(s) kept as-is')));
+  assert.equal(result.current.length, 0);
+  assert.ok(logs.some(line => line.includes('No running role to restart')));
 });
 
 test('reload reports failed parallel restarts as skipped warnings', async t => {
   const { home, project, cli } = fixture(t);
   const logs = [];
   const result = await reloadRunning({
-    home, project, cli, snapshot: async () => ({}), log: msg => logs.push(msg),
+    home, project, cli, snapshot: async () => ({}), inspect: async () => ({ kind: 'agent' }), log: msg => logs.push(msg),
     restart: async () => ({ reloaded: ['idle'], failed: [{ name: 'coder1', reason: 'agent is busy; retry after its turn completes' }] }),
   });
   assert.deepEqual(result.reloaded, ['idle']);
   assert.deepEqual(result.skipped.map(item => item.name), ['coder1']);
   assert.ok(logs.some(line => line.includes('Warning: coder1 not reloaded')));
+});
+
+test('roles whose panes are shells wait for the start pass instead of restarting', async t => {
+  const { home, project, cli } = fixture(t);
+  const logs = [];
+  let restarts = 0;
+  const result = await reloadRunning({
+    home, project, cli, snapshot: async () => ({}), inspect: async () => ({ kind: 'shell' }), log: msg => logs.push(msg),
+    restart: async () => { restarts += 1; return { reloaded: [], failed: [] }; },
+  });
+  assert.equal(restarts, 0);
+  assert.equal(result.reloaded.length, 0);
+  assert.ok(logs.some(line => line.includes('No running role to restart')));
 });

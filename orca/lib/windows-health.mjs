@@ -79,9 +79,19 @@ export async function verifyWindowsAbsence({ project, missing, cli, platform = p
   return true;
 }
 
-// Read-only v36 protocol adapter: never attaches or writes a terminal.
+// Orca 会随版本升级终端宿主守护进程（v36 → v39 → …），文件名带版本号。
+// 取本机已注册的最高版本，避免硬编码版本号在 Orca 升级后让所有角色变成不可验证。
+export function terminalHostVersion(directory = path.join(dataDirectory(), 'daemon')) {
+  const versions = fs.readdirSync(directory)
+    .map(name => name.match(/^daemon-v(\d+)\.pid$/)?.[1])
+    .filter(Boolean).map(Number);
+  if (!versions.length) throw new Error('terminal_host_version_unavailable');
+  return Math.max(...versions);
+}
+
+// Read-only terminal-host protocol adapter: never attaches or writes a terminal.
 export async function daemonSessions() {
-  const directory = path.join(dataDirectory(), 'daemon'), version = 36;
+  const directory = path.join(dataDirectory(), 'daemon'), version = terminalHostVersion(directory);
   const expected = JSON.parse(fs.readFileSync(path.join(directory, `daemon-v${version}.pid`), 'utf8'));
   const token = fs.readFileSync(path.join(directory, `daemon-v${version}.token`), 'utf8').trim();
   const suffix = createHash('sha256').update(directory).digest('hex').slice(0, 12);

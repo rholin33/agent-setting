@@ -30,6 +30,15 @@ test('macOS full-team close restores only after complete stable absence proof', 
  await assert.rejects(verifyMacAbsence({...options,conversationUsers:async()=>{throw Error('still open');}}),/still open/);
  await assert.rejects(verifyMacAbsence({...options,inventory:async()=>({identity:{launchNonce:'stable'},sessions:[{sessionId:`repo::${project}@@a`,isAlive:true}]})}),/Hidden or unverifiable project PTY/);
  await assert.rejects(verifyMacAbsence({...options,cli:async()=>({terminals:[],totalCount:0,truncated:true,hostScope:{hostIds:['local'],omittedHostIds:[]}})}),/Incomplete/);
+ const terminal={handle:'moved',ptyId:`repo::${project}@@new`,incarnationId:'new',tabId:'new',leafId:'leaf',connected:true,executionHostId:'local',agentIdentity:'pi'};
+ const live={...options,inventory:async()=>({identity:{launchNonce:'stable'},sessions:[{sessionId:terminal.ptyId,terminalHandle:terminal.handle,incarnationId:'new',isAlive:true,pid:root.pid}]}),
+  cli:async()=>({terminals:[terminal],totalCount:1,truncated:false,hostScope:{hostIds:['local'],omittedHostIds:[]}}),
+  processes:async()=>[root,agent,{pid:process.pid}],snapshot:()=>({})};
+ await assert.rejects(verifyMacAbsence(live),/unbound/);
+ live.snapshot=()=>({sleepingAgentSessionsByPaneKey:{'new:leaf':{agent:'pi',worktreeId:`repo::${project}`,providerSession:{id:'original'}}}});
+ await assert.rejects(verifyMacAbsence(live),/another live pane/);
+ live.snapshot=()=>({sleepingAgentSessionsByPaneKey:{'new:leaf':{agent:'pi',worktreeId:`repo::${project}`,providerSession:{id:'different'}}}});
+ assert.equal(await verifyMacAbsence(live),true);
  let n=0;
  await assert.rejects(verifyMacAbsence({...options,inventory:async()=>({identity:{launchNonce:String(n++)},sessions:[]})}),/host changed/);
 });

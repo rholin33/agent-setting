@@ -18,6 +18,14 @@
 
 这是既有运行回归证据，不是独立子代理对新技能的盲测。本次只新增文档；技能加载及文档完整性另通过本机 Pi loader 验证。CCB/tmux、无 Magic Context 和新版上游实现未在本次实机重演。
 
+## 2026-10-08 Revisited / Orca 补充记录
+
+master 原会话在 `orca-team` 恢复后占 Pi 窗口 671.2%，Magic Context 显示约 1.8M / 878%，0 compartments；当前 0.43.2 插件缺 `historian.pi.model`。补齐用户级非秘密配置后，Astra terminated、DeepSeek timeout、Sol 第一次流式 timeout，后续 Sol 调用生成 2 个 compartments；验证消息 materialize 后降为约 87.9K / Pi 32.3% / MC 42%。
+
+纯回复 `MASTER_CONTEXT_OK` 和 `MASTER_READY_20261008` 实际出现，但后台旧 historian 与 Working 仍挂起；正常中断、精确子进程 SIGINT、`/quit` 与定点 `orca-team restart master` 后最终 idle、emergency/lease 为0、marker为空、DB quick_check=ok。同 session、旧 JSONL完整字节前缀保留。最终 CPU 样本 0.0%/3.1%。`/ctx-recomp`仅显示确认页，未确认执行。
+
+本次**未执行成功的文件工具探针**，因此只能证明上下文压缩及文字请求恢复，不能把这份案例当成工具声明完整性的验收。备份与详细结果在 Revisited `.runtime-logs/orca-master-context-20261007/result.md`；不要硬编码案例 PID/handle 或保证所有模型超时都同源。编写技能无需再次操作 live master。
+
 ## 后续验收场景
 
 | 输入/压力 | 预期决策 |

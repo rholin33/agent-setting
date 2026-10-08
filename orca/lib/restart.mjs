@@ -2,7 +2,7 @@ import path from 'node:path';
 import { projectFiles, readJson, saveJson, withLock, validateConfig, focusDesktop } from './team.mjs';
 import { validateTranscript, sameWorktree, binding } from './sessions.mjs';
 import { captureSession } from './launch-state.mjs';
-import { inspectHealth, recoverInPane } from './health.mjs';
+import { inspectHealth, recoverInPane, confirmConversationOwnership } from './health.mjs';
 import { nodeCommand } from './platform.mjs';
 import { rpc } from './orca.mjs';
 
@@ -76,8 +76,11 @@ async function restartCore({ home, project, role, cli, snapshot, state, checkpoi
     }
     await focus(handle);
     await sleep(500);
-    const idle = await cli(['terminal', 'wait', '--terminal', handle, '--for', 'tui-idle', '--timeout-ms', '1000']);
-    if (!idle.wait?.satisfied) throw new Error(`${role}: agent is busy; retry after its turn completes`);
+    // Orca 在等待超时时返回 ok:false/timeout，而不是 satisfied:false。
+    let idle = null;
+    try { idle = await cli(['terminal', 'wait', '--terminal', handle, '--for', 'tui-idle', '--timeout-ms', '3000']); }
+    catch (error) { if (error.message !== 'timeout') throw error; }
+    if (!idle?.wait?.satisfied) throw new Error(`${role}: agent is busy; retry after its turn completes`);
     const screen = (await cli(['terminal', 'read', '--terminal', handle, '--screen'])).terminal;
     if (screen.source !== 'screen' || (screen.draft !== undefined && screen.draft !== null && screen.draft !== '')) {
       throw new Error(`${role}: terminal draft cannot be verified empty; no exit sent`);
@@ -118,6 +121,7 @@ async function restartCore({ home, project, role, cli, snapshot, state, checkpoi
     }
     throw new Error(`${role}: original conversation recovery unconfirmed; rerun orca-team`);
   } });
+  await confirmConversationOwnership({ name: role, saved, handle, cli });
   delete saved.restartIntent;
   saved.appliedModel = appliedModelOf(catalogRole);
   checkpoint();

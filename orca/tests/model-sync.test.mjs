@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { readCodexModel, seedPiModelConfig, syncModels } from '../lib/model-sync.mjs';
+import { readCodexModel, readCodexConfig, loadPiModelConfig, seedPiModelConfig, syncModels } from '../lib/model-sync.mjs';
 import { createPickerState, pickerKey, renderPicker, THINKING_CYCLE } from '../lib/model-picker.mjs';
 
 function temp(t) {
@@ -35,6 +35,40 @@ test('seedPiModelConfig builds presets with per-model and default thinking', t =
   assert.deepEqual(seeded.presets.map(p => [p.model, p.thinking]), [
     ['local/deepseek-v4.1-flash', 'medium'], ['local/gemini-3.8-flash-high', 'high']]);
   assert.deepEqual(seeded.roles, {});
+});
+
+test('existing presets refresh new providers without losing saved choices or custom labels', t => {
+  const home = temp(t);
+  const roles = { master: { model: 'pay/new', thinking: 'xhigh' } };
+  fs.writeFileSync(path.join(home, 'pi-models.json'), JSON.stringify({
+    presets: [{ model: 'local/old', thinking: 'medium', label: 'custom label' }], roles,
+  }));
+  const seed = () => ({ presets: [{ model: 'local/old', thinking: 'high' }, { model: 'pay/new', thinking: 'xhigh' }], roles: {} });
+  const loaded = loadPiModelConfig(home, seed);
+  assert.deepEqual(loaded.config.presets, [
+    { model: 'local/old', thinking: 'medium', label: 'custom label' }, { model: 'pay/new', thinking: 'xhigh' },
+  ]);
+  assert.deepEqual(loaded.config.roles, roles);
+  assert.deepEqual(loadPiModelConfig(home, seed).config, loaded.config);
+  assert.equal(createPickerState({ roles: [{ name: 'master', model: 'pay/new' }], presets: loaded.config.presets }).rows[0].presetIndex, 1);
+});
+
+test('Codex config supplies both model and thinking from top-level keys', t => {
+  const home = temp(t);
+  fs.writeFileSync(path.join(home, 'config.toml'), 'model = "current"\nmodel_reasoning_effort = "medium"\n[profile]\nmodel_reasoning_effort = "xhigh"\n');
+  assert.deepEqual(readCodexConfig(home), { model: 'current', thinking: 'medium' });
+});
+
+test('picker shows Codex roles but does not allow changing their local configuration', () => {
+  const state = createPickerState({
+    roles: [{ name: 'master', agent: 'pi', model: 'pay/current' }, { name: 'coder1', agent: 'codex', model: 'local-codex', thinking: 'medium' }],
+    presets: [{ model: 'pay/current' }, { model: 'local/alternative' }],
+    initial: { coder1: { model: 'stale', thinking: 'xhigh' } },
+  });
+  const selected = pickerKey(state, 'down').state;
+  assert.match(renderPicker(selected), /codex\/local-codex \(local config\)/);
+  assert.equal(pickerKey(selected, 'right').state, selected);
+  assert.equal(pickerKey(selected, 'think-next').state, selected);
 });
 
 test('syncModels follows the local Codex config and leaves Pi roles alone off-terminal', async t => {
@@ -128,7 +162,7 @@ test('pickPiModels maps raw-mode keys to a confirmed selection or cancel', async
     const stdin = new FakeStdin();
     const stdout = { isTTY: true, chunks: [], write(text) { this.chunks.push(text); return true; } };
     const promise = pickPiModels({
-      roles: [{ name: 'master', model: 'preset-a', thinking: null }],
+      roles: [{ name: 'master', agent: 'pi', model: 'preset-a', thinking: null }, { name: 'coder1', agent: 'codex', model: 'local-config', thinking: 'medium' }],
       presets: [{ model: 'preset-a', thinking: null }, { model: 'preset-b', thinking: 'medium' }],
       stdin, stdout,
     });

@@ -7,6 +7,8 @@ description: Use when a Pi session is unusable after long context, hangs while r
 
 恢复用户指定的 **原 Pi 会话**，保留历史和业务断点。适用于 Orca、普通终端及实际由 CCB 管理的 Pi；按宿主选择操作入口。先阅读 [恢复操作参考](references/recovery.md)。
 
+Orca / `orca-team` 恢复后上下文超限、historian 缺配置或摘要子进程挂起时，另读 [Orca 上下文恢复](references/orca-context.md)。进程运行和 session 绑定只证明会话身份，**不证明上下文或工具可用**。
+
 ## 1. 锁定目标
 
 - 从用户请求和运行状态确定项目、角色、session ID、JSONL 绝对路径、Pi 可执行文件、版本、模型、启动参数、PID、终端 handle。不可凭旧 PID 或旧 handle 操作。
@@ -19,14 +21,15 @@ description: Use when a Pi session is unusable after long context, hangs while r
 
 | 症状 | 下一步 |
 |---|---|
-| TUI 可响应，Magic Context 已压缩但待生效 | 核对本机命令后 `/ctx-flush`，执行最小只读探针，让压缩结果生效 |
+| TUI 可响应，Magic Context 已压缩但待生效 | 核对 pending marker 与当前版 materialization 机制；用一次最小探针让摘要生效，只有普通待处理操作适用时才 `/ctx-flush` |
+| 超限且无历史 compartments，auto-compaction cancelled | 核对当前插件版本、有效 historian 配置与真实配置路径；备份后通过支持的 wrapup 生成摘要 |
 | TUI 无响应，CPU 持续增长，保留历史有巨型内容 | 停止核实过的单个目标进程，确认退出，用同一 session 的官方 RPC 模式恢复 |
 | 压缩后模型称没有文件/终端工具 | 核对工具调用证据、Pi/扩展版本与 GitHub issue；按参考检查 #485 |
 | `ParseError` 或扩展加载失败 | 先定位当前文件和错误；语法检查通过不代表 Pi 扩展加载成功 |
 | 403/429/524、连接失败 | 按服务/认证问题处理，不据此反复压缩或清历史 |
 | 无 Magic Context | 使用当前 Pi 官方 compaction 文档；不要发送 `/ctx-*` |
 
-不要把 `/ctx-flush` 当成新一轮摘要：它只处理已排队操作。无待生效压缩且仍超限时，检查 historian 状态及当前版重新压缩命令；不要循环发送。`/ctx-wrapup` 仅在用户明确要求时使用。
+不要把 `/ctx-flush` 当成新一轮摘要：它只处理普通已排队操作，不保证 materialize Pi compaction marker。用户授权恢复上下文后可使用已核实的 `/ctx-wrapup`；其整数参数是保留消息数，不是目标百分比。无进展先检查 historian，不循环发送或擅自删除历史。
 
 ## 3. 执行与验证
 

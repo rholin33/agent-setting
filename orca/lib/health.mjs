@@ -56,7 +56,7 @@ export async function inspectHealth(cli, rpc, handle, provider, { platform = pro
   return { kind, terminal, reason };
 }
 
-export async function recoverInPane({ name, saved, handle, command, cli, inspect, checkpoint, verifyBinding }) {
+export async function recoverInPane({ name, saved, handle, command, cli, inspect, checkpoint, verifyBinding, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
   const before = await inspect(handle, saved.agent);
   if (before.kind !== 'shell') throw new Error(`${name}: idle shell cannot be verified (${before.reason})`);
   // Reading the terminal immediately before send avoids pasting into a nonempty prompt.
@@ -72,7 +72,29 @@ export async function recoverInPane({ name, saved, handle, command, cli, inspect
   const receipt = await cli(['terminal', 'send', '--terminal', handle, '--text', command, '--enter']);
   if (receipt.send?.accepted !== true) throw new Error(`${name}: resume input was not confirmed; inspect pending state`);
   await verifyBinding();
+  await confirmConversationOwnership({ name, saved, handle, cli, sleep });
+  await sleep(1000);
+  const restored = await inspect(handle, saved.agent);
+  if (restored.kind !== 'agent' || restored.terminal.incarnationId !== before.terminal.incarnationId) {
+    throw new Error(`${name}: resumed agent did not remain running; pending retained`);
+  }
+  await verifyBinding();
   delete saved.pending;
   delete saved.restartIntent;
   checkpoint();
+}
+
+const TAKEOVER_PROMPT = /This conversation is open in another app/i;
+
+// Codex 在会话仍被其他客户端持有时先显示接管提示；绑定已恢复但 TUI 还停在提示屏。
+// 只对 Codex 角色生效，并在提示消失前不报告成功。
+export async function confirmConversationOwnership({ name, saved, handle, cli, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), attempts = 20 }) {
+  if (saved.agent !== 'codex') return;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const screen = (await cli(['terminal', 'read', '--terminal', handle, '--screen'])).terminal;
+    if (!TAKEOVER_PROMPT.test((screen.tail || []).join('\n'))) return;
+    await cli(['terminal', 'send', '--terminal', handle, '--text', 'R']);
+    await sleep(500);
+  }
+  throw new Error(`${name}: conversation is still open in another client; takeover was not confirmed`);
 }

@@ -9,6 +9,7 @@ import { rpc } from './orca.mjs';
 import { prepareLaunch, captureSession } from './launch-state.mjs';
 import { pinGroupTabs } from './tabs.mjs';
 import { verifyWindowsAbsence } from './windows-health.mjs';
+import { assertUniqueRoleTabs, assertConversationAbsent } from './recovery-guards.mjs';
 
 export const readJson = file => JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
 export function saveJson(file, value) {
@@ -144,6 +145,7 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pin
     }
     const resolved = {}, resume = {}, health = {}, issues = [], missing = [];
     const snap = await snapshot();
+    if (action === 'start') assertUniqueRoleTabs(snap, project, config, inventory);
     for (const name of names) {
       const saved = state.agents[name];
       if (!saved) continue;
@@ -173,6 +175,7 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pin
       const matches = inventory.terminals.filter(row => sameWorktree(`local::${row.worktreePath}`, project) && row.tabId === saved.tabId && row.leafId === saved.leafId);
       if (!matches.length) {
         if (action === 'status') { log(`${name}: missing`); continue; }
+        assertConversationAbsent(snap, project, [{ name, saved }], inventory.terminals);
         if (!saved.session && !saved.pending && !foundBinding) {
           // 旧记录没有可恢复的会话；完整本地终端清单确认原窗格已不在时按首次启动处理。
           if (inventory.truncated !== false || inventory.totalCount !== inventory.terminals.length ||
@@ -207,6 +210,15 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pin
         const status = health[name];
         if (status.kind === 'agent') {
           if (state.agents[name].restartIntent) {
+            const saved = state.agents[name];
+            if (action === 'start' && Date.parse(status.providerStartedAt) > Date.parse(saved.restartIntent.createdAt) &&
+                captureSession(saved, status, project, binding(snap, saved, project))) {
+              delete saved.restartIntent;
+              delete saved.pending;
+              saveJson(files.state, state);
+              log(`${name}: recovered original conversation; restart reconciled`);
+              continue;
+            }
             issues.push(`${name}: previous exit unconfirmed; no duplicate input sent`);
             log(`${name}: restart incomplete; agent still running`); continue;
           }
@@ -263,7 +275,7 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pin
       const sibling = tab.agents.find(other => other !== name && resolved[other]);
       let created, handle;
       if (!sibling) {
-        created = await cli(['terminal', 'create', '--worktree', `path:${project}`, '--title', tab.title, '--command', command]); handle = created.terminal.handle;
+        created = await cli(['terminal', 'create', '--worktree', `path:${project}`, '--title', tab.displayTitle || tab.title, '--command', command]); handle = created.terminal.handle;
       } else {
         const primary = resolved[sibling];
         await focus(primary.handle);

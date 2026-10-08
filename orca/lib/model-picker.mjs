@@ -14,9 +14,10 @@ export function createPickerState({ roles, presets, initial = {} }) {
   if (!Array.isArray(presets) || !presets.length) throw new Error('No Pi model presets configured');
   for (const preset of presets) if (!preset || typeof preset.model !== 'string' || !preset.model.trim()) throw new Error('Invalid Pi model preset');
   const rows = roles.map(role => {
-    const chosen = initial[role.name] || { model: role.model, thinking: role.thinking ?? null };
+    const editable = role.agent !== 'codex';
+    const chosen = (editable && initial[role.name]) || { model: role.model, thinking: role.thinking ?? null };
     if (typeof chosen.model !== 'string' || !chosen.model.trim()) throw new Error(`Invalid model for role ${role.name}`);
-    return { name: role.name, model: chosen.model, thinking: chosen.thinking ?? null, presetIndex: presets.findIndex(p => p.model === chosen.model) };
+    return { name: role.name, editable, model: chosen.model, thinking: chosen.thinking ?? null, presetIndex: presets.findIndex(p => p.model === chosen.model) };
   });
   return { rows, presets, cursor: 0 };
 }
@@ -30,6 +31,7 @@ export function pickerKey(state, key) {
     const cursor = (state.cursor + (key === 'down' ? 1 : rows.length - 1)) % rows.length;
     return { state: { ...state, cursor } };
   }
+  if (!rows[state.cursor].editable) return { state };
   if (['left', 'right', 'tab', 'backtab'].includes(key)) {
     const direction = key === 'left' || key === 'backtab' ? -1 : 1;
     const row = rows[state.cursor];
@@ -54,13 +56,13 @@ export function pickerKey(state, key) {
 export function renderPicker(state) {
   const lines = [
     '',
-    '  Pi model selection for orca-team (presets from pi-models.json)',
+    '  orca-team roles: Pi models from Pi providers + pi-models.json; Codex uses local config',
     '  Up/Down: role   Left/Right or Tab: model   , / .: thinking   Enter: confirm   Esc: cancel',
     '',
   ];
   state.rows.forEach((row, index) => {
     const preset = row.presetIndex >= 0 ? state.presets[row.presetIndex] : null;
-    const model = preset ? (preset.label || preset.model) : `${row.model} (custom)`;
+    const model = !row.editable ? `codex/${row.model} (local config)` : preset ? (preset.label || preset.model) : `${row.model} (custom)`;
     lines.push(`  ${index === state.cursor ? '\u25b8' : ' '} ${row.name.padEnd(10)} ${model.padEnd(42)} thinking: ${row.thinking ?? 'default'}`);
   });
   lines.push('');
@@ -97,7 +99,7 @@ export async function pickPiModels({ roles, presets, initial = {}, stdin = proce
         state = result.state;
         write(renderPicker(state));
         if (result.done === 'confirm') {
-          finish(Object.fromEntries(state.rows.map(row => [row.name, { model: row.model, thinking: row.thinking }])));
+          finish(Object.fromEntries(state.rows.filter(row => row.editable).map(row => [row.name, { model: row.model, thinking: row.thinking }])));
           return;
         }
         if (result.done === 'cancel') { finish(null); return; }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyProcess, recoverInPane, provesSession, inspectHealth } from '../lib/health.mjs';
+import { classifyProcess, recoverInPane, confirmConversationOwnership, provesSession, inspectHealth } from '../lib/health.mjs';
 
 test('native resume proof requires exact original conversation and a live agent', () => {
   const saved = { agent: 'pi', session: { id: 'original', transcriptPath: 'C:/sessions/original.jsonl' } };
@@ -98,4 +98,41 @@ test('unverified shell sends nothing', async () => {
   await assert.rejects(recoverInPane({ name: 'test', saved: { agent: 'pi' },
     inspect: async () => ({ kind: 'unverifiable', reason: 'process_table_unreadable' }),
     cli: () => assert.fail('must not send') }), /cannot be verified/);
+});
+test('recovery retains pending when a briefly resumed agent exits', async () => {
+  const saved = { agent: 'pi', session: { id: 'original' } };
+  await assert.rejects(recoverInPane({ name: 'loader', saved, handle: 'h', command: 'resume',
+    inspect: async () => ({ kind: 'shell', terminal }), checkpoint: () => {},
+    verifyBinding: async () => {}, sleep: async () => {},
+    cli: async args => args[1] === 'read' ? { terminal: { tail: ['PS C:\\project>'] } } : { send: { accepted: true } }
+  }), /did not remain running/);
+  assert.equal(saved.pending, true);
+});
+test('recovery verifies sustained agent identity before clearing pending', async () => {
+  const saved = { agent: 'pi', session: { id: 'original' }, restartIntent: {} };
+  let inspections = 0, bindings = 0;
+  await recoverInPane({ name: 'loader', saved, handle: 'h', command: 'resume',
+    inspect: async () => ({ kind: ++inspections <= 2 ? 'shell' : 'agent', terminal }),
+    checkpoint: () => {}, verifyBinding: async () => { bindings++; }, sleep: async () => {},
+    cli: async args => args[1] === 'read' ? { terminal: { tail: ['PS C:\\project>'] } } : { send: { accepted: true } }
+  });
+  assert.equal(bindings, 2);
+  assert.equal(saved.pending, undefined);
+  assert.equal(saved.restartIntent, undefined);
+});
+test('Codex resume takes over a conversation still open in another client', async () => {
+  const calls = [];
+  let locked = true;
+  const cli = async args => {
+    calls.push(args);
+    if (args[1] === 'read') return { terminal: { source: 'screen', tail: locked ? ['🔒 This conversation is open in another app', 'Close it there and press R to continue here.'] : ['› Ask Codex to do anything'] } };
+    if (args[1] === 'send' && args.at(-1) === 'R') { locked = false; return { send: { accepted: true } }; }
+    return { send: { accepted: true } };
+  };
+  await confirmConversationOwnership({ name: 'coder1', saved: { agent: 'codex' }, handle: 'h', cli, sleep: async () => {} });
+  assert.equal(calls.filter(args => args[1] === 'send').length, 1);
+  assert.deepEqual(calls.find(args => args[1] === 'send'), ['terminal', 'send', '--terminal', 'h', '--text', 'R']);
+  await assert.rejects(confirmConversationOwnership({ name: 'coder1', saved: { agent: 'codex' }, handle: 'h', attempts: 2, sleep: async () => {},
+    cli: async () => ({ terminal: { tail: ['This conversation is open in another app'] } }) }), /takeover was not confirmed/);
+  await confirmConversationOwnership({ name: 'master', saved: { agent: 'pi' }, handle: 'h', cli: () => assert.fail('must not read Pi screens') });
 });

@@ -1,7 +1,7 @@
 # Restart with current local credentials
 
 ## Overview
-`orca-team restart` restarts every configured role in order; `restart ROLE` targets one role. Original panes and conversations are retained.
+`orca-team restart` restarts every configured role; `restart ROLE` targets one role. Original panes and conversations are retained. The default `orca-team` command now uses the same restart path: every role whose pane is running its provider agent is restarted with the configured agent, model, and thinking level, so a team that Orca restored on its own is normalized by one invocation.
 
 ## Design and state
 Each role uses the existing project lock, verifies idle state, sends one exit, verifies a shell, then launches the original conversation through the installed launcher. Busy or unverified roles are reported while other roles continue; any failure returns nonzero. Restart intent and pending markers preserve ambiguous operations.
@@ -10,7 +10,7 @@ Each role uses the existing project lock, verifies idle state, sends one exit, v
 New provider processes read current local configuration. Codex roles with piProvider read the latest Pi models.json key at launch. Ordinary Codex uses its local authentication/configuration. Restart does not change credential files or update keys inherited from an unchanged parent shell environment.
 
 ## Verification
-59 tests pass. Whole-team live run restarted all nine roles; master initially required binding reconciliation. After the Pi launch-wrapper verification fix, master restart returned success directly. All nine original conversations were verified after the whole-team run. Single-role simple restart also passed. No credential values were changed for testing.
+The Node suite passes, including reload tests that assert every running role is queued for restart, that none is queued when no pane is live, and that plain shells are left to the startup phase. Live runs restarted all nine roles; roles that were mid-turn reported `agent is busy` or an unverified exit and restarted successfully when retried individually. No credential values were changed for testing.
 
 ## UI
 No new UI; terminal output reports each role.
