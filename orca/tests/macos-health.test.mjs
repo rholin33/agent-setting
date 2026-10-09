@@ -47,3 +47,32 @@ test('macOS verifies a foreground idle shell but refuses unknown shell descendan
  assert.ok(macTree([root,shell],1,'pi'));
  assert.equal(macTree([root,shell,{...agent,pid:3,parent:2,name:'curl'}],1,'pi'),null);
 });
+
+import { parseMacProcesses, readPiProof } from '../lib/macos-health.mjs';
+test('macOS parses exited commands but refuses malformed identity rows', () => {
+ const rows = parseMacProcesses('42 1 42 42 ttys001 Thu Oct 8 14:00:00 2026 pi\n43 1 43 -1 ?? Thu Oct 8 14:00:01 2026 ');
+ assert.equal(rows[0].name, 'pi');
+ assert.equal(rows[1].name, '<exited>');
+ assert.throws(() => parseMacProcesses('42 incomplete'), /Incomplete/);
+});
+test('missing Pi identity proof does not authorize a conversation', () => {
+ assert.equal(readPiProof(999999999, 'Thu Oct 8 14:00:00 2026', {worktreePath:'/unknown',tabId:'tab',leafId:'pane'}),null);
+});
+
+test('Pi proof rejects stale PID identity, another pane and mismatched transcript', t => {
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'pi-proof-'));
+ const previous=process.env.ORCA_TEAM_HOME;
+ process.env.ORCA_TEAM_HOME=home;
+ t.after(()=>{if(previous===undefined)delete process.env.ORCA_TEAM_HOME;else process.env.ORCA_TEAM_HOME=previous;fs.rmSync(home,{recursive:true,force:true});});
+ const directory=path.join(home,'runtime','session-proofs');fs.mkdirSync(directory,{recursive:true});
+ const transcriptPath=path.join(home,'session.jsonl');
+ fs.writeFileSync(transcriptPath,JSON.stringify({type:'session',id:'original',cwd:home})+'\n');
+ const proof={pid:42,created:'start',cwd:home,paneKey:'tab:pane',session:{id:'original',transcriptPath}};
+ fs.writeFileSync(path.join(directory,'42.json'),JSON.stringify(proof));
+ const terminal={worktreePath:home,tabId:'tab',leafId:'pane'};
+ assert.deepEqual(readPiProof(42,'start',terminal),proof.session);
+ assert.equal(readPiProof(42,'later',terminal),null);
+ assert.equal(readPiProof(42,'start',{...terminal,leafId:'other'}),null);
+ fs.writeFileSync(transcriptPath,JSON.stringify({type:'session',id:'other',cwd:home})+'\n');
+ assert.equal(readPiProof(42,'start',terminal),null);
+});

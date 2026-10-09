@@ -136,3 +136,15 @@ test('Codex resume takes over a conversation still open in another client', asyn
     cli: async () => ({ terminal: { tail: ['This conversation is open in another app'] } }) }), /takeover was not confirmed/);
   await confirmConversationOwnership({ name: 'master', saved: { agent: 'pi' }, handle: 'h', cli: () => assert.fail('must not read Pi screens') });
 });
+
+test('shell recovery clears only mouse report residue and still verifies the prompt', async () => {
+ const saved={agent:'pi',session:{id:'original'}};
+ let reads=0,inspections=0;const sends=[];
+ await recoverInPane({name:'master',saved,handle:'h',command:'resume',sleep:async()=>{},checkpoint:()=>{},verifyBinding:async()=>{},
+  inspect:async()=>({kind:++inspections<=2?'shell':'agent',terminal}),
+  cli:async args=>{
+   if(args[1]==='read')return {terminal:{tail:[++reads===1?'35;17;43M35;8;42M':'user@host %']}};
+   sends.push(args[args.indexOf('--text')+1]);return {send:{accepted:true}};
+  }});
+ assert.deepEqual(sends,['\u0003','resume']);
+});

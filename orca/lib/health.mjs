@@ -60,7 +60,16 @@ export async function recoverInPane({ name, saved, handle, command, cli, inspect
   const before = await inspect(handle, saved.agent);
   if (before.kind !== 'shell') throw new Error(`${name}: idle shell cannot be verified (${before.reason})`);
   // Reading the terminal immediately before send avoids pasting into a nonempty prompt.
-  const screen = (await cli(['terminal', 'read', '--terminal', handle, '--limit', '2000'])).terminal;
+  let screen = (await cli(['terminal', 'read', '--terminal', handle, '--limit', '2000'])).terminal;
+  // Pi can leave mouse reports in zsh after exit. Cancel only this recognized
+  // residue in a natively verified shell, then require a clean prompt again.
+  const tail = (screen.tail || []).filter(line => line.trim()).at(-1)?.trim() || '';
+  if (/^(?:.*[%$#>]\s*)?(?:\d*;\d+;\d+[Mm])+$/.test(tail)) {
+    const cancelled = await cli(['terminal', 'send', '--terminal', handle, '--text', '\u0003']);
+    if (cancelled.send?.accepted !== true) throw new Error(`${name}: shell input cleanup unconfirmed`);
+    await sleep(250);
+    screen = (await cli(['terminal', 'read', '--terminal', handle, '--limit', '2000'])).terminal;
+  }
   const last = (screen.tail || []).filter(line => line.trim()).at(-1)?.trim() || '';
   if (!/^(?:PS .+>|[^\n]*[$#%>]|➜ .+ [✗✔])$/.test(last)) throw new Error(`${name}: shell prompt is not empty`);
   const current = await inspect(handle, saved.agent);

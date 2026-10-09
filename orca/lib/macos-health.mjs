@@ -1,16 +1,21 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { daemonSessions } from './windows-health.mjs';
 import { snapshot as readSnapshot } from './orca.mjs';
 import { assertConversationAbsent } from './recovery-guards.mjs';
 
 export async function macProcesses() {
-  const { stdout } = await promisify(execFile)('/bin/ps', ['-axo', 'pid=,ppid=,pgid=,tpgid=,tty=,lstart=,comm='], { encoding: 'utf8', timeout: 5000 });
+  const { stdout } = await promisify(execFile)('/bin/ps', ['-axo', 'pid=,ppid=,pgid=,tpgid=,tty=,lstart=,comm='], { encoding: 'utf8', timeout: 5000, env: { ...process.env, LC_ALL: 'C' } });
+  return parseMacProcesses(stdout);
+}
+export function parseMacProcesses(stdout) {
   return stdout.trim().split('\n').map(line => {
-    const m = line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+(-?\d+)\s+(\S+)\s+(\w+\s+\w+\s+\d+\s+[\d:]+\s+\d+)\s+(.+)$/);
+    const m = line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+(-?\d+)\s+(\S+)\s+(\w+\s+\w+\s+\d+\s+[\d:]+\s+\d+)(?:\s+(.*))?$/);
     if (!m) throw new Error('Incomplete macOS process table');
-    return { pid: +m[1], parent: +m[2], group: +m[3], foreground: +m[4], tty: m[5], created: m[6], name: path.basename(m[7]) };
+    return { pid: +m[1], parent: +m[2], group: +m[3], foreground: +m[4], tty: m[5], created: m[6], name: path.basename(m[7] || '') || '<exited>' };
   });
 }
 export function macTree(rows, pid, provider) {
@@ -58,11 +63,29 @@ export async function inspectMac(terminal, provider, { inventory = daemonSession
       if (saved?.leafId === terminal.leafId && saved?.tabId === terminal.tabId && saved.session?.transcriptPath) sessionPaths.push(saved.session.transcriptPath);
     }
   }
+  if (provider === 'pi' && !sessionPaths.length) {
+    for (const pid of providerPids) {
+      const proof = readPiProof(pid, tree.find(row => row[0] === pid)?.[2], terminal);
+      if (proof) { sessionPaths.push(proof.transcriptPath); sessionIds.push(proof.id); }
+    }
+  }
   const check = macTree(await processes(), first[0].pid, provider);
   if (check !== b) throw new Error('macOS process changed while reading conversation arguments');
   const providerProcess = tree.find(row => row[5] === provider);
   return { terminal: current, kind: providerPids.length ? 'agent' : 'shell', sessionIds, sessionPaths, reason: 'macos_native_verified',
     providerStartedAt: providerProcess ? new Date(providerProcess[2]).toISOString() : undefined };
+}
+
+export function readPiProof(pid, created, terminal) {
+  const file = path.join(process.env.ORCA_TEAM_HOME || path.dirname(path.dirname(fileURLToPath(import.meta.url))), 'runtime', 'session-proofs', `${pid}.json`);
+  try {
+    const proof = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (proof.pid !== pid || proof.created !== created || proof.cwd !== terminal.worktreePath ||
+        proof.paneKey !== `${terminal.tabId}:${terminal.leafId}`) return null;
+    const header = JSON.parse(fs.readFileSync(proof.session.transcriptPath, 'utf8').split('\n')[0]);
+    if (header.type !== 'session' || header.id !== proof.session.id || header.cwd !== proof.cwd) return null;
+    return proof.session;
+  } catch { return null; }
 }
 
 // Prove closed conversations absent without relying on optional renderer tombstones.
@@ -110,7 +133,12 @@ export async function verifyMacAbsence({ project, missing, cli, inventory = daem
       if (JSON.parse(tree).some(row => row[5] === 'pi')) {
         const record = snap.sleepingAgentSessionsByPaneKey?.[`${terminal.tabId}:${terminal.leafId}`];
         if (record?.agent !== 'pi' || !record.providerSession?.id || record.connectionId || !sameWorktree(record.worktreeId, project)) {
-          throw new Error('Live Pi conversation is unbound; absence refused');
+          const providerProcess = JSON.parse(tree).find(row => row[5] === 'pi');
+          const proof = readPiProof(providerProcess[0], providerProcess[2], terminal);
+          if (!proof) throw new Error('Live Pi conversation is unbound; absence refused');
+          if (missing.some(({ saved }) => saved.session.id === proof.id || saved.session.transcriptPath === proof.transcriptPath)) {
+            throw new Error('Original conversation is running in another pane');
+          }
         }
       }
     }

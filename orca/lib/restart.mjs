@@ -1,4 +1,5 @@
 import path from 'node:path';
+import fs from 'node:fs';
 import { projectFiles, readJson, saveJson, withLock, validateConfig, focusDesktop } from './team.mjs';
 import { validateTranscript, sameWorktree, binding } from './sessions.mjs';
 import { captureSession } from './launch-state.mjs';
@@ -80,6 +81,14 @@ async function restartCore({ home, project, role, cli, snapshot, state, checkpoi
     let idle = null;
     try { idle = await cli(['terminal', 'wait', '--terminal', handle, '--for', 'tui-idle', '--timeout-ms', '3000']); }
     catch (error) { if (error.message !== 'timeout') throw error; }
+    if (!idle?.wait?.satisfied && saved.agent === 'codex') {
+      try {
+        const firstScreen = (await cli(['terminal', 'read', '--terminal', handle, '--screen'])).terminal;
+        await sleep(500);
+        const secondScreen = (await cli(['terminal', 'read', '--terminal', handle, '--screen'])).terminal;
+        idle = { wait: { satisfied: stableCodexIdle(firstScreen, secondScreen) } };
+      } catch { /* Missing screen evidence never authorizes restart. */ }
+    }
     if (!idle?.wait?.satisfied) throw new Error(`${role}: agent is busy; retry after its turn completes`);
     const screen = (await cli(['terminal', 'read', '--terminal', handle, '--screen'])).terminal;
     if (screen.source !== 'screen' || (screen.draft !== undefined && screen.draft !== null && screen.draft !== '')) {
@@ -137,15 +146,19 @@ export async function restartRole(options) {
   });
 }
 
-// Restart several roles concurrently under one lock. Busy, timed-out or
+// Restart several roles sequentially under one lock. Busy, timed-out or
 // unverifiable roles fail independently and never cancel their siblings.
 export async function restartRoles({ roles, ...options }) {
   const files = projectFiles(options.home, options.project);
   return withLock(files.lock, async () => {
     const state = readJson(files.state);
     const checkpoint = () => saveJson(files.state, state);
-    const settled = await Promise.allSettled(roles.map(role =>
-      restartCore({ ...options, role, state, checkpoint })));
+    // Desktop focus and screen evidence are shared: restart one pane at a time.
+    const settled = [];
+    for (const role of roles) {
+      try { await restartCore({ ...options, role, state, checkpoint }); settled.push({ status: 'fulfilled' }); }
+      catch (reason) { settled.push({ status: 'rejected', reason }); }
+    }
     saveJson(files.state, state);
     const reloaded = [], failed = [];
     settled.forEach((result, index) => {
@@ -170,7 +183,11 @@ export function resolveRestartRoles(config, catalog, targets = []) {
 
 export async function restartTeam(options) {
   const { home, project, log = console.log } = options;
-  const config = readJson(projectFiles(home, project).config);
+  const files = projectFiles(home, project);
+  if (!fs.existsSync(files.config) || !fs.existsSync(files.state)) {
+    throw new Error(`No initialized Orca team for ${project}; run from its project directory or specify --project PATH. Restart will not create a new team.`);
+  }
+  const config = readJson(files.config);
   const roles = resolveRestartRoles(config, readJson(path.join(home, 'team.json')), options.targets);
   const restart = options.restart || restartRole;
   const failures = [];
@@ -180,4 +197,12 @@ export async function restartTeam(options) {
   }
   if (failures.length) throw new Error(`Restart incomplete (${failures.length}/${roles.length}):\n${failures.join('\n')}`);
   log(`Restarted ${roles.length} roles with current local configuration; original conversations preserved`);
+}
+
+export function stableCodexIdle(first, second) {
+  if (first.source !== 'screen' || second.source !== 'screen') return false;
+  if ([first, second].some(screen => screen.draft != null && screen.draft !== '')) return false;
+  const a = (first.tail || []).join('\n'), b = (second.tail || []).join('\n');
+  if (a !== b || !/^\s*›\s*(?:Ask Codex to do anything)?\s*$/m.test(b)) return false;
+  return !/(?:esc to interrupt|Working\s*\(|Would you like|Do you want|open in another app)/i.test(b);
 }

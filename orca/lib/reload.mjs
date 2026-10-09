@@ -5,7 +5,7 @@ import { sameWorktree } from './sessions.mjs';
 import { restartRoles } from './restart.mjs';
 
 // 统一命令语义：运行中的角色一律按当前配置重启（保留原会话），无论之前应用过什么配置，
-// 这样 Orca 重启后由 Orca 自己恢复的窗格也会回到配置状态。并发重启；忙碌、超时或无法
+// 这样 Orca 重启后由 Orca 自己恢复的窗格也会回到配置状态。逐个重启；忙碌、超时或无法
 // 验证的角色只告警不计为已重启，不会丢失进行中的工作；没有运行的角色留给 runTeam 启动或恢复。
 export async function reloadRunning({ home, project, names, cli, snapshot, inspect, log = console.log, restart = restartRoles, now = Date.now }) {
   const files = projectFiles(home, project);
@@ -38,6 +38,6 @@ export async function reloadRunning({ home, project, names, cli, snapshot, inspe
   const { reloaded, failed } = await restart({ home, project, roles: stale, cli, snapshot, log });
   const skipped = failed;
   for (const item of failed) log(`Warning: ${item.name} not reloaded: ${item.reason}`);
-  if (reloaded.length) log(`Reloaded with current model config in parallel (${Math.round((now() - started) / 1000)}s): ${reloaded.join(', ')}`);
+  if (reloaded.length) log(`Reloaded with current model config sequentially (${Math.round((now() - started) / 1000)}s): ${reloaded.join(', ')}`);
   return { reloaded, skipped, current: [] };
 }

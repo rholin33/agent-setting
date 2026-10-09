@@ -7,6 +7,17 @@ import { restartRole } from '../lib/restart.mjs';
 import { initialize, readJson, saveJson } from '../lib/team.mjs';
 import { normalizeProject } from '../lib/platform.mjs';
 
+test('restart without initialized project reports how to select one and does not launch agents', async t => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'restart-missing-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const project = normalizeProject(path.join(home, 'other-project'));
+  let restarted = false;
+  await assert.rejects(restartTeam({ home, project, restart: async () => { restarted = true; } }),
+    error => error.message.includes(project) && error.message.includes('--project PATH'));
+  assert.equal(restarted, false);
+  assert.equal(fs.existsSync(path.join(home, 'projects')), false);
+});
+
 for (const provider of ['pi', 'codex']) test(`restart reconciles verified pending ${provider} conversation before exit`, async t => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'restart-pending-'));
   t.after(() => fs.rmSync(home, { recursive: true, force: true }));
@@ -206,4 +217,14 @@ test('restart accepts groups and multiple roles, deduplicates, and rejects unkno
  assert.deepEqual(resolveRestartRoles(config,catalog,['coder1','coder2']),['coder1','coder2']);
  assert.deepEqual(resolveRestartRoles(config,catalog,['coder','coder1']),['coder1','coder2']);
  assert.throws(()=>resolveRestartRoles(config,catalog,['coder','unknown']),/Unknown restart/);
+});
+
+import { stableCodexIdle } from '../lib/restart.mjs';
+test('Codex idle fallback requires stable empty prompt and refuses activity or drafts', () => {
+ const screen = {source:'screen',tail:['Done','› Ask Codex to do anything','GPT-6 medium']};
+ assert.equal(stableCodexIdle(screen,screen),true);
+ for (const other of [{...screen,draft:'hi'},{...screen,source:'stream'}, {...screen,tail:['Working (esc to interrupt)','› Ask Codex to do anything']}, {...screen,tail:['Done','› typed input']}]) {
+  assert.equal(stableCodexIdle(other,other),false);
+ }
+ assert.equal(stableCodexIdle(screen,{...screen,tail:['Changed','› Ask Codex to do anything']}),false);
 });

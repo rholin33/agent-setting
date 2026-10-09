@@ -147,12 +147,13 @@ test('Pi launches discover only their role skills on fresh and resumed sessions'
   fs.writeFileSync(path.join(skills, 'archi-advice', 'SKILL.md'), '---\nname: archi-advice\ndescription: Review architecture.\n---\n');
   const role = { agent: 'pi', model: 'model', role: 'agentroles.archi' };
   const prompt = path.join(home, 'generated', 'archi.md');
+  const extension = process.platform === 'darwin' ? ['--extension', path.join(home, 'lib', 'pi-session-proof.ts')] : [];
   const fresh = launchArguments(role, prompt, null, project, home);
-  assert.deepEqual(fresh.args, ['--model', 'model', '--append-system-prompt', prompt, '--skill', skills]);
+  assert.deepEqual(fresh.args, ['--model', 'model', '--append-system-prompt', prompt, ...extension, '--skill', skills]);
   const transcriptPath = path.join(home, 'archi.jsonl');
   fs.writeFileSync(transcriptPath, JSON.stringify({ type: 'session', id: 'original', cwd: project }) + '\n');
   const resumed = launchArguments(role, prompt, { id: 'original', transcriptPath }, project, home);
-  assert.deepEqual(resumed.args, ['--model', 'model', '--session', transcriptPath, '--append-system-prompt', prompt, '--skill', skills]);
+  assert.deepEqual(resumed.args, ['--model', 'model', '--session', transcriptPath, '--append-system-prompt', prompt, ...extension, '--skill', skills]);
   assert.equal(launchArguments({ ...role, role: 'agentroles.simple' }, prompt, null, project, home).args.includes('--skill'), false);
   assert.throws(() => launchArguments({ ...role, role: 'agentroles../archi' }, prompt, null, project, home), /Invalid Pi role/);
 });
@@ -429,4 +430,11 @@ test('split receipt timeout reconciles six groups without duplicate launches', a
   terminals.pop();
   await assert.rejects(runTeam(options), /No confirmed close record/);
   assert.equal(creations, 9);
+});
+
+test('Codex no-daemon is opt-in for supported CLI versions', t => {
+ const {home,project}=fixture(t);const prompt=path.join(home,'prompt.md');fs.writeFileSync(prompt,'instructions');
+ const role={agent:'codex',model:'model'};
+ assert.equal(launchArguments(role,prompt,null,project,home).args.includes('--no-daemon'),false);
+ assert.equal(launchArguments(role,prompt,null,project,home,{codexNoDaemon:true}).args.includes('--no-daemon'),true);
 });

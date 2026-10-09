@@ -43,7 +43,7 @@ export function validateTranscript(saved, project) {
   if (!meta || meta.id !== session.id || !sameWorktree(`local::${meta.cwd}`, project)) throw new Error('Original conversation identity/project mismatch');
   return session;
 }
-export function launchArguments(role, prompt, session, project, home) {
+export function launchArguments(role, prompt, session, project, home, { codexNoDaemon = false } = {}) {
   // 模型来自账本；Codex 账本在每次 start 时同步为本机 Codex 配置，显式传入
   // 可避免 resume 恢复会话内记录的旧模型和推理强度。
   const args = ['--model', role.model];
@@ -52,6 +52,10 @@ export function launchArguments(role, prompt, session, project, home) {
   if (role.agent === 'pi') {
     if (session) args.push('--session', session.transcriptPath);
     args.push('--append-system-prompt', prompt);
+    if (home && process.platform === 'darwin') {
+      args.push('--extension', path.join(home, 'lib', 'pi-session-proof.ts'));
+      env.ORCA_TEAM_HOME = home;
+    }
     if (role.role) {
       if (!home || !/^agentroles\.[a-zA-Z0-9_-]+$/.test(role.role)) throw new Error(`Invalid Pi role: ${role.role}`);
       const skills = path.join(home, 'source', role.role.slice('agentroles.'.length), 'skills');
@@ -59,6 +63,8 @@ export function launchArguments(role, prompt, session, project, home) {
     }
     if (role.thinking) args.push('--thinking', role.thinking);
   } else if (role.agent === 'codex') {
+    // Fixed-role PTYs own their runtime; /quit must release it for exact resume.
+    if (codexNoDaemon) args.push('--no-daemon');
     if (session) {
       args.unshift('resume', session.id);
       let directory = path.dirname(session.transcriptPath);

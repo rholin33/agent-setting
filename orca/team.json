@@ -16,21 +16,21 @@
   {
     "name": "archi",
     "agent": "pi",
-    "model": "pay/gpt-6-sol",
+    "model": "pay/gpt-6-astra",
     "thinking": "xhigh",
     "role": "agentroles.archi"
   },
   {
     "name": "coder1",
     "agent": "codex",
-    "model": "gpt-6-sol",
+    "model": "gpt-6-astra",
     "thinking": "medium",
     "role": "agentroles.coder"
   },
   {
     "name": "coder2",
     "agent": "codex",
-    "model": "gpt-6-sol",
+    "model": "gpt-6-astra",
     "thinking": "medium",
     "role": "agentroles.coder"
   },
@@ -44,8 +44,8 @@
   {
     "name": "reviewer",
     "agent": "codex",
-    "model": "gpt-6-sol",
-    "thinking": "xhigh",
+    "model": "gpt-6-astra",
+    "thinking": "medium",
     "role": "agentroles.code_reviewer"
   },
   {

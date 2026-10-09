@@ -202,3 +202,11 @@ When all project terminals have been closed, two authenticated native/desktop in
 ## Reload local keys
 
 After updating local provider credentials, run `orca-team restart` in the project to restart all configured roles in their original panes and conversations. `orca-team restart ROLE` restarts one role. Busy roles are skipped and reported; other roles continue. Any incomplete role makes the command exit nonzero. Credentials are reread by the launch path and are never printed or copied by restart. Keys inherited from an unchanged parent shell must be refreshed at their source first.
+
+## Portable restart compatibility
+
+On macOS, fixed Pi roles explicitly load the packaged `lib/pi-session-proof.ts` extension. It records only the current PID, process start time, pane identity, project path and original session identity under the installed team home's `runtime/session-proofs/`. These local records are never synchronized. Native PTY/process checks and transcript-header validation must match before a record is accepted. `ORCA_TEAM_HOME` controls the destination; no global Pi settings are changed.
+
+Codex launch checks the installed CLI help before enabling `--no-daemon`. Supported versions use a runtime owned by the role terminal so quitting releases it; older versions retain their existing launch arguments. Desktop restarts run sequentially because focus and screen verification are shared. Stable empty Codex screens supplement unavailable idle status; working, permission and takeover screens remain blocked. Recognized Pi mouse-report residue is cancelled only after an idle shell is verified, followed by another clean-prompt check.
+
+When a saved project has no live terminals, startup reveals an existing AGENTS.md or README.md through Orca's file-open CLI and waits briefly for its saved panes. Missing or ambiguous identities still stop recovery.

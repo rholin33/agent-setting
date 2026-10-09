@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { supportsNoDaemon } from '../lib/codex-capabilities.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -54,6 +55,19 @@ try {
     } else if (action === 'start') {
       if (await ensureOrca({ cli: orca })) console.log('Orca was started automatically');
       const files = projectFiles(home, project);
+      // Orca restores persisted PTYs when the workspace is revealed. Reveal via
+      // the supported file-open CLI before checking for retained tabs without PTYs.
+      const initial = orca(['terminal', 'list', '--worktree', `path:${project}`]);
+      if (!initial.terminals.length && fs.existsSync(files.state)) {
+        const document = ['AGENTS.md', 'README.md'].find(name => fs.existsSync(path.join(project, name)));
+        if (document) {
+          orca(['file', 'open', document, '--worktree', `path:${project}`]);
+          for (let attempt = 0; attempt < 20; attempt++) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            if (orca(['terminal', 'list', '--worktree', `path:${project}`]).terminals.length) break;
+          }
+        }
+      }
       const candidates = [path.join(project, '.orca', 'team.json'), files.config, path.join(home, 'layout.json')];
       const file = candidates.find(candidate => fs.existsSync(candidate));
       if (!file) throw new Error('No project or default layout configuration found');
@@ -101,7 +115,7 @@ try {
       const saved = values.resume || current?.session ? current : null;
       if (values.resume && !saved?.session) throw new Error('Original session is unavailable');
       const launchRole = saved ? { ...saved, model: role.model, thinking: role.thinking, agent: role.agent } : role;
-      const launch = launchArguments({ ...launchRole, role: role.role }, prompt, saved?.session, project, home);
+      const launch = launchArguments({ ...launchRole, role: role.role }, prompt, saved?.session, project, home, { codexNoDaemon: role.agent === 'codex' && supportsNoDaemon() });
       if (role.agent === 'codex' && role.piProvider) {
         const provider = readJson(path.join(os.homedir(), '.pi', 'agent', 'models.json')).providers?.[role.piProvider];
         if (!provider || provider.api !== 'openai-responses' || !provider.models?.some(model => model.id === role.model)) {
