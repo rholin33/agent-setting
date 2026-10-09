@@ -148,3 +148,77 @@ test('shell recovery clears only mouse report residue and still verifies the pro
   }});
  assert.deepEqual(sends,['\u0003','resume']);
 });
+
+test('dirty PowerShell prompt is cleared once before resuming the same shell', async () => {
+  const saved = { agent: 'pi', session: { id: 'original' } };
+  const sends = [];
+  let cleared = false, resumed = false;
+  await recoverInPane({ name: 'master', saved, handle: 'original-handle', command: 'resume-exact',
+    inspect: async () => ({ kind: resumed ? 'agent' : 'shell', terminal }), sleep: async () => {}, checkpoint: () => {}, verifyBinding: async () => {},
+    cli: async args => {
+      if (args[1] === 'read') return { terminal: { tail: [cleared ? 'PS D:\\Code\\sewpg>' : 'PS D:\\Code\\sewpg>[<35;4;40M'] } };
+      assert.equal(args[1], 'send');
+      sends.push(args);
+      if (args[5] === '\x03') cleared = true;
+      if (args[5] === 'resume-exact') resumed = true;
+      return { send: { accepted: true } };
+    } });
+  assert.deepEqual(sends.map(args => [args[5], args.includes('--enter')]), [['\x03', false], ['resume-exact', true]]);
+  assert.equal(saved.pending, undefined);
+});
+
+test('dirty prompt cannot be cleared if the process changes before Ctrl+C', async () => {
+  let checks = 0, sends = 0;
+  await assert.rejects(recoverInPane({ name: 'master', saved: { agent: 'pi' }, handle: 'h', command: 'resume',
+    inspect: async () => (++checks === 1 ? { kind: 'shell', terminal } : { kind: 'agent', terminal }),
+    cli: async args => {
+      if (args[1] === 'read') return { terminal: { tail: ['PS D:\\Code\\sewpg>junk'] } };
+      sends++; return { send: { accepted: true } };
+    } }), /process changed before prompt cleanup/);
+  assert.equal(sends, 0);
+});
+
+test('unrecognized terminal output is not cleared or resumed', async () => {
+  let sends = 0;
+  await assert.rejects(recoverInPane({ name: 'master', saved: { agent: 'pi' }, handle: 'h', command: 'resume',
+    inspect: async () => ({ kind: 'shell', terminal }),
+    cli: async args => {
+      if (args[1] === 'read') return { terminal: { tail: ['unrecognized output'] } };
+      sends++; return { send: { accepted: true } };
+    } }), /shell prompt is not empty/);
+  assert.equal(sends, 0);
+});
+
+test('unclean prompt after Ctrl+C never receives a resume command', async () => {
+  const sends = [];
+  await assert.rejects(recoverInPane({ name: 'master', saved: { agent: 'pi' }, handle: 'h', command: 'resume',
+    inspect: async () => ({ kind: 'shell', terminal }),
+    cli: async args => {
+      if (args[1] === 'read') return { terminal: { tail: ['PS D:\\Code\\sewpg>junk'] } };
+      sends.push(args); return { send: { accepted: true } };
+    } }), /shell prompt is not empty/);
+  assert.deepEqual(sends.map(args => args[5]), ['\x03']);
+});
+
+test('unconfirmed Ctrl+C never resumes the session', async () => {
+  const sends = [];
+  await assert.rejects(recoverInPane({ name: 'master', saved: { agent: 'pi' }, handle: 'h', command: 'resume',
+    inspect: async () => ({ kind: 'shell', terminal }),
+    cli: async args => {
+      if (args[1] === 'read') return { terminal: { tail: ['PS D:\\Code\\sewpg>junk'] } };
+      sends.push(args); return { send: { accepted: false } };
+    } }), /prompt cleanup was not confirmed/);
+  assert.deepEqual(sends.map(args => args[5]), ['\x03']);
+});
+
+test('changed process after Ctrl+C never receives a resume command', async () => {
+  const sends = [];
+  let checks = 0;
+  await assert.rejects(recoverInPane({ name: 'master', saved: { agent: 'pi' }, handle: 'h', command: 'resume',
+    inspect: async () => (++checks <= 2 ? { kind: 'shell', terminal } : { kind: 'agent', terminal }),
+    cli: async args => {
+      if (args[1] === 'read') return { terminal: { tail: ['PS D:\\Code\\sewpg>junk'] } };
+      sends.push(args); return { send: { accepted: true } };
+    } }), /process changed during prompt cleanup/);
+  assert.deepEqual(sends.map(args => args[5]), ['\x03']);
+});

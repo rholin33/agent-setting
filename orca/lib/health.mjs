@@ -60,18 +60,38 @@ export async function recoverInPane({ name, saved, handle, command, cli, inspect
   const before = await inspect(handle, saved.agent);
   if (before.kind !== 'shell') throw new Error(`${name}: idle shell cannot be verified (${before.reason})`);
   // Reading the terminal immediately before send avoids pasting into a nonempty prompt.
-  let screen = (await cli(['terminal', 'read', '--terminal', handle, '--limit', '2000'])).terminal;
-  // Pi can leave mouse reports in zsh after exit. Cancel only this recognized
-  // residue in a natively verified shell, then require a clean prompt again.
-  const tail = (screen.tail || []).filter(line => line.trim()).at(-1)?.trim() || '';
-  if (/^(?:.*[%$#>]\s*)?(?:\d*;\d+;\d+[Mm])+$/.test(tail)) {
+  const readPrompt = async () => {
+    const screen = (await cli(['terminal', 'read', '--terminal', handle, '--limit', '2000'])).terminal;
+    return (screen.tail || []).filter(line => line.trim()).at(-1)?.trim() || '';
+  };
+  const prompt = /^(?:PS .+>|[^\n]*[$#%>]|➜ .+ [✗✔])$/;
+  let last = await readPrompt();
+  // Preserve POSIX mouse-report cleanup alongside Windows prompt handling.
+  if (/^(?:.*[%$#>]\s*)?(?:\d*;\d+;\d+[Mm])+$/.test(last)) {
     const cancelled = await cli(['terminal', 'send', '--terminal', handle, '--text', '\u0003']);
     if (cancelled.send?.accepted !== true) throw new Error(`${name}: shell input cleanup unconfirmed`);
     await sleep(250);
-    screen = (await cli(['terminal', 'read', '--terminal', handle, '--limit', '2000'])).terminal;
+    last = await readPrompt();
   }
-  const last = (screen.tail || []).filter(line => line.trim()).at(-1)?.trim() || '';
-  if (!/^(?:PS .+>|[^\n]*[$#%>]|➜ .+ [✗✔])$/.test(last)) throw new Error(`${name}: shell prompt is not empty`);
+  if (!prompt.test(last)) {
+    if (!/^PS [^\r\n]+>/.test(last)) throw new Error(`${name}: shell prompt is not empty`);
+    const idle = await inspect(handle, saved.agent);
+    if (idle.kind !== 'shell' || idle.terminal.incarnationId !== before.terminal.incarnationId) {
+      throw new Error(`${name}: process changed before prompt cleanup`);
+    }
+    const cleared = await cli(['terminal', 'send', '--terminal', handle, '--text', '\x03']);
+    if (cleared.send?.accepted !== true) throw new Error(`${name}: prompt cleanup was not confirmed`);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt) await sleep(200);
+      const current = await inspect(handle, saved.agent);
+      if (current.kind !== 'shell' || current.terminal.incarnationId !== before.terminal.incarnationId) {
+        throw new Error(`${name}: process changed during prompt cleanup`);
+      }
+      last = await readPrompt();
+      if (prompt.test(last)) break;
+    }
+    if (!prompt.test(last)) throw new Error(`${name}: shell prompt is not empty`);
+  }
   const current = await inspect(handle, saved.agent);
   if (current.kind !== 'shell' || current.terminal.incarnationId !== before.terminal.incarnationId) {
     throw new Error(`${name}: process changed before resume`);

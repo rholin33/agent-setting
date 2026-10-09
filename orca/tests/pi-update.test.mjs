@@ -3,8 +3,28 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { updatePiBeforeStart } from '../lib/pi-update.mjs';
+import { updatePiBeforeStart, runPiUpdate } from '../lib/pi-update.mjs';
 import { projectFiles, saveJson } from '../lib/team.mjs';
+
+test('Windows Pi update supports cmd and both PowerShell editions', () => {
+  const calls = [];
+  const spawn = (...args) => { calls.push(args); return { status: 0 }; };
+  assert.equal(runPiUpdate('pi.cmd', ['update', '--all'], 'win32', spawn, 'cmd.exe').status, 0);
+  assert.equal(calls[0][0].toLowerCase().endsWith('cmd.exe'), true);
+  assert.deepEqual(calls[0][1], ['/d', '/s', '/c', 'pi.cmd update --all']);
+  assert.equal(calls[0][2].windowsHide, true);
+  for (const shell of ['powershell.exe', 'pwsh.exe', 'C:\\Program Files\\PowerShell\\7\\pwsh.exe']) {
+    runPiUpdate('pi.cmd', ['update', '--all'], 'win32', spawn, shell);
+    const [command, args, options] = calls.at(-1);
+    assert.equal(command, shell);
+    assert.deepEqual(args, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '& pi.cmd update --all; exit $LASTEXITCODE']);
+    assert.equal(options.windowsHide, true);
+  }
+  assert.throws(() => runPiUpdate('pi.cmd', ['update', '--all'], 'win32', spawn, 'bash.exe'), /Unsupported Windows update shell/);
+  assert.throws(() => runPiUpdate('pi.cmd', ['update', '--all; echo bad'], 'win32', spawn, 'pwsh.exe'), /Unexpected Pi update command/);
+  runPiUpdate('pi', ['update', '--all'], 'linux', spawn);
+  assert.deepEqual(calls.at(-1).slice(0, 2), ['pi', ['update', '--all']]);
+});
 
 test('Pi update is deferred for live project Pi panes and runs before first launch', async t => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-pi-update-'));

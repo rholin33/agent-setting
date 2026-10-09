@@ -275,7 +275,9 @@ test('pending resume with an absent pane waits for absence proof before retrying
     if (args[1] === 'list') return { terminals, visualLayouts: [{ root: { type: 'group', tabs } }] };
     if (args[1] === 'create') {
       created++;
-      assert.match(args[args.indexOf('--command') + 1], /--resume/);
+      const command = args[args.indexOf('--command') + 1];
+      const decoded = process.platform === 'win32' ? Buffer.from(command.split(' ').at(-1), 'base64').toString('utf16le') : command;
+      assert.match(decoded, /--resume/);
       const row = { handle: 'new', tabId: 'new-tab', leafId: 'new-leaf', worktreePath: project, connected: true };
       terminals.push(row); tabs.push({ tabId: row.tabId, panes: { type: 'pane-leaf', leafId: row.leafId } });
       snap.sleepingAgentSessionsByPaneKey[`${row.tabId}:${row.leafId}`] = { agent: 'codex', worktreeId: `repo::${project}`, providerSession: saved.session };

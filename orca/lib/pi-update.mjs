@@ -4,8 +4,25 @@ import { spawnSync } from 'node:child_process';
 import { projectFiles, readJson } from './team.mjs';
 import { sameWorktree } from './sessions.mjs';
 
-export async function updatePiBeforeStart({ home, project, names, cli, log = console.log,
-  run = (command, args) => spawnSync(command, args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }) }) {
+export function runPiUpdate(command, args, platform = process.platform, spawn = spawnSync, shell = process.env.ComSpec || 'cmd.exe') {
+  const options = { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, windowsHide: true };
+  if (platform === 'win32') {
+    // Invoke the batch entry explicitly in either supported Windows shell.
+    if (command !== 'pi.cmd' || args.join(' ') !== 'update --all') throw new Error('Unexpected Pi update command');
+    const shellName = path.win32.basename(shell).toLowerCase();
+    if (['cmd', 'cmd.exe'].includes(shellName)) {
+      return spawn(shell, ['/d', '/s', '/c', 'pi.cmd update --all'], options);
+    }
+    if (['powershell', 'powershell.exe', 'pwsh', 'pwsh.exe'].includes(shellName)) {
+      return spawn(shell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '& pi.cmd update --all; exit $LASTEXITCODE'], options);
+    }
+    throw new Error(`Unsupported Windows update shell: ${shell}`);
+  }
+  return spawn(command, args, options);
+}
+
+export async function updatePiBeforeStart({ home, project, names, cli, log = console.log, shell,
+  run = (command, args) => runPiUpdate(command, args, process.platform, spawnSync, shell) }) {
   const files = projectFiles(home, project);
   const catalog = readJson(path.join(home, 'team.json'));
   const piNames = catalog.filter(role => role.agent === 'pi').map(role => role.name);
