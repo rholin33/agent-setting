@@ -52,6 +52,7 @@ class SyncExclusionsTest(unittest.TestCase):
         self.write(self.project / ".ccb/project.identity.json", '{"project_slug":"sample"}\n')
         self.write(self.project / ".ccb" / AGENT_SETTINGS, "local runtime settings\n")
         self.write(self.repo / "scripts/sync-local-config.sh", (ROOT / "scripts/sync-local-config.sh").read_text())
+        self.write(self.repo / "codex/AGENTS.orca.md", "# Orca instructions\n")
         self.write(self.repo / ".gitignore", (ROOT / ".gitignore").read_text())
 
     @staticmethod

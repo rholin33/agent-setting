@@ -17,10 +17,11 @@ export function captureSession(saved, live, project, observed) {
   const explicit = saved.launchIntent?.transcriptPath;
   if (!session && saved.agent === 'pi') {
     const candidates = explicit ? [explicit] : [...new Set(paths)];
-    // 预创建的空 transcript 只占位；Pi 写入 session header 后才有会话身份。
-    const persisted = candidates.filter(file => fs.existsSync(file) && fs.statSync(file).size > 0);
-    if (candidates.length === 1 && persisted.length === 1) {
-      const header = JSON.parse(fs.readFileSync(candidates[0], 'utf8').split('\n')[0]);
+    if (candidates.length === 1 && fs.existsSync(candidates[0])) {
+      const text = fs.readFileSync(candidates[0], 'utf8');
+      // Pi precreates the file before writing its session header. Retry during startup.
+      if (!text.includes('\n')) return false;
+      const header = JSON.parse(text.split('\n')[0]);
       session = { key: 'session_id', id: header.id, transcriptPath: candidates[0] };
     }
   }

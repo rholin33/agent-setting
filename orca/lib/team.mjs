@@ -9,7 +9,7 @@ import { rpc } from './orca.mjs';
 import { prepareLaunch, captureSession } from './launch-state.mjs';
 import { pinGroupTabs } from './tabs.mjs';
 import { verifyWindowsAbsence } from './windows-health.mjs';
-import { assertUniqueRoleTabs, assertConversationAbsent } from './recovery-guards.mjs';
+import { assertUniqueRoleTabs, assertConversationAbsent, reconcileRoleTabs } from './recovery-guards.mjs';
 
 export const readJson = file => JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
 export function saveJson(file, value) {
@@ -121,7 +121,7 @@ export async function focusDesktop(handle) {
   if (process.platform === 'darwin') execFileSync('/usr/bin/open', ['-a', 'Orca']);
   return rpc('terminal.focus', { terminal: handle, navigation: 'host' });
 }
-export async function runTeam({ home, project, action, group, cli, snapshot, pin = pinGroupTabs, focus = focusDesktop, verifyAbsent = process.platform === 'darwin' ? verifyMacAbsence : verifyWindowsAbsence, inspect = (handle, provider) => inspectHealth(cli, rpc, handle, provider), sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), log = console.log }) {
+export async function runTeam({ home, project, action, group, cli, snapshot, published = worktree => rpc('session.tabs.list', { worktree }), pin = pinGroupTabs, focus = focusDesktop, verifyAbsent = process.platform === 'darwin' ? verifyMacAbsence : verifyWindowsAbsence, inspect = (handle, provider) => inspectHealth(cli, rpc, handle, provider), sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), log = console.log }) {
   project = normalizeProject(project);
   const files = projectFiles(home, project);
   if (action === 'start') await initialize(home, project);
@@ -144,8 +144,14 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pin
       await cli(['repo', 'add', '--path', project]); inventory = await list();
     }
     const resolved = {}, resume = {}, health = {}, issues = [], missing = [];
-    const snap = await snapshot();
-    if (action === 'start') assertUniqueRoleTabs(snap, project, config, inventory);
+    let snap = await snapshot();
+    if (action === 'start') {
+      snap = await reconcileRoleTabs({ snapshot: snap, project, config, state, inventory,
+        published: () => published(`path:${project}`), verifyAbsent: args => verifyAbsent({ ...args, cli }) });
+      assertUniqueRoleTabs(snap, project, config, inventory);
+      // Persist the absence proof before creating any replacement pane.
+      saveJson(files.state, state);
+    }
     for (const name of names) {
       const saved = state.agents[name];
       if (!saved) continue;

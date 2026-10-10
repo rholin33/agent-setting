@@ -10,7 +10,7 @@
     "name": "loader",
     "agent": "pi",
     "model": "local/deepseek-v4.1-flash",
-    "thinking": null,
+    "thinking": "medium",
     "role": "agentroles.ccb_self"
   },
   {
@@ -23,14 +23,14 @@
   {
     "name": "coder1",
     "agent": "codex",
-    "model": "gpt-6-astra",
+    "model": "gpt-6.1-sol",
     "thinking": "medium",
     "role": "agentroles.coder"
   },
   {
     "name": "coder2",
     "agent": "codex",
-    "model": "gpt-6-astra",
+    "model": "gpt-6.1-sol",
     "thinking": "medium",
     "role": "agentroles.coder"
   },
@@ -44,7 +44,7 @@
   {
     "name": "reviewer",
     "agent": "codex",
-    "model": "gpt-6-astra",
+    "model": "gpt-6.1-sol",
     "thinking": "medium",
     "role": "agentroles.code_reviewer"
   },
@@ -58,8 +58,8 @@
   {
     "name": "simple",
     "agent": "pi",
-    "model": "local/deepseek-v4.1-flash",
-    "thinking": "medium",
+    "model": "pay/gpt-6.1-sol",
+    "thinking": "xhigh",
     "role": "agentroles.simple"
   }
 ]

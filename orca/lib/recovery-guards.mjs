@@ -1,5 +1,45 @@
 import { sameWorktree } from './sessions.mjs';
 
+// The renderer can retire a pane while the persisted snapshot still lists its tab.
+// Never infer process absence from that snapshot alone, and retain the saved history.
+export async function reconcileRoleTabs({ snapshot, project, config, state, inventory, published, verifyAbsent }) {
+  const result = structuredClone(snapshot);
+  const tabs = Object.entries(result.tabsByWorktree || {})
+    .filter(([key]) => sameWorktree(key, project)).flatMap(([, rows]) => rows);
+  const titles = new Set(config.tabs.map(group => group.displayTitle || group.title));
+  const stale = [...new Map(tabs.filter(tab => titles.has((tab.customTitle || tab.title || '').trim()) &&
+    !inventory.terminals.some(row => row.tabId === tab.id)).map(tab => [tab.id, tab])).values()];
+  if (!stale.length) return result;
+  const visible = await published();
+  if (!Array.isArray(visible?.tabs)) throw new Error('Published tab inventory unavailable; recovery refused');
+  for (const tab of stale) {
+    if (visible.tabs.some(row => row.parentTabId === tab.id || row.id === tab.id)) {
+      throw new Error(`Durable tab ${tab.id} still has an original pane in Orca; recovery refused`);
+    }
+    const proof = state.retiredTabs?.[tab.id];
+    if (proof && sameWorktree(`local::${proof.project}`, project) && Object.keys(proof.sessions || {}).length &&
+        Object.entries(proof.sessions).every(([name, id]) => state.agents[name]?.session?.id === id)) {
+      // A replacement may now run this conversation; the proof was recorded before it launched.
+      continue;
+    }
+    const group = config.tabs.find(group => (group.displayTitle || group.title) === (tab.customTitle || tab.title || '').trim());
+    const missing = group.agents.map(name => ({ name, saved: state.agents[name] }));
+    if (missing.some(({ saved }) => !saved?.session?.id || saved.tabId !== tab.id)) {
+      throw new Error(`Tab ${tab.id}: original conversation binding unavailable; recovery refused`);
+    }
+    assertConversationAbsent(result, project, missing, inventory.terminals);
+    if (await verifyAbsent({ project, missing }) !== true) throw new Error(`Tab ${tab.id}: process absence was not verified`);
+    state.retiredTabs ||= {};
+    state.retiredTabs[tab.id] = { project, verifiedAt: new Date().toISOString(),
+      sessions: Object.fromEntries(missing.map(({ name, saved }) => [name, saved.session.id])) };
+  }
+  const ids = new Set(stale.map(tab => tab.id));
+  for (const [key, rows] of Object.entries(result.tabsByWorktree || {})) {
+    if (sameWorktree(key, project)) result.tabsByWorktree[key] = rows.filter(tab => !ids.has(tab.id));
+  }
+  return result;
+}
+
 // A missing PTY does not mean its durable tab has been closed.
 export function assertUniqueRoleTabs(snapshot, project, config, inventory) {
   const tabs = Object.entries(snapshot.tabsByWorktree || {})

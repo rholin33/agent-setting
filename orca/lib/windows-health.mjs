@@ -159,7 +159,7 @@ export async function inspectWindows(terminal, provider, { inventory = daemonSes
   const match = list => list.sessions.filter(s => s.terminalHandle === terminal.handle && s.sessionId === terminal.ptyId && s.incarnationId === terminal.incarnationId && s.isAlive && !s.wslDistro);
   const before = await inventory(), initial = match(before);
   if (initial.length !== 1) throw new Error('windows_pane_identity_unavailable');
-  const first = await processes(), second = await processes();
+  const [first, second] = await Promise.all([processes(), processes()]);
   const after = await inventory(), final = match(after);
   const current = show ? await show() : terminal;
   if (final.length !== 1 || initial[0].pid !== final[0].pid || initial[0].sessionId !== final[0].sessionId ||

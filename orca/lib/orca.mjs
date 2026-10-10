@@ -2,17 +2,25 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { dataDirectory } from './platform.mjs';
 
-export function orca(args) {
-  const result = spawnSync(process.env.ORCA_CLI_COMMAND || (process.platform === 'linux' ? 'orca-ide' : 'orca'), [...args, '--json'], { encoding: 'utf8', windowsHide: true, maxBuffer: 32 * 1024 * 1024 });
-  if (result.error) throw result.error;
+export async function orca(args) {
+  let result;
+  try {
+    result = { ...await promisify(execFile)(process.env.ORCA_CLI_COMMAND || (process.platform === 'linux' ? 'orca-ide' : 'orca'), [...args, '--json'], { encoding: 'utf8', windowsHide: true, maxBuffer: 32 * 1024 * 1024 }), status: 0 };
+  } catch (error) {
+    if (!error.stdout) throw error;
+    result = { stdout: error.stdout, status: error.code };
+  }
   let reply;
   try { reply = JSON.parse(result.stdout.replace(/^\uFEFF/, '')); }
   catch { throw new Error('Orca returned invalid JSON; request will not be retried.'); }
-  if (result.status !== 0 || reply.ok === false) {
-    const error = new Error(reply.error?.message || 'Orca command failed');
+  const unsatisfiedWait = args[0] === 'terminal' && args[1] === 'wait' && reply.ok === true &&
+    typeof reply.result?.wait?.satisfied === 'boolean';
+  if ((!unsatisfiedWait && result.status !== 0) || reply.ok === false) {
+    const error = new Error(reply.error?.message || reply.error?.code || `Orca command failed: ${JSON.stringify(reply.error || reply)}`);
     error.code = reply.error?.code;
     error.selector = reply.error?.data?.selector;
     throw error;

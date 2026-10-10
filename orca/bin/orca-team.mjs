@@ -8,18 +8,36 @@ import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { normalizeProject, quote } from '../lib/platform.mjs';
 import { orca, snapshot, rpc } from '../lib/orca.mjs';
-import { initialize, runTeam, readJson, saveJson, projectFiles } from '../lib/team.mjs';
+import { initialize, runTeam, readJson, saveJson, projectFiles, withLock } from '../lib/team.mjs';
 import { launchArguments } from '../lib/sessions.mjs';
 import { restartTeam } from '../lib/restart.mjs';
 import { inspectHealth } from '../lib/health.mjs';
 import { ensureOrca } from '../lib/orca-boot.mjs';
 import { syncModels } from '../lib/model-sync.mjs';
-import { updatePiBeforeStart } from '../lib/pi-update.mjs';
+import { updateAgentsBeforeStart } from '../lib/agent-update.mjs';
+import { updateLifecycle } from '../lib/update-lifecycle.mjs';
 import { reloadRunning } from '../lib/reload.mjs';
 import { taskHistory } from '../lib/history.mjs';
 import { deploy, installQuickCommands, registerShellProfile } from '../lib/install.mjs';
 
 const source = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const startedAt = Date.now();
+async function stage(label, action) {
+  const before = Date.now();
+  try { return await action(); }
+  finally { console.log(`${label}: ${((Date.now() - before) / 1000).toFixed(1)}s`); }
+}
+async function updatePrehook(home, names) {
+  const catalog = readJson(path.join(home, 'team.json'));
+  const agents = catalog.filter(role => !names || names.includes(role.name)).map(role => role.agent);
+  try {
+    return await withLock(path.join(home, 'agent-update.lock'), () => updateAgentsBeforeStart({ agents,
+      lifecycle: updateLifecycle({ home, cli: orca, snapshot }) }));
+  } catch (error) {
+    if (/session recovery|partial shutdown recovery/.test(error.message)) throw error;
+    console.log(`Warning: update prehook skipped: ${error.message}; continuing startup`);
+  }
+}
 try {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: { home: { type: 'string' }, project: { type: 'string' }, role: { type: 'string' }, group: { type: 'string' }, fresh: { type: 'string', multiple: true }, cached: { type: 'boolean' }, resume: { type: 'boolean' }, 'quick-commands': { type: 'boolean' }, 'shell-profile': { type: 'string' }, 'no-pick': { type: 'boolean' }, help: { type: 'boolean' } } });
   const action = positionals[0] || 'start';
@@ -29,7 +47,7 @@ try {
   if (values.group !== undefined && !['start', 'status'].includes(action)) throw new Error('--group is only supported for start/status');
   if (values.fresh?.length && action !== 'start') throw new Error('--fresh is only supported for start');
   if (values.help) {
-    console.log('orca-team [status|history [ROLE]|init|install|export-config] [--group TITLE] [--project PATH] [--home PATH] [--fresh ROLE] [--no-pick]\nDefault: bring the selected project to the configured state. Create missing roles, resume original conversations in idle panes, and restart every running role with the configured agent/model/thinking while keeping its conversation. Busy or unverifiable roles are reported as incomplete.\nstart is an alias for the default command; restart [ROLE|GROUP ...] restarts a subset on demand.\n--fresh ROLE (repeatable) drops one stopped role\'s saved pane/session binding and starts that role in a new pane; it refuses while the role is running.\n--no-pick skips the Pi model picker. install --quick-commands registers Orca grouped global shortcuts.');
+    console.log('orca-team [status|history [ROLE]|init|install|export-config] [--group TITLE] [--project PATH] [--home PATH] [--fresh ROLE] [--no-pick]\nDefault: bring the selected project to the configured state. Create missing roles, resume original conversations in idle panes, and reuse matching running roles and reload only changed agent/model/thinking configurations while keeping their conversations. Busy or unverifiable roles are reported as incomplete.\nstart is an alias for the default command; restart [ROLE|GROUP ...] restarts a subset on demand.\n--fresh ROLE (repeatable) drops one stopped role\'s saved pane/session binding and starts that role in a new pane; it refuses while the role is running.\n--no-pick skips the Pi model picker. install --quick-commands registers Orca grouped global shortcuts.');
   } else {
     const home = path.resolve(values.home || process.env.ORCA_TEAM_HOME || path.join(os.homedir(), '.orca', 'roles', 'ccb-team'));
     const project = normalizeProject(fs.realpathSync(values.project || process.cwd()));
@@ -51,20 +69,22 @@ try {
     } else if (action === 'history') {
       console.log(JSON.stringify(await taskHistory({ home, project, role: roleName, cli: orca, cached: values.cached }), null, 2));
     } else if (action === 'restart') {
+      await stage('Orca connection', () => ensureOrca({ cli: orca }));
+      await stage('Agent update prehook', () => updatePrehook(home));
       await restartTeam({ home, project, targets: [...(values.role ? [values.role] : []), ...positionals.slice(1)], cli: orca, snapshot });
     } else if (action === 'start') {
-      if (await ensureOrca({ cli: orca })) console.log('Orca was started automatically');
+      if (await stage('Orca connection', () => ensureOrca({ cli: orca }))) console.log('Orca was started automatically');
       const files = projectFiles(home, project);
       // Orca restores persisted PTYs when the workspace is revealed. Reveal via
       // the supported file-open CLI before checking for retained tabs without PTYs.
-      const initial = orca(['terminal', 'list', '--worktree', `path:${project}`]);
+      const initial = await orca(['terminal', 'list', '--worktree', `path:${project}`]);
       if (!initial.terminals.length && fs.existsSync(files.state)) {
         const document = ['AGENTS.md', 'README.md'].find(name => fs.existsSync(path.join(project, name)));
         if (document) {
-          orca(['file', 'open', document, '--worktree', `path:${project}`]);
+          await orca(['file', 'open', document, '--worktree', `path:${project}`]);
           for (let attempt = 0; attempt < 20; attempt++) {
             await new Promise(resolve => setTimeout(resolve, 500));
-            if (orca(['terminal', 'list', '--worktree', `path:${project}`]).terminals.length) break;
+            if ((await orca(['terminal', 'list', '--worktree', `path:${project}`])).terminals.length) break;
           }
         }
       }
@@ -95,12 +115,13 @@ try {
           saveJson(files.state, state);
         }
       }
-      await updatePiBeforeStart({ home, project, names, cli: orca, snapshot });
-      await syncModels({ home, names, pick: !values['no-pick'] });
-      // 统一语义：先按当前配置重启正在运行的角色，再让启动阶段创建或恢复其余窗格。
-      const { skipped } = await reloadRunning({ home, project, names, cli: orca, snapshot,
-        inspect: (handle, provider) => inspectHealth(orca, rpc, handle, provider) });
-      await runTeam({ home, project, action, group: values.group, cli: orca, snapshot });
+      await stage('Agent update prehook', () => updatePrehook(home, names));
+      await stage('Model selection', () => syncModels({ home, names, pick: !values['no-pick'] }));
+      // Reuse matching roles; only changed configurations need an exit/resume cycle.
+      const { skipped, current } = await stage('Configuration reload', () => reloadRunning({ home, project, names, cli: orca, snapshot,
+        inspect: (handle, provider) => inspectHealth(orca, rpc, handle, provider) }));
+      if (current.length) console.log(`Configuration unchanged; reusing: ${current.join(', ')}`);
+      await stage('Layout and conversation recovery', () => runTeam({ home, project, action, group: values.group, cli: orca, snapshot }));
       if (skipped.length) throw new Error(`Roles not restarted: ${skipped.map(item => `${item.name}: ${item.reason}`).join('; ')}`);
     } else if (action === 'status') {
       await runTeam({ home, project, action, group: values.group, cli: orca, snapshot });
@@ -148,6 +169,11 @@ try {
         launch.args.push('--session', transcript,
           `Initialize the fixed ${role.name} role using the loaded instructions. Reply only "${role.name} ready". Do not call tools or start tasks.`);
       }
+      if (role.agent === 'codex' && process.env.ORCA_CODEX_LAUNCH_PREFLIGHT) {
+        const preparation = spawnSync(process.env.ORCA_CODEX_LAUNCH_PREFLIGHT,
+          ['agent', 'hooks', 'prepare-codex'], { env: { ...process.env, ...launch.env }, windowsHide: true, encoding: 'utf8' });
+        if (preparation.error || preparation.status !== 0) throw new Error('Orca Codex hook preparation failed');
+      }
       let executable = launch.executable, args = launch.args;
       if (process.platform === 'win32') {
         const script = '& ' + [executable, ...args].map(value => quote(value, 'win32')).join(' ');
@@ -159,3 +185,4 @@ try {
     } else throw new Error(`Unknown action: ${action}`);
   }
 } catch (error) { console.error(error.message); process.exitCode = 1; }
+finally { if (!process.argv.includes('--help') && !process.argv.includes('export-config')) console.log(`Total: ${((Date.now() - startedAt) / 1000).toFixed(1)}s`); }

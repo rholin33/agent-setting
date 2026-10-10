@@ -11,8 +11,8 @@ const runtimeFile = () => path.join(dataDirectory(), 'orca-runtime.json');
 // failures mean Orca itself is not running.
 export function isRuntimeError(error) {
   const message = String(error?.message || '');
-  return error?.code === 'ENOENT' ||
-    /not running|runtime|metadata|invalid JSON|ECONNREFUSED|EPERM|timed? ?out/i.test(message);
+  return error?.code === 'ENOENT' || error?.code === 'runtime_unavailable' ||
+    /not running|could not connect to the running Orca app|runtime|metadata|invalid JSON|ECONNREFUSED|EPERM|timed? ?out/i.test(message);
 }
 
 function probe(cli) {

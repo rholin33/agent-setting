@@ -63,7 +63,8 @@ export function launchArguments(role, prompt, session, project, home, { codexNoD
     }
     if (role.thinking) args.push('--thinking', role.thinking);
   } else if (role.agent === 'codex') {
-    // Fixed-role PTYs own their runtime; /quit must release it for exact resume.
+    // Each pane needs its own server: a shared daemon sends every pane's
+    // hooks using the first pane's Orca identity (Codex >= 0.156).
     if (codexNoDaemon) args.push('--no-daemon');
     if (session) {
       args.unshift('resume', session.id);

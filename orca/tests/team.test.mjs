@@ -270,14 +270,14 @@ test('pending resume with an absent pane waits for absence proof before retrying
   saveJson(files.state, { workspace: project, agents: { coder1: saved } });
   let created = 0;
   const terminals = [], tabs = [];
-  const snap = { sleepingAgentSessionsByPaneKey: {} };
+  const snap = { sleepingAgentSessionsByPaneKey: {},
+    tabsByWorktree: { [`repo::${project}`]: [{ id: 'old-tab', customTitle: 'coder' }] } };
   const cli = async args => {
     if (args[1] === 'list') return { terminals, visualLayouts: [{ root: { type: 'group', tabs } }] };
     if (args[1] === 'create') {
       created++;
       const command = args[args.indexOf('--command') + 1];
-      const decoded = process.platform === 'win32' ? Buffer.from(command.split(' ').at(-1), 'base64').toString('utf16le') : command;
-      assert.match(decoded, /--resume/);
+      assert.match(command.includes('-EncodedCommand') ? Buffer.from(command.split(' ').at(-1), 'base64').toString('utf16le') : command, /--resume/);
       const row = { handle: 'new', tabId: 'new-tab', leafId: 'new-leaf', worktreePath: project, connected: true };
       terminals.push(row); tabs.push({ tabId: row.tabId, panes: { type: 'pane-leaf', leafId: row.leafId } });
       snap.sleepingAgentSessionsByPaneKey[`${row.tabId}:${row.leafId}`] = { agent: 'codex', worktreeId: `repo::${project}`, providerSession: saved.session };
@@ -286,13 +286,18 @@ test('pending resume with an absent pane waits for absence proof before retrying
     if (args[1] === 'show') return { terminal: terminals[0] };
     throw new Error(`Unexpected ${args[1]}`);
   };
-  const options = { home, project, action: 'start', cli, snapshot: () => snap, inspect: async () => ({ kind: 'agent' }), pin: async () => {}, log: () => {} };
+  const options = { home, project, action: 'start', cli, snapshot: () => snap,
+    published: async () => ({ tabs: terminals.map(row => ({ parentTabId: row.tabId })) }),
+    inspect: async () => ({ kind: 'agent' }), pin: async () => {}, log: () => {} };
   await assert.rejects(runTeam({ ...options, verifyAbsent: async () => { throw new Error('original process still running'); } }), /original process still running/);
   assert.equal(created, 0);
   const result = await runTeam({ ...options, verifyAbsent: async () => true });
   assert.equal(created, 1);
   assert.equal(result.agents.coder1.pending, undefined);
   assert.equal(result.agents.coder1.session.id, 'original');
+  assert.equal(readJson(files.state).retiredTabs['old-tab'].sessions.coder1, 'original');
+  await runTeam({ ...options, verifyAbsent: async () => { throw new Error('replacement already runs'); } });
+  assert.equal(created, 1);
 });
 test('pending launch and changed provider identity stop without creating terminals', async t => {
   const { home, project } = fixture(t);

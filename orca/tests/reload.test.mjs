@@ -38,7 +38,7 @@ function fixture(t) {
   return { home, project, cli, catalog };
 }
 
-test('reload restarts every running role with the current configuration', async t => {
+test('reload reuses matching roles and restarts changed or unknown configurations', async t => {
   const { home, project, cli } = fixture(t);
   const logs = [];
   const calls = [];
@@ -46,10 +46,19 @@ test('reload restarts every running role with the current configuration', async 
     home, project, cli, snapshot: async () => ({}), inspect: async () => ({ kind: 'agent' }), log: msg => logs.push(msg),
     restart: async options => { calls.push(options.roles); return { reloaded: options.roles, failed: [] }; },
   });
-  assert.deepEqual(calls, [['master', 'coder1', 'idle']]);
-  assert.deepEqual(result.reloaded, ['master', 'coder1', 'idle']);
-  assert.deepEqual(result.current, []);
-  assert.ok(logs.some(line => line.includes('Restarting 3 running role(s)')));
+  assert.deepEqual(calls, [['coder1', 'idle']]);
+  assert.deepEqual(result.reloaded, ['coder1', 'idle']);
+  assert.deepEqual(result.current, ['master']);
+  assert.ok(logs.some(line => line.includes('Restarting 2 running role(s)')));
+});
+
+test('matching config does not inspect or restart its running pane', async t => {
+  const { home, project, cli } = fixture(t);
+  const result = await reloadRunning({ home, project, cli, names: ['master'], log: () => {},
+    inspect: async () => { throw new Error('unnecessary native inspection'); },
+    restart: async () => { throw new Error('unnecessary restart'); } });
+  assert.deepEqual(result.current, ['master']);
+  assert.deepEqual(result.reloaded, []);
 });
 
 test('reload without running panes performs no restarts', async t => {

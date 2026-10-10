@@ -1,11 +1,12 @@
-import path from 'node:path';
 import fs from 'node:fs';
+import path from 'node:path';
 import { projectFiles, readJson, saveJson, withLock, validateConfig, focusDesktop } from './team.mjs';
 import { validateTranscript, sameWorktree, binding } from './sessions.mjs';
 import { captureSession } from './launch-state.mjs';
 import { inspectHealth, recoverInPane, confirmConversationOwnership } from './health.mjs';
 import { nodeCommand } from './platform.mjs';
 import { rpc } from './orca.mjs';
+import { exitAgent } from './force-exit.mjs';
 
 export function appliedModelOf(catalogRole) {
   return { agent: catalogRole.agent, model: catalogRole.model, thinking: catalogRole.thinking ?? null };
@@ -15,6 +16,7 @@ export function appliedModelOf(catalogRole) {
 // roles may run it concurrently because every mutation targets its own agent
 // record and checkpoints serialize synchronously.
 async function restartCore({ home, project, role, cli, snapshot, state, checkpoint,
+  stopOnly = false, forceExit = false,
   focus = focusDesktop,
   inspect = (handle, provider) => inspectHealth(cli, rpc, handle, provider),
   sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), log = console.log }) {
@@ -56,6 +58,10 @@ async function restartCore({ home, project, role, cli, snapshot, state, checkpoi
     if (!verified) throw new Error(`${role}: launch pending; original conversation cannot be verified (${reason})`);
     delete saved.pending;
     checkpoint();
+  } else if (saved.pending && forceExit && (live.kind === 'shell' ||
+      live.kind === 'agent' && captureSession(saved, live, project, binding(await snapshot(), saved, project)))) {
+    delete saved.pending;
+    checkpoint();
   } else if (saved.pending) {
     throw new Error(`${role}: launch pending; run orca-team to reconcile first`);
   }
@@ -65,6 +71,13 @@ async function restartCore({ home, project, role, cli, snapshot, state, checkpoi
   saved.agent = catalogRole.agent;
   if (live.kind === 'agent') {
     if (!captureSession(saved, live, project, binding(await snapshot(), saved, project))) throw new Error(`${role}: live conversation is unverified`);
+    if (forceExit) {
+      await focus(handle);
+      live = await exitAgent({ name: role, saved, handle, terminal: live.terminal, cli, inspect, checkpoint, sleep, log,
+        verify: async observed => {
+          if (!captureSession(saved, observed, project, binding(await snapshot(), saved, project))) throw new Error(`${role}: live conversation is unverified`);
+        } });
+    } else {
     if (saved.restartIntent) {
       const startedAt = Date.parse(live.providerStartedAt);
       const requestedAt = Date.parse(saved.restartIntent.createdAt);
@@ -77,20 +90,25 @@ async function restartCore({ home, project, role, cli, snapshot, state, checkpoi
     }
     await focus(handle);
     await sleep(500);
+    await confirmConversationOwnership({ name: role, saved, handle, cli, sleep });
     // Orca 在等待超时时返回 ok:false/timeout，而不是 satisfied:false。
     let idle = null;
     try { idle = await cli(['terminal', 'wait', '--terminal', handle, '--for', 'tui-idle', '--timeout-ms', '3000']); }
     catch (error) { if (error.message !== 'timeout') throw error; }
     if (!idle?.wait?.satisfied && saved.agent === 'codex') {
-      try {
-        const firstScreen = (await cli(['terminal', 'read', '--terminal', handle, '--screen'])).terminal;
-        await sleep(500);
-        const secondScreen = (await cli(['terminal', 'read', '--terminal', handle, '--screen'])).terminal;
-        idle = { wait: { satisfied: stableCodexIdle(firstScreen, secondScreen) } };
-      } catch { /* Missing screen evidence never authorizes restart. */ }
+      const firstScreen = (await cli(['terminal', 'read', '--terminal', handle, '--screen'])).terminal;
+      await sleep(500);
+      const secondScreen = (await cli(['terminal', 'read', '--terminal', handle, '--screen'])).terminal;
+      if (stableCodexIdle(firstScreen, secondScreen)) idle = { wait: { satisfied: true } };
     }
-    if (!idle?.wait?.satisfied) throw new Error(`${role}: agent is busy; retry after its turn completes`);
     const screen = (await cli(['terminal', 'read', '--terminal', handle, '--screen'])).terminal;
+    // Orca can retain agent-update-prompt after Escape has dismissed the modal.
+    // Only the current screen's explicit empty Codex editor permits this fallback.
+    const text = (screen.tail || []).join('\n');
+    const dismissedUpdate = saved.agent === 'codex' && idle?.wait?.blockedReason === 'agent-update-prompt' &&
+      screen.source === 'screen' && /^\s*› Ask Codex to do anything\s*$/m.test(text) &&
+      !/esc skip|Update available|This conversation is open in another app/i.test(text);
+    if (!idle?.wait?.satisfied && !dismissedUpdate) throw new Error(`${role}: agent is busy; retry after its turn completes`);
     if (screen.source !== 'screen' || (screen.draft !== undefined && screen.draft !== null && screen.draft !== '')) {
       throw new Error(`${role}: terminal draft cannot be verified empty; no exit sent`);
     }
@@ -120,8 +138,13 @@ async function restartCore({ home, project, role, cli, snapshot, state, checkpoi
       if (live.kind === 'shell') break;
       await sleep(500);
     }
+    }
   }
   if (live.kind !== 'shell') throw new Error(`${role}: exit not verified; no resume sent; inspect the terminal before retrying`);
+  if (stopOnly) {
+    log(`${role}: stopped for update; original conversation retained`);
+    return;
+  }
   const command = nodeCommand([path.join(home, 'bin', 'orca-team.mjs'), 'launch', '--home', home, '--project', project, '--role', role, '--resume']);
   await recoverInPane({ name: role, saved, handle, command, cli, inspect, checkpoint, verifyBinding: async () => {
     for (let attempt = 0; attempt < 30; attempt++) {
@@ -146,19 +169,26 @@ export async function restartRole(options) {
   });
 }
 
-// Restart several roles sequentially under one lock. Busy, timed-out or
+// Restart several roles concurrently under one lock. Busy, timed-out or
 // unverifiable roles fail independently and never cancel their siblings.
-export async function restartRoles({ roles, ...options }) {
+export async function restartRoles({ roles, concurrent = false, ...options }) {
   const files = projectFiles(options.home, options.project);
   return withLock(files.lock, async () => {
     const state = readJson(files.state);
     const checkpoint = () => saveJson(files.state, state);
-    // Desktop focus and screen evidence are shared: restart one pane at a time.
     const settled = [];
-    for (const role of roles) {
-      try { await restartCore({ ...options, role, state, checkpoint }); settled.push({ status: 'fulfilled' }); }
-      catch (reason) { settled.push({ status: 'rejected', reason }); }
+    const run = async role => {
+      try {
+        await restartCore({ ...options, role, state, checkpoint });
+        return { status: 'fulfilled' };
+      } catch (reason) { return { status: 'rejected', reason }; }
+    };
+    if (concurrent) {
+      // Bound native CIM scans to avoid exhausting the Windows provider.
+      for (let index = 0; index < roles.length; index += 2)
+        settled.push(...await Promise.all(roles.slice(index, index + 2).map(run)));
     }
+    else for (const role of roles) settled.push(await run(role));
     saveJson(files.state, state);
     const reloaded = [], failed = [];
     settled.forEach((result, index) => {

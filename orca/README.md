@@ -22,7 +22,7 @@ The installer generates these entry scripts without rewriting existing shell pro
 
 ## Projects
 
-Run `orca-team` in a project directory. It reconciles the team: restarts every role that is currently running with the configured agent, model, and thinking level (keeping each original conversation), then creates missing roles and resumes stopped conversations in idle panes. `orca-team status` only inspects existing state; `orca-team init` only initializes. `--project PATH` selects a different project.
+Run `orca-team` in a project directory. It reconciles the team: reuses matching roles and reloads only changed agent/model/thinking configurations (keeping each original conversation), then creates missing roles and resumes stopped conversations in idle panes. `orca-team status` only inspects existing state; `orca-team init` only initializes. `--project PATH` selects a different project.
 
 The default command first makes sure the Orca app is running: when the runtime metadata is
 missing it launches Orca and waits until the CLI answers. It then syncs role
@@ -96,14 +96,20 @@ Pi roles use the selected `provider/model`. Before startup, Codex role models
 sync from the machine's Codex configuration. Role `thinking` maps to the
 provider's reasoning setting.
 
-`orca-team` runs `pi update --all` before model selection or role startup
-when the selected project has no running Pi role. If a Pi pane is already live,
-the update is deferred so its installed package files are not replaced during
-that conversation. Run the update from an idle project before starting roles.
+`orca-team` checks Codex and Pi updates once before team startup or explicit
+restart. It scans running processes across projects and stops tracked blocking roles before
+updates, then resumes their original conversations. Busy tasks are interrupted; verified local Windows and macOS provider processes can be forcibly terminated if graceful exit fails. External Codex and Pi processes are left running and do not preemptively block program or extension installation; actual installer errors are reported. Idle npm-installed providers query the
+registry and install only when their version differs from the latest version;
+idle Pi then runs `pi update --extensions` for its packages. A shared update lock keeps
+multiple team commands from installing simultaneously. Update failures warn
+and continue startup with the available installation.
 The picker reads per-role model and thinking selections from local `pi-models.json`;
 `,` and `.` change the selected role's thinking level, and Enter saves it.
-A failed update stops startup. Existing Pi processes must be restarted after
-package files change, or they can import bundle chunks that the update removed.
+Default startup reuses running roles whose recorded applied agent, model, and
+thinking match the current configuration. Only changed or unknown configurations
+are reloaded. Explicit `restart` still forces the selected roles to restart.
+Startup prints elapsed time for connection, update, model selection, reload,
+and layout/conversation recovery. No overall time limit is imposed.
 
 Each project gets `projects/<path-hash>/config.json`, `state.json`, and an exclusive startup lock. Config is seeded from `layout.json`. When the project's `.orca/team.json` exists, it is the portable authoritative layout: initialization/start validates it, backs up differing local config, and applies it without replacing state. Without this override, existing project config remains independent of template updates. Windows project keys ignore path case; macOS/Linux keys preserve it. Runtime state records pane IDs, model settings, and exact provider conversation bindings. Locks are removed after successful or failed normal execution. A lock owned by a live PID blocks another start or restart; a lock whose PID has exited is preserved with a stale suffix and replaced automatically.
 
@@ -202,6 +208,24 @@ When all project terminals have been closed, two authenticated native/desktop in
 ## Reload local keys
 
 After updating local provider credentials, run `orca-team restart` in the project to restart all configured roles in their original panes and conversations. `orca-team restart ROLE` restarts one role. Busy roles are skipped and reported; other roles continue. Any incomplete role makes the command exit nonzero. Credentials are reread by the launch path and are never printed or copied by restart. Keys inherited from an unchanged parent shell must be refreshed at their source first.
+## Missing-pane recovery
+
+`orca-team` retains saved conversations when Orca's persisted tab snapshot differs
+from the published desktop tabs. Before replacing a tab with no live PTY, startup
+requires the original role/session bindings, absence from the published tab list,
+and the existing native terminal-host plus OS process absence checks. Unavailable
+or conflicting evidence stops recovery without sending a launch command.
+
+Verified retired tab IDs and their original session IDs are recorded in the project
+state before replacement panes launch. Later starts ignore these stale snapshot
+entries only while the saved conversation identities still match and the old tabs
+remain absent from both the live terminals and published desktop. History files
+and Orca's persisted tab records are retained. Existing layout verification still
+checks every configured role/group after recovery. Pi startup waits for a complete
+session header when its transcript file has just been precreated.
+
+
+Windows maintenance uses asynchronous CLI requests and at most two concurrent roles under one project lock. Each inspection retains two independent CIM reads and verifies the PTY identity before and after. Supported Codex launches include --no-daemon to preserve per-pane hook identity when resuming sessions. Runtime role count and sidebar status are separate checks; a valid layout alone does not prove sidebar visibility.
 
 ## Portable restart compatibility
 
@@ -210,3 +234,6 @@ On macOS, fixed Pi roles explicitly load the packaged `lib/pi-session-proof.ts` 
 Codex launch checks the installed CLI help before enabling `--no-daemon`. Supported versions use a runtime owned by the role terminal so quitting releases it; older versions retain their existing launch arguments. Desktop restarts run sequentially because focus and screen verification are shared. Stable empty Codex screens supplement unavailable idle status; working, permission and takeover screens remain blocked. Recognized Pi mouse-report residue is cancelled only after an idle shell is verified, followed by another clean-prompt check.
 
 When a saved project has no live terminals, startup reveals an existing AGENTS.md or README.md through Orca's file-open CLI and waits briefly for its saved panes. Missing or ambiguous identities still stop recovery.
+
+
+macOS update prehooks stop tracked roles even when Pi changes its process title. Forced exit verifies the local host, PTY incarnation, provider PID creation time and same-terminal descendants before signalling individual processes; it preserves the pane shell and external agents. macOS maintenance remains sequential because focus and screen checks are shared. Windows uses at most two concurrent roles. The update then resumes each original conversation. macOS process termination is covered by simulated identity/descendant tests; this update has not been verified on a physical Mac.

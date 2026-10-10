@@ -11,8 +11,11 @@
     "npm:pi-tool-display",
     "npm:pi-mcp-adapter@2.33.0"
   ],
+  "extensions": [
+    "-builtin:mcp"
+  ],
   "defaultProvider": "pay",
-  "lastChangelogVersion": "0.86.0",
+  "lastChangelogVersion": "1.1.0",
   "hideThinkingBlock": false,
   "tuiMode": "fullscreen",
   "modelThinkingLevels": {
