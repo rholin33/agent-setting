@@ -56,7 +56,7 @@ export function pickerKey(state, key) {
 export function renderPicker(state) {
   const lines = [
     '',
-    '  orca-team roles: Pi models from Pi providers + pi-models.json; Codex uses local config',
+    '  orca-team roles: agent models from provider presets; Codex uses local config',
     '  Up/Down: role   Left/Right or Tab: model   , / .: thinking   Enter: confirm   Esc: cancel',
     '',
   ];

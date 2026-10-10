@@ -24,7 +24,7 @@ export function macTree(rows, pid, provider) {
   const tree = [root], seen = new Set([pid]);
   // Pi/Codex 执行工具时会短暂派生子进程；它们不属于启动身份链。
   for (let i = 0; i < tree.length; i++) for (const row of rows.filter(r => r.parent === tree[i].pid && tree[i].name !== provider)) {
-    if (seen.has(row.pid) || row.tty !== root.tty || Date.parse(row.created) < Date.parse(tree[i].created)) return null;
+    if (seen.has(row.pid) || row.tty !== root.tty || !Number.isFinite(Date.parse(row.created)) || !Number.isFinite(Date.parse(tree[i].created)) || Date.parse(row.created) < Date.parse(tree[i].created)) return null;
     seen.add(row.pid); tree.push(row);
   }
   const agents = tree.filter(r => r.name === provider && r.group === r.foreground);
@@ -32,7 +32,7 @@ export function macTree(rows, pid, provider) {
   if (agents.length !== 1 && !idleShell) return null;
   return JSON.stringify(tree.map(r => [r.pid,r.parent,r.created,r.group,r.foreground,r.name]));
 }
-export async function inspectMac(terminal, provider, { inventory = daemonSessions, processes = macProcesses, show } = {}) {
+export async function inspectMac(terminal, provider, { inventory = daemonSessions, processes = macProcesses, show, execute = promisify(execFile) } = {}) {
   const match = r => r.sessions.filter(s => s.terminalHandle === terminal.handle && s.sessionId === terminal.ptyId && s.incarnationId === terminal.incarnationId && s.isAlive === true);
   const before = await inventory(), first = match(before);
   if (first.length !== 1) throw new Error('macOS pane identity unavailable');
@@ -43,24 +43,25 @@ export async function inspectMac(terminal, provider, { inventory = daemonSession
   const tree = JSON.parse(b), providerPids = tree.filter(row => row[5] === provider).map(row => row[0]);
   const sessionIds = [], sessionPaths = [];
   for (const pid of providerPids) {
-    const { stdout } = await promisify(execFile)('/bin/ps', ['-ww', '-p', String(pid), '-o', 'args='], { encoding: 'utf8', timeout: 5000 });
+    const { stdout } = await execute('/bin/ps', ['-ww', '-p', String(pid), '-o', 'args='], { encoding: 'utf8', timeout: 5000 });
+    if (provider === 'omp') sessionPaths.push(...sessionArgumentPaths(stdout));
     if (provider === 'pi') {
-      const { stdout: files } = await promisify(execFile)('/usr/sbin/lsof', ['-a', '-p', String(pid), '-Fn'], { encoding: 'utf8', timeout: 5000 });
+      const { stdout: files } = await execute('/usr/sbin/lsof', ['-a', '-p', String(pid), '-Fn'], { encoding: 'utf8', timeout: 5000 });
       sessionPaths.push(...files.split('\n').filter(line => line.startsWith('n/') && line.endsWith('.jsonl')).map(line => line.slice(1)));
     }
     if (provider === 'codex') sessionIds.push(...[...stdout.matchAll(/(?:^|\s)resume\s+([0-9a-f-]{36})(?:\s|$)/gi)].map(m => m[1]));
   }
-  if (provider === 'pi' && !sessionPaths.length) {
-    // Pi changes its process title; inspect the verified launch wrapper, which
+  if (['pi', 'omp'].includes(provider) && !sessionPaths.length) {
+    // Provider changes its process title; inspect the verified launch wrapper, which
     // carries the role and project while the provider itself remains foreground.
     const { default: fs } = await import('node:fs');
     for (const row of tree.filter(row => row[5] === 'node')) {
-      const { stdout } = await promisify(execFile)('/bin/ps', ['-ww', '-p', String(row[0]), '-o', 'args='], { encoding: 'utf8', timeout: 5000 });
+      const { stdout } = await execute('/bin/ps', ['-ww', '-p', String(row[0]), '-o', 'args='], { encoding: 'utf8', timeout: 5000 });
       const match = stdout.match(/(\/[^\n]+?)\/bin\/orca-team\.mjs launch --home (.+?) --project (.+?) --role ([\w-]+) --resume(?:\s|$)/);
       if (!match) continue;
       const { projectFiles } = await import('./team.mjs');
       const saved = JSON.parse(fs.readFileSync(projectFiles(match[2], match[3]).state, 'utf8')).agents[match[4]];
-      if (saved?.leafId === terminal.leafId && saved?.tabId === terminal.tabId && saved.session?.transcriptPath) sessionPaths.push(saved.session.transcriptPath);
+      if (saved?.agent === provider && saved?.leafId === terminal.leafId && saved?.tabId === terminal.tabId && saved.session?.transcriptPath) sessionPaths.push(saved.session.transcriptPath);
     }
   }
   if (provider === 'pi' && !sessionPaths.length) {
@@ -105,7 +106,7 @@ export async function macConversationUsers(missing) {
   }
 }
 
-export async function verifyMacAbsence({ project, missing, cli, inventory = daemonSessions, processes = macProcesses, conversationUsers = macConversationUsers, snapshot = readSnapshot }) {
+export async function verifyMacAbsence({ project, missing, cli, inventory = daemonSessions, processes = macProcesses, inspect = inspectMac, conversationUsers = macConversationUsers, snapshot = readSnapshot }) {
   const { sameWorktree, validateTranscript } = await import('./sessions.mjs');
   for (const { saved } of missing) validateTranscript(saved, project);
   const proofs = [];
@@ -128,8 +129,21 @@ export async function verifyMacAbsence({ project, missing, cli, inventory = daem
     assertConversationAbsent(snap, project, missing, desktop.terminals);
     for (const session of active) {
       const terminal = desktop.terminals.find(row => row.handle === session.terminalHandle);
-      const tree = macTree(rows, session.pid, terminal.agentIdentity === 'codex' ? 'codex' : 'pi');
+      const provider = ['codex', 'omp', 'pi'].find(name => {
+        const candidate = macTree(rows, session.pid, name);
+        return candidate && JSON.parse(candidate).some(row => row[5] === name);
+      }) || 'pi';
+      const tree = macTree(rows, session.pid, provider);
       if (!tree) throw new Error('Unverifiable project process tree; absence refused');
+      if (JSON.parse(tree).some(row => row[5] === 'omp')) {
+        const live = await inspect(terminal, 'omp', { inventory, processes, show: async () => (await cli(['terminal', 'show', '--terminal', terminal.handle])).terminal });
+        if (live.kind !== 'agent' || !live.sessionPaths?.length) throw new Error('Live OMP conversation is unbound; absence refused');
+        for (const transcriptPath of live.sessionPaths) {
+          const header = JSON.parse(fs.readFileSync(transcriptPath, 'utf8').split('\n')[0]);
+          if (header.type !== 'session' || !header.id || !sameWorktree(`local::${header.cwd}`, project)) throw new Error('Live OMP transcript identity is unverified');
+          if (missing.some(({ saved }) => saved.session.id === header.id || path.resolve(saved.session.transcriptPath) === path.resolve(transcriptPath))) throw new Error('Original conversation is running in another pane');
+        }
+      }
       if (JSON.parse(tree).some(row => row[5] === 'pi')) {
         const record = snap.sleepingAgentSessionsByPaneKey?.[`${terminal.tabId}:${terminal.leafId}`];
         if (record?.agent !== 'pi' || !record.providerSession?.id || record.connectionId || !sameWorktree(record.worktreeId, project)) {
@@ -147,4 +161,14 @@ export async function verifyMacAbsence({ project, missing, cli, inventory = daem
   }
   if (proofs[0] !== proofs[1]) throw new Error('Terminal host changed during absence verification');
   return true;
+}
+
+// ps renders quoted arguments on macOS. Reject ambiguous paths rather than guessing.
+export function sessionArgumentPaths(command) {
+  const paths = [];
+  for (const match of command.matchAll(/(?:^|\s)--(?:session|resume)(?:=|\s+)(?:"([^"\n]+)"|'([^'\n]+)'|([^\s"']+))/g)) {
+    const value = match[1] || match[2] || match[3];
+    if (path.posix.isAbsolute(value) && value.endsWith('.jsonl')) paths.push(value);
+  }
+  return [...new Set(paths)];
 }

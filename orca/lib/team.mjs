@@ -96,7 +96,7 @@ export function validateConfig(config, catalog) {
   const catalogNames = new Set();
   for (const role of catalog) {
     if (!/^[a-z][a-z0-9_]*$/.test(role.name) || catalogNames.has(role.name) ||
-        !['pi', 'codex'].includes(role.agent) || typeof role.model !== 'string' || !role.model.trim()) throw new Error('Invalid role catalog');
+        !['pi', 'omp', 'codex'].includes(role.agent) || typeof role.model !== 'string' || !role.model.trim()) throw new Error('Invalid role catalog');
     catalogNames.add(role.name);
   }
   const names = new Set();

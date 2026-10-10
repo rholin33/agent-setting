@@ -45,7 +45,7 @@ def codex_agents_variant_relative(target: str) -> Path:
 INCLUDE_UNTRACKED = False
 ORCA_HOME = Path(os.environ.get("ORCA_TEAM_HOME", str(Path.home() / ".orca/roles/ccb-team"))).expanduser()
 ORCA_PACKAGE_DIRECTORIES = {"bin", "lib", "roles", "source", "tests", "docs"}
-ORCA_PACKAGE_FILES = {"team.json", "layout.json", "package.json", "README.md", "FILE-INVENTORY.json"}
+ORCA_PACKAGE_FILES = {"team.json", "layout.json", "package.json", "README.md", "FILE-INVENTORY.json", "omp-models.json"}
 TEXT_EXTENSIONS = {
     ".md",
     ".txt",

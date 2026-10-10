@@ -1,0 +1,60 @@
+{
+  "presets": [
+    {
+      "model": "local/cline-pass/deepseek-v4.1-flash",
+      "thinking": "high",
+      "label": "local/cline-pass/deepseek-v4.1-flash"
+    },
+    {
+      "model": "local/cline-pass/mimo-v2.6-flash",
+      "thinking": null,
+      "label": "local/cline-pass/mimo-v2.6-flash"
+    },
+    {
+      "model": "local/gemini-3.8-flash-high",
+      "thinking": null,
+      "label": "local/gemini-3.8-flash-high"
+    },
+    {
+      "model": "pay/gpt-6-astra",
+      "thinking": "xhigh",
+      "label": "pay/gpt-6-astra"
+    },
+    {
+      "model": "pay/gpt-6.1-sol",
+      "thinking": "xhigh",
+      "label": "pay/gpt-6.1-sol"
+    },
+    {
+      "model": "pay/gpt-image-2",
+      "thinking": "xhigh",
+      "label": "pay/gpt-image-2"
+    }
+  ],
+  "roles": {
+    "master": {
+      "model": "pay/gpt-6-astra",
+      "thinking": "xhigh"
+    },
+    "loader": {
+      "model": "local/cline-pass/deepseek-v4.1-flash",
+      "thinking": "high"
+    },
+    "archi": {
+      "model": "pay/gpt-6-astra",
+      "thinking": "xhigh"
+    },
+    "designer": {
+      "model": "local/gemini-3.8-flash-high",
+      "thinking": null
+    },
+    "test": {
+      "model": "local/cline-pass/deepseek-v4.1-flash",
+      "thinking": "high"
+    },
+    "simple": {
+      "model": "pay/gpt-6.1-sol",
+      "thinking": "xhigh"
+    }
+  }
+}

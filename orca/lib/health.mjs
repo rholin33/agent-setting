@@ -5,7 +5,7 @@ import path from 'node:path';
 export function provesSession(live, saved, platform = process.platform) {
   if (live.kind !== 'agent' || !saved.session?.id) return false;
   const normalize = file => platform === 'win32' ? path.win32.normalize(file).toLowerCase() : path.posix.normalize(file);
-  return saved.agent === 'pi'
+  return ['pi', 'omp'].includes(saved.agent)
     ? typeof saved.session.transcriptPath === 'string' && live.sessionPaths?.some(file => normalize(file) === normalize(saved.session.transcriptPath)) === true
     : live.sessionIds?.includes(saved.session.id) === true;
 }

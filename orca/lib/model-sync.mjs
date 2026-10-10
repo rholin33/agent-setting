@@ -40,8 +40,8 @@ export function seedPiModelConfig(piHome = path.join(os.homedir(), '.pi', 'agent
   return { presets, roles: {} };
 }
 
-export function loadPiModelConfig(home, seed = seedPiModelConfig) {
-  const file = path.join(home, 'pi-models.json');
+export function loadPiModelConfig(home, seed = seedPiModelConfig, filename = 'pi-models.json') {
+  const file = path.join(home, filename);
   if (fs.existsSync(file)) {
     const config = readJson(file);
     if (!Array.isArray(config.presets) || !config.presets.length) throw new Error(`Invalid presets in ${file}`);
@@ -82,13 +82,15 @@ export async function syncModels({ home, names, pick = true, log = console.log, 
   } else if (codexRoles.length) {
     log('Warning: local Codex config has no model key; Codex role models unchanged');
   }
-  const piRoles = catalog.filter(role => role.agent === 'pi' && inScope(role));
+  const piRoles = catalog.filter(role => ['pi', 'omp'].includes(role.agent) && inScope(role));
+  if (!seed && piRoles.some(role => role.agent === 'omp')) seed = () => ({ presets: piRoles.map(role => ({ model: role.model, thinking: role.thinking, label: role.model })), roles: {} });
+  const modelConfigFile = piRoles.some(role => role.agent === 'omp') ? 'omp-models.json' : 'pi-models.json';
   let config = null;
   let selectionMade = false;
   if (piRoles.length && pick) {
     const interactive = Boolean(stdin.isTTY && stdout.isTTY);
     let loaded = null;
-    try { loaded = loadPiModelConfig(home, seed); }
+    try { loaded = loadPiModelConfig(home, seed, modelConfigFile); }
     catch (error) { if (interactive) throw error; log(`Warning: ${error.message}`); }
     config = loaded?.config ?? null;
     if (config && interactive) {
@@ -110,7 +112,7 @@ export async function syncModels({ home, names, pick = true, log = console.log, 
     }
   }
   if (changes.length) saveJson(catalogFile, catalog);
-  if (selectionMade) saveJson(path.join(home, 'pi-models.json'), config);
+  if (selectionMade) saveJson(path.join(home, modelConfigFile), config);
   for (const change of changes) log(`Model sync: ${change}`);
   return changes;
 }

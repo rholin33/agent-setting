@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { ompExecutable } from './omp.mjs';
 import { windowsProcesses } from './windows-health.mjs';
 
 const packages = { codex: '@openai/codex', pi: '@earendil-works/pi-coding-agent' };
@@ -12,7 +13,7 @@ async function processInventory() {
 }
 
 function active(rows, agent) {
-  return rows.some(row => agent === 'codex'
+  return rows.some(row => agent === 'omp' ? /(?:^|[\\/])omp(?:\.exe)?$/i.test(row.Name || '') : agent === 'codex'
     ? !/app-server-daemon[\\/]releases/i.test(row.CommandLine || '') &&
       (/(?:^|[\\/])codex(?:\.exe)?$/i.test(row.Name || '') || /@openai[\\/]codex[\\/]bin[\\/]codex\.js/i.test(row.CommandLine || ''))
     : /pi-coding-agent[\\/]dist[\\/](?:bundle[\\/])?cli\.js/i.test(row.CommandLine || ''));
@@ -20,7 +21,11 @@ function active(rows, agent) {
 
 export async function runUpdateCommand(command, args) {
   // Only fixed command templates reach cmd.exe; never interpolate project paths.
-  const allowed = command === 'npm' && (args.join(' ') === 'list --global --depth=0 --json' ||
+  if (command === 'omp' && ['update', 'update --plugins'].includes(args.join(' '))) {
+ try { return {status:0,...await execute(ompExecutable(),args,{windowsHide:true,maxBuffer:16*1024*1024})}; }
+ catch(error) {return {status:error.code || 1,stderr:error.stderr || error.message};}
+ }
+ const allowed = command === 'npm' && (args.join(' ') === 'list --global --depth=0 --json' ||
     args[0] === 'view' && Object.values(packages).includes(args[1]) && args.slice(2).join(' ') === 'version --json' ||
     args.slice(0, 2).join(' ') === 'install --global' && /^(@openai\/codex|@earendil-works\/pi-coding-agent)@\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(args[2]) && args.length === 3) ||
     command === 'pi' && args.join(' ') === 'update --extensions';
@@ -35,7 +40,7 @@ export async function runUpdateCommand(command, args) {
 
 export async function updateAgentsBeforeStart({ agents, processes = processInventory, run = runUpdateCommand, log = console.log, lifecycle }) {
   const result = { updated: [], deferred: [], warnings: [] };
-  const names = [...new Set(agents)].filter(name => packages[name]);
+  const names = [...new Set(agents)].filter(name => packages[name] || name === 'omp');
   const warn = message => { result.warnings.push(message); log(`Warning: ${message}; continuing startup`); };
   const defer = name => { if (!result.deferred.includes(name)) result.deferred.push(name); log(`Update deferred: ${name} has a running process`); };
   let inventory;
@@ -51,7 +56,17 @@ export async function updateAgentsBeforeStart({ agents, processes = processInven
     let stopped = [];
     if (!lifecycle && active(inventory, name)) { defer(name); continue; }
     try {
-      installed ??= JSON.parse(await checked('npm', ['list', '--global', '--depth=0', '--json']));
+      if (name === 'omp') {
+ if (lifecycle) stopped = await lifecycle.stop(name);
+ else if (inventory.some(row => /^omp(?:\.exe)?$/i.test(row.Name || ''))) {defer(name);continue;}
+ log('Updating OMP program and plugins…');
+ await checked('omp',['update']);
+ await checked('omp',['update','--plugins']);
+ result.updated.push(name);
+ log('OMP update completed successfully');
+ continue;
+ }
+ installed ??= JSON.parse(await checked('npm', ['list', '--global', '--depth=0', '--json']));
       const current = installed.dependencies?.[packages[name]]?.version;
       if (!current) throw new Error(`${name} is not an npm global installation; update skipped`);
       const latest = JSON.parse(await checked('npm', ['view', packages[name], 'version', '--json']));

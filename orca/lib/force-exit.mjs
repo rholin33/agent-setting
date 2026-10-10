@@ -61,7 +61,7 @@ async function terminateAgent({ terminal, saved }) {
       if (!tree.some(existing => existing.ProcessId === row.ProcessId)) tree.push(row);
     }
   }
-  const candidates = tree.slice(1).filter(row => saved.agent === 'codex' ? /^codex\.exe$/i.test(row.Name) :
+  const candidates = tree.slice(1).filter(row => saved.agent === 'codex' ? /^codex\.exe$/i.test(row.Name) : saved.agent === 'omp' ? /^omp\.exe$/i.test(row.Name) :
     /^node\.exe$/i.test(row.Name) && /pi-coding-agent[\\/]dist[\\/](?:bundle[\\/])?cli\.js/i.test(row.CommandLine || ''));
   if (candidates.length !== 1) throw new Error('Provider process is ambiguous');
   const target = candidates[0];

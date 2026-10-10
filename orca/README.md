@@ -237,3 +237,15 @@ When a saved project has no live terminals, startup reveals an existing AGENTS.m
 
 
 macOS update prehooks stop tracked roles even when Pi changes its process title. Forced exit verifies the local host, PTY incarnation, provider PID creation time and same-terminal descendants before signalling individual processes; it preserves the pane shell and external agents. macOS maintenance remains sequential because focus and screen checks are shared. Windows uses at most two concurrent roles. The update then resumes each original conversation. macOS process termination is covered by simulated identity/descendant tests; this update has not been verified on a physical Mac.
+
+## Windows OMP roles
+
+The six former Pi roles use OMP; Codex roles remain configured separately. OMP is resolved from ORCA_OMP_COMMAND, the default Windows local installer path, then PATH. Role skills use a generated config overlay (skills.customDirectories), and OMP model selections use omp-models.json. The prehook stops verified managed OMP processes, runs omp update and omp update --plugins, then resumes exact sessions. The current project migration retains original Pi transcripts and resumes separate OMP copies. Windows native health, termination and absence checks recognize omp.exe.
+
+## macOS OMP parity
+
+OMP roles share the Windows launch arguments, model picker, role skill overlays, transcript validation and update lifecycle. macOS resolves ORCA_OMP_COMMAND first, then local installer/Homebrew paths and PATH. Native inspection verifies the foreground OMP process and exact --session/--resume transcript path, rechecking the PTY and process identities. Closed-pane recovery refuses duplicate conversations, including when Orca labels OMP as Pi. Updates stop managed roles sequentially, run omp update and omp update --plugins, then resume their exact conversations. External OMP instances are preserved and do not preemptively block updates.
+
+Default startup order is model selection, agent update prehook, configuration reconciliation, then layout/session verification. Update recovery applies the newly selected model and thinking level; matching roles are reused by reconciliation. Explicit restart uses the saved selections.
+
+The macOS changes have simulated process/PTY and lifecycle regression coverage; no Mac hardware was available for acceptance testing. macOS users must configure OMP providers locally. Credentials and original Windows session files are not portable configuration.

@@ -71,7 +71,7 @@ test('fresh launch creates six tabs/nine roles and rerun has no mutations', asyn
       const launching = Object.values(pendingState.agents).find(a => a.pending && !a.tabId);
       const transcriptPath = launching.launchIntent.transcriptPath || path.join(home, `codex-${creations}.jsonl`);
       fs.mkdirSync(path.dirname(transcriptPath), { recursive: true });
-      fs.writeFileSync(transcriptPath, JSON.stringify(launching.agent === 'pi' ? { type: 'session', id: `s${creations}`, cwd: project } : { type: 'session_meta', payload: { id: `s${creations}`, cwd: project } }) + '\n');
+      fs.writeFileSync(transcriptPath, JSON.stringify(['pi','omp'].includes(launching.agent) ? { type: 'session', id: `s${creations}`, cwd: project } : { type: 'session_meta', payload: { id: `s${creations}`, cwd: project } }) + '\n');
       launching.session = { id: `s${creations}`, transcriptPath };
       const primary = verb === 'split' ? terminals.find(row => row.handle === val('--terminal')) : null;
       const row = { handle: `term_${creations}`, tabId: primary?.tabId || `tab_${creations}`, leafId: `leaf_${creations}`, worktreePath: project, connected: true, orphaned: false };
@@ -383,7 +383,7 @@ test('split receipt timeout reconciles six groups without duplicate launches', a
       const launching = Object.values(pendingState.agents).find(a => a.pending && !a.tabId);
       const transcriptPath = launching.launchIntent.transcriptPath || path.join(home, `codex-${creations}.jsonl`);
       fs.mkdirSync(path.dirname(transcriptPath), { recursive: true });
-      fs.writeFileSync(transcriptPath, JSON.stringify(launching.agent === 'pi' ? { type: 'session', id: `s${creations}`, cwd: project } : { type: 'session_meta', payload: { id: `s${creations}`, cwd: project } }) + '\n');
+      fs.writeFileSync(transcriptPath, JSON.stringify(['pi','omp'].includes(launching.agent) ? { type: 'session', id: `s${creations}`, cwd: project } : { type: 'session_meta', payload: { id: `s${creations}`, cwd: project } }) + '\n');
       launching.session = { id: `s${creations}`, transcriptPath };
       const primary = verb === 'split' ? terminals.find(row => row.handle === val('--terminal')) : null;
       const row = { handle: `term_${creations}`, tabId: primary?.tabId || `tab_${creations}`, leafId: `leaf_${creations}`, worktreePath: project, connected: true, orphaned: false };

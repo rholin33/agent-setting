@@ -8,14 +8,14 @@ export function prepareLaunch(saved, role, directory) {
   Object.assign(saved, { agent: role.agent, model: role.model, thinking: role.thinking });
   const id = randomUUID();
   saved.launchIntent = { id, createdAt: new Date().toISOString(),
-    ...(role.agent === 'pi' ? { transcriptPath: path.join(directory, 'sessions', `${role.name}-${id}.jsonl`) } : {}) };
+    ...(['pi', 'omp'].includes(role.agent) ? { transcriptPath: path.join(directory, 'sessions', `${role.name}-${id}.jsonl`) } : {}) };
 }
 
 export function captureSession(saved, live, project, observed) {
   let session = observed || saved.session;
   const paths = live.sessionPaths || [];
   const explicit = saved.launchIntent?.transcriptPath;
-  if (!session && saved.agent === 'pi') {
+  if (!session && ['pi', 'omp'].includes(saved.agent)) {
     const candidates = explicit ? [explicit] : [...new Set(paths)];
     if (candidates.length === 1 && fs.existsSync(candidates[0])) {
       const text = fs.readFileSync(candidates[0], 'utf8');

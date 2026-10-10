@@ -115,8 +115,8 @@ try {
           saveJson(files.state, state);
         }
       }
-      await stage('Agent update prehook', () => updatePrehook(home, names));
       await stage('Model selection', () => syncModels({ home, names, pick: !values['no-pick'] }));
+      await stage('Agent update prehook', () => updatePrehook(home, names));
       // Reuse matching roles; only changed configurations need an exit/resume cycle.
       const { skipped, current } = await stage('Configuration reload', () => reloadRunning({ home, project, names, cli: orca, snapshot,
         inspect: (handle, provider) => inspectHealth(orca, rpc, handle, provider) }));
@@ -157,7 +157,7 @@ try {
         };
         for (const [key, value] of Object.entries(overrides)) launch.args.push('-c', `${key}=${JSON.stringify(value)}`);
       }
-      if (!saved?.session && current?.launchIntent && role.agent === 'pi') {
+      if (!saved?.session && current?.launchIntent && ['pi', 'omp'].includes(role.agent)) {
         const transcript = current.launchIntent.transcriptPath;
         // 只有非空 transcript 才证明本次启动已经发生；空文件是下面预创建的占位。
         if (fs.existsSync(transcript) && fs.statSync(transcript).size > 0) throw new Error('Launch intent already has a transcript; rerun start to reconcile it');
@@ -165,7 +165,7 @@ try {
         // Pi 只在首个 assistant 消息后才落盘，缺失文件在启动阶段不会写 session header。
         // 预创建空文件让 Pi 立即写入 header，Orca 才能在 session_start 时记下
         // session_file/session_id，角色启动后无需等待首轮对话即可完成会话绑定。
-        if (!fs.existsSync(transcript)) fs.writeFileSync(transcript, '');
+        if (!fs.existsSync(transcript)) fs.writeFileSync(transcript, role.agent === 'omp' ? JSON.stringify({type:'session',version:3,id:current.launchIntent.id,timestamp:new Date().toISOString(),cwd:project})+'\n' : '');
         launch.args.push('--session', transcript,
           `Initialize the fixed ${role.name} role using the loaded instructions. Reply only "${role.name} ready". Do not call tools or start tasks.`);
       }

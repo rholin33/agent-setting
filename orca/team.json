@@ -1,21 +1,21 @@
 [
   {
     "name": "master",
-    "agent": "pi",
+    "agent": "omp",
     "model": "pay/gpt-6-astra",
     "thinking": "xhigh",
     "role": "agentroles.ccb_self"
   },
   {
     "name": "loader",
-    "agent": "pi",
-    "model": "local/deepseek-v4.1-flash",
-    "thinking": "medium",
+    "agent": "omp",
+    "model": "local/cline-pass/deepseek-v4.1-flash",
+    "thinking": "high",
     "role": "agentroles.ccb_self"
   },
   {
     "name": "archi",
-    "agent": "pi",
+    "agent": "omp",
     "model": "pay/gpt-6-astra",
     "thinking": "xhigh",
     "role": "agentroles.archi"
@@ -36,7 +36,7 @@
   },
   {
     "name": "designer",
-    "agent": "pi",
+    "agent": "omp",
     "model": "local/gemini-3.8-flash-high",
     "thinking": null,
     "role": "agentroles.frontend_engineer"
@@ -50,14 +50,14 @@
   },
   {
     "name": "test",
-    "agent": "pi",
-    "model": "local/deepseek-v4.1-flash",
-    "thinking": "medium",
+    "agent": "omp",
+    "model": "local/cline-pass/deepseek-v4.1-flash",
+    "thinking": "high",
     "role": "agentroles.code_reviewer"
   },
   {
     "name": "simple",
-    "agent": "pi",
+    "agent": "omp",
     "model": "pay/gpt-6.1-sol",
     "thinking": "xhigh",
     "role": "agentroles.simple"
