@@ -66,6 +66,8 @@ class AgentsVariantTests(unittest.TestCase):
                     patch.object(sync, "CODEX_MANAGED_DIRECTORIES", ()), \
                     patch.object(sync, "PI_MANAGED_FILES", ()), \
                     patch.object(sync, "PI_MANAGED_DIRECTORIES", ()), \
+                    patch.object(sync, "CLAUDE_MANAGED_FILES", ()), \
+                    patch.object(sync, "CLAUDE_MANAGED_DIRECTORIES", ()), \
                     patch.object(sync, "ORCA_HOME", root / "orca"), \
                     patch.object(exporter, "REPO_ROOT", root / "repo"), \
                     patch.object(sync, "get_project_root", return_value=root / "project"), \

@@ -62,6 +62,7 @@ async function terminateAgent({ terminal, saved }) {
     }
   }
   const candidates = tree.slice(1).filter(row => saved.agent === 'codex' ? /^codex\.exe$/i.test(row.Name) : saved.agent === 'omp' ? /^omp\.exe$/i.test(row.Name) :
+    saved.agent === 'claude' ? /^claude\.exe$/i.test(row.Name) :
     /^node\.exe$/i.test(row.Name) && /pi-coding-agent[\\/]dist[\\/](?:bundle[\\/])?cli\.js/i.test(row.CommandLine || ''));
   if (candidates.length !== 1) throw new Error('Provider process is ambiguous');
   const target = candidates[0];
@@ -75,6 +76,9 @@ async function terminateAgent({ terminal, saved }) {
   await execute(path.win32.join(process.env.SystemRoot || 'C:/Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe'),
     ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { windowsHide: true });
 }
+
+// Claude Code 用 /exit 退出；其它 provider 沿用 /quit。
+export const exitCommand = agent => agent === 'claude' ? '/exit' : '/quit';
 
 export async function exitAgent({ name, saved, handle, terminal, cli, inspect, verify, checkpoint,
   force = terminateAgent, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), log = console.log }) {
@@ -90,8 +94,9 @@ export async function exitAgent({ name, saved, handle, terminal, cli, inspect, v
   saved.restartIntent = { sessionId: saved.session.id, createdAt: new Date().toISOString() };
   checkpoint();
   log(`${name}: interrupting current task before exit`);
-  // OMP cancels its active turn with Escape; Ctrl-C does not cancel tool waits.
-  const interrupt = await cli(saved.agent === 'omp'
+  // OMP/Claude cancel the active turn with Escape; Ctrl-C does not cancel OMP tool waits
+  // and a second Ctrl-C would exit Claude without the graceful /exit path.
+  const interrupt = await cli(['omp', 'claude'].includes(saved.agent)
     ? ['terminal', 'send', '--terminal', handle, '--text', '\x1b']
     : ['terminal', 'send', '--terminal', handle, '--interrupt']);
   if (interrupt.send?.accepted !== true) throw new Error(`${name}: interrupt unconfirmed`);
@@ -106,7 +111,7 @@ export async function exitAgent({ name, saved, handle, terminal, cli, inspect, v
     const cleared = await cli(['terminal', 'send', '--terminal', handle, '--text', '\u0015\u000b']);
     if (cleared.send?.accepted !== true) throw new Error(`${name}: editor clear unconfirmed`);
     await observe();
-    await cli(['terminal', 'send', '--terminal', handle, '--text', '/quit', '--enter']);
+    await cli(['terminal', 'send', '--terminal', handle, '--text', exitCommand(saved.agent), '--enter']);
     for (let attempt = 0; attempt < 5; attempt++) {
       await sleep(500);
       live = await observe();

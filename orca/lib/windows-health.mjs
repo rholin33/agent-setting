@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import { dataDirectory } from './platform.mjs';
 import { sameWorktree } from './sessions.mjs';
 import { snapshot as readSnapshot } from './orca.mjs';
+import { claudeSessionIds } from './claude.mjs';
 
 // Newer Orca builds remove closed panes without persisting tombstones.
 // Prove absence from both the native PTY host and OS before resuming history.
@@ -33,7 +34,7 @@ export async function verifyWindowsAbsence({ project, missing, cli, platform = p
           active.filter(s => s.terminalHandle === t.handle).length !== 1) throw new Error('Desktop/native terminal inventory mismatch');
       if (missing.some(({ saved }) => saved.tabId === t.tabId && saved.leafId === t.leafId)) throw new Error('Original pane is still present');
       const s = active.find(s => s.terminalHandle === t.handle);
-      if (t.agentIdentity || ['pi', 'omp', 'codex'].some(provider => classifyWindows(rows, s, provider) === 'agent')) {
+      if (t.agentIdentity || ['pi', 'omp', 'codex', 'claude'].some(provider => classifyWindows(rows, s, provider) === 'agent')) {
         const live = snap.sleepingAgentSessionsByPaneKey?.[`${t.tabId}:${t.leafId}`];
         if (live?.origin === 'live' && sameWorktree(live.worktreeId, project) && live.providerSession?.id) {
           if (missing.some(({ saved }) => saved.session.id === live.providerSession.id)) throw new Error('Original conversation is running in another pane');
@@ -52,15 +53,16 @@ export async function verifyWindowsAbsence({ project, missing, cli, platform = p
               }
             }
           }
-          const agents = rows.filter(r => descendants.has(r.ProcessId) && (/^(?:codex|omp)\.exe$/i.test(r.Name) ||
+          const agents = rows.filter(r => descendants.has(r.ProcessId) && (/^(?:codex|omp|claude)\.exe$/i.test(r.Name) ||
             /^node\.exe$/i.test(r.Name) && /pi-coding-agent[\\/]dist[\\/](?:bundle[\\/])?cli\.js/i.test(r.CommandLine || '')));
           if (!agents.length || agents.some(r => /^codex\.exe$/i.test(r.Name)
             ? !/(?:^|\s)resume\s+"?[0-9a-f-]{36}(?:"|\s|$)/i.test(r.CommandLine || '')
+            : /^claude\.exe$/i.test(r.Name) ? !claudeSessionIds(r.CommandLine || '').length
             : !/(?:^|\s)(?:--session|--resume)\s+(?:"[^"]+"|[^\s"]+)/.test(r.CommandLine || ''))) throw new Error('Running agent conversation is unbound');
         }
       }
     }
-    for (const row of rows.filter(r => /^(?:node|codex|pi|omp|wsl|bash)(?:\.exe)?$/i.test(r.Name))) {
+    for (const row of rows.filter(r => /^(?:node|codex|claude|pi|omp|wsl|bash)(?:\.exe)?$/i.test(r.Name))) {
       if (typeof row.CommandLine !== 'string' || !row.CommandLine) throw new Error('Agent process command line is unreadable');
       const command = normalize(row.CommandLine);
       for (const { name, saved } of missing) {
@@ -172,6 +174,7 @@ export function classifyWindows(rows, session, provider) {
   const agent = tree.slice(1).some(row => provider === 'codex'
     ? /^codex\.exe$/i.test(row.Name)
     : provider === 'omp' ? /^omp\.exe$/i.test(row.Name)
+    : provider === 'claude' ? /^claude\.exe$/i.test(row.Name)
     : /^node\.exe$/i.test(row.Name) && /(?:^|[\\/])pi-coding-agent[\\/]dist[\\/](?:bundle[\\/])?cli\.js(?:"|\s|$)/i.test(row.CommandLine || ''));
   return agent ? 'agent' : 'unverifiable';
 }
@@ -205,7 +208,11 @@ export async function inspectWindows(terminal, provider, { inventory = daemonSes
   const sessionPaths = second.filter(row => descendants.has(row.ProcessId) && (/^omp\.exe$/i.test(row.Name) || /^node\.exe$/i.test(row.Name) &&
     /pi-coding-agent[\\/]dist[\\/](?:bundle[\\/])?cli\.js/i.test(row.CommandLine || '')))
     .flatMap(row => [...(row.CommandLine || '').matchAll(/(?:^|\s)(?:--session|--resume)\s+(?:"([^"]+)"|([^\s"]+))/g)].map(m => m[1] || m[2]));
-  const sessionIds = second.filter(row => descendants.has(row.ProcessId) && /^codex\.exe$/i.test(row.Name))
-    .flatMap(row => [...(row.CommandLine || '').matchAll(/(?:^|\s)resume\s+"?([0-9a-f-]{36})(?:"|\s|$)/gi)].map(m => m[1]));
+  const sessionIds = [
+    ...second.filter(row => descendants.has(row.ProcessId) && /^codex\.exe$/i.test(row.Name))
+      .flatMap(row => [...(row.CommandLine || '').matchAll(/(?:^|\s)resume\s+"?([0-9a-f-]{36})(?:"|\s|$)/gi)].map(m => m[1])),
+    ...second.filter(row => descendants.has(row.ProcessId) && /^claude\.exe$/i.test(row.Name))
+      .flatMap(row => claudeSessionIds(row.CommandLine || '')),
+  ];
   return { terminal: current, sessionPaths, sessionIds, kind: a === b ? b : 'unverifiable', reason: a === b && b !== 'unverifiable' ? 'windows_native_verified' : 'windows_process_tree_unverified' };
 }

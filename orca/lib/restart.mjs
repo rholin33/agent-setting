@@ -6,7 +6,7 @@ import { captureSession } from './launch-state.mjs';
 import { inspectHealth, recoverInPane, confirmConversationOwnership } from './health.mjs';
 import { nodeCommand } from './platform.mjs';
 import { rpc } from './orca.mjs';
-import { exitAgent } from './force-exit.mjs';
+import { exitAgent, exitCommand } from './force-exit.mjs';
 
 export function appliedModelOf(catalogRole) {
   return { agent: catalogRole.agent, model: catalogRole.model, thinking: catalogRole.thinking ?? null };
@@ -126,7 +126,7 @@ async function restartCore({ home, project, role, cli, snapshot, state, checkpoi
     }
     saved.restartIntent = { sessionId: saved.session.id, createdAt: new Date().toISOString() };
     checkpoint();
-    const receipt = await cli(['terminal', 'send', '--terminal', handle, '--text', '/quit', '--enter', '--wait-submit', '5']);
+    const receipt = await cli(['terminal', 'send', '--terminal', handle, '--text', exitCommand(saved.agent), '--enter', '--wait-submit', '5']);
     if (receipt.send?.accepted !== true) throw new Error(`${role}: exit unconfirmed; restart intent retained`);
     for (let attempt = 0; attempt < 60; attempt++) {
       if (attempt % 10 === 0) await focus(handle);

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { validateTranscript } from './sessions.mjs';
+import { claudeTranscriptPath } from './claude.mjs';
 
 export function prepareLaunch(saved, role, directory) {
   if (saved.session || saved.launchIntent) return;
@@ -24,6 +25,15 @@ export function captureSession(saved, live, project, observed) {
       const header = JSON.parse(text.split('\n')[0]);
       session = { key: 'session_id', id: header.id, transcriptPath: candidates[0] };
     }
+  }
+  if (!session && saved.agent === 'claude') {
+    // 新会话使用启动前写入 launchIntent 的 --session-id；进程参数必须证明是同一个 UUID。
+    const id = saved.launchIntent?.id;
+    if (!id || !live.sessionIds?.includes(id)) return false;
+    const transcriptPath = claudeTranscriptPath(id);
+    // Claude 在首条消息写入前只有元数据行，带 cwd 的记录出现后才能校验归属；启动期间重试。
+    if (!transcriptPath || !fs.readFileSync(transcriptPath, 'utf8').split('\n').some(line => line.includes('"cwd"'))) return false;
+    session = { key: 'session_id', id, transcriptPath };
   }
   if (session && explicit && session.transcriptPath !== explicit) throw new Error('Launch intent transcript differs from Orca binding');
   if (!session) return false;

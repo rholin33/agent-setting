@@ -60,8 +60,11 @@ CCB selection includes current-project CCB configuration and project
 Orca selection includes portable project layout overrides, but never pane IDs,
 state.json, locks, transcripts, generated machine paths or shortcut backups.
 Common configuration excludes local-only `cad-fill-dimension-report` skills.
+Claude Code common configuration is `claude/CLAUDE.md` and `claude/skills/`
+(→ `~/.claude`). `settings.json` stays local because it carries machine-specific
+hooks; `skills/synced/` is managed by the claude.ai account and is never copied.
 
-Environment overrides: `CODEX_HOME`, `PI_CODING_AGENT_DIR`, `CCB_HOME`,
+Environment overrides: `CODEX_HOME`, `PI_CODING_AGENT_DIR`, `CLAUDE_CONFIG_DIR`, `CCB_HOME`,
 `ORCA_TEAM_HOME`; `AGENT_SETTING_PROJECT_ROOT` preserves the invoking project.
 `AGENT_SETTING_PROJECT_KEY` explicitly binds the same project across machines.
 Orca otherwise uses a project identity file or normalized Git origin; a project

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { daemonSessions } from './windows-health.mjs';
 import { snapshot as readSnapshot } from './orca.mjs';
 import { assertConversationAbsent } from './recovery-guards.mjs';
+import { claudeSessionIds } from './claude.mjs';
 
 export async function macProcesses() {
   const { stdout } = await promisify(execFile)('/bin/ps', ['-axo', 'pid=,ppid=,pgid=,tpgid=,tty=,lstart=,comm='], { encoding: 'utf8', timeout: 5000, env: { ...process.env, LC_ALL: 'C' } });
@@ -49,6 +50,7 @@ export async function inspectMac(terminal, provider, { inventory = daemonSession
       const { stdout: files } = await execute('/usr/sbin/lsof', ['-a', '-p', String(pid), '-Fn'], { encoding: 'utf8', timeout: 5000 });
       sessionPaths.push(...files.split('\n').filter(line => line.startsWith('n/') && line.endsWith('.jsonl')).map(line => line.slice(1)));
     }
+    if (provider === 'claude') sessionIds.push(...claudeSessionIds(stdout));
     if (provider === 'codex') sessionIds.push(...[...stdout.matchAll(/(?:^|\s)resume\s+([0-9a-f-]{36})(?:\s|$)/gi)].map(m => m[1]));
   }
   if (['pi', 'omp'].includes(provider) && !sessionPaths.length) {
@@ -129,7 +131,7 @@ export async function verifyMacAbsence({ project, missing, cli, inventory = daem
     assertConversationAbsent(snap, project, missing, desktop.terminals);
     for (const session of active) {
       const terminal = desktop.terminals.find(row => row.handle === session.terminalHandle);
-      const provider = ['codex', 'omp', 'pi'].find(name => {
+      const provider = ['codex', 'claude', 'omp', 'pi'].find(name => {
         const candidate = macTree(rows, session.pid, name);
         return candidate && JSON.parse(candidate).some(row => row[5] === name);
       }) || 'pi';

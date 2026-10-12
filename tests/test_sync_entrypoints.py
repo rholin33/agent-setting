@@ -31,6 +31,7 @@ class EntrypointTests(unittest.TestCase):
             home = pathlib.Path(directory)
             env = dict(os.environ, CODEX_HOME=str(home / 'codex'),
                        PI_CODING_AGENT_DIR=str(home / 'pi'), CCB_HOME=str(home / 'ccb'),
+                       CLAUDE_CONFIG_DIR=str(home / 'claude'),
                        ORCA_TEAM_HOME=str(home / 'orca'), AGENT_SETTING_PROJECT_ROOT=str(home))
             result = subprocess.run([sys.executable, str(ROOT / 'scripts/install-config.py'), '--target', 'orca'],
                                     env=env, capture_output=True, text=True)

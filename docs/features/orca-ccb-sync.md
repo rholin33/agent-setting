@@ -3,7 +3,7 @@
 ## Scope
 
 Develop an explicit `ccb` or `orca` selector. Both selections include common
-Codex/Pi portable configuration; only the selected orchestration configuration
+Codex/Pi/Claude Code portable configuration; only the selected orchestration configuration
 is applied or exported. Provider installation and credentials are out of scope.
 Default operation pulls and merges into the current machine. Only explicit
 `push` permits export, staging, committing and pushing after review.

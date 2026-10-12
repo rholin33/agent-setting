@@ -1,6 +1,6 @@
 # Portable Orca Team
 
-The shared package preserves 199 original role resource files and nine adapted prompts. Orca, Pi, Codex, their models and credentials must already be configured. Node.js 22 or later runs the portable manager. No provider settings or credentials are installed.
+The shared package preserves 199 original role resource files and nine adapted prompts. Orca, Pi/OMP, Codex or Claude Code, their models and credentials must already be configured. Node.js 22 or later runs the portable manager. No provider settings or credentials are installed.
 
 ## Installation
 
@@ -95,6 +95,16 @@ This package does not patch Orca, suppress its dialogs, or install a watcher.
 Pi roles use the selected `provider/model`. Before startup, Codex role models
 sync from the machine's Codex configuration. Role `thinking` maps to the
 provider's reasoning setting.
+
+Claude Code roles (`"agent": "claude"`) use `model` and `thinking` from
+`team.json` directly (`--model`, `--effort`); they are read-only in the picker.
+The role prompt is passed with `--append-system-prompt-file` on every fresh launch
+and resume. A fresh launch pre-assigns the conversation with `--session-id` from
+`launchIntent`, so the binding is proven by the process arguments plus the
+`$CLAUDE_CONFIG_DIR/projects/*/<id>.jsonl` transcript (default `~/.claude`);
+resume uses `--resume <id>`. Exit uses `/exit`, interrupt uses Escape. Packaged
+Pi role skills are not loaded into Claude, and Claude Code updates itself, so
+the update prehook skips it. `ORCA_CLAUDE_COMMAND` overrides the executable.
 
 `orca-team` checks Codex and Pi updates once before team startup or explicit
 restart. It scans running processes across projects and stops tracked blocking roles before

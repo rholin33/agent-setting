@@ -32,7 +32,7 @@ ends after applying and verifying local configuration, even if local edits exist
 Capture the user's original project directory before changing directories.
 Pass it through AGENT_SETTING_PROJECT_ROOT. Resolve CODEX_HOME (default ~/.codex),
 PI_CODING_AGENT_DIR (default ~/.pi/agent), CCB_HOME (default ~/.ccb), and
-ORCA_TEAM_HOME (default ~/.orca/roles/ccb-team). Python 3 runs the shared sync
+ORCA_TEAM_HOME (default ~/.orca/roles/ccb-team), CLAUDE_CONFIG_DIR (default ~/.claude). Python 3 runs the shared sync
 implementation on Windows, macOS and Linux; use python on Windows or python3
 where available. No Bash or PowerShell dependency is required for the sync core.
 
@@ -44,7 +44,9 @@ Do not discard changes to make synchronization proceed.
 Common scope: target-selected Codex AGENTS.md variants codex/AGENTS.ccb.md and
 codex/AGENTS.orca.md (each run syncs only its own variant to the global
 ~/.codex/AGENTS.md), codex/hooks/, codex/rules/, codex/skills/ excluding .system
-and caches; pi/AGENTS.md, pi/settings.json, pi/skills/, pi/bin/.
+and caches; pi/AGENTS.md, pi/settings.json, pi/skills/, pi/bin/; claude/CLAUDE.md and
+claude/skills/ excluding skills/synced (claude.ai-managed). Claude settings.json
+is local-only (machine hooks) and is never exported.
 CCB scope: ccb/ccb.config and the current project's ccb/projects configuration
 and pi/projects settings. CCB role bootstrap in roles/ and ccb/roles.json belongs
 only to CCB. Orca mode must not apply CCB config, install CCB roles, or touch

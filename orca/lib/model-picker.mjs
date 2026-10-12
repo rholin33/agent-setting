@@ -14,10 +14,11 @@ export function createPickerState({ roles, presets, initial = {} }) {
   if (!Array.isArray(presets) || !presets.length) throw new Error('No Pi model presets configured');
   for (const preset of presets) if (!preset || typeof preset.model !== 'string' || !preset.model.trim()) throw new Error('Invalid Pi model preset');
   const rows = roles.map(role => {
-    const editable = role.agent !== 'codex';
+    // Codex 跟随本机配置，Claude 直接使用 team.json；其余角色使用 Pi/OMP 预设。
+    const editable = !['codex', 'claude'].includes(role.agent);
     const chosen = (editable && initial[role.name]) || { model: role.model, thinking: role.thinking ?? null };
     if (typeof chosen.model !== 'string' || !chosen.model.trim()) throw new Error(`Invalid model for role ${role.name}`);
-    return { name: role.name, editable, model: chosen.model, thinking: chosen.thinking ?? null, presetIndex: presets.findIndex(p => p.model === chosen.model) };
+    return { name: role.name, agent: role.agent, editable, model: chosen.model, thinking: chosen.thinking ?? null, presetIndex: presets.findIndex(p => p.model === chosen.model) };
   });
   return { rows, presets, cursor: 0 };
 }
@@ -62,7 +63,7 @@ export function renderPicker(state) {
   ];
   state.rows.forEach((row, index) => {
     const preset = row.presetIndex >= 0 ? state.presets[row.presetIndex] : null;
-    const model = !row.editable ? `codex/${row.model} (local config)` : preset ? (preset.label || preset.model) : `${row.model} (custom)`;
+    const model = !row.editable ? (row.agent === 'claude' ? `claude/${row.model} (team.json)` : `codex/${row.model} (local config)`) : preset ? (preset.label || preset.model) : `${row.model} (custom)`;
     lines.push(`  ${index === state.cursor ? '\u25b8' : ' '} ${row.name.padEnd(10)} ${model.padEnd(42)} thinking: ${row.thinking ?? 'default'}`);
   });
   lines.push('');

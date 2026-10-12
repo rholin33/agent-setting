@@ -10,6 +10,7 @@ import { normalizeProject, quote } from '../lib/platform.mjs';
 import { orca, snapshot, rpc } from '../lib/orca.mjs';
 import { initialize, runTeam, readJson, saveJson, projectFiles, withLock } from '../lib/team.mjs';
 import { launchArguments } from '../lib/sessions.mjs';
+import { claudeTranscriptPath } from '../lib/claude.mjs';
 import { restartTeam, resolveRestartRoles } from '../lib/restart.mjs';
 import { inspectHealth } from '../lib/health.mjs';
 import { ensureOrca } from '../lib/orca-boot.mjs';
@@ -172,6 +173,14 @@ try {
         // session_file/session_id，角色启动后无需等待首轮对话即可完成会话绑定。
         if (!fs.existsSync(transcript)) fs.writeFileSync(transcript, role.agent === 'omp' ? JSON.stringify({type:'session',version:3,id:current.launchIntent.id,timestamp:new Date().toISOString(),cwd:project})+'\n' : '');
         launch.args.push('--session', transcript,
+          `Initialize the fixed ${role.name} role using the loaded instructions. Reply only "${role.name} ready". Do not call tools or start tasks.`);
+      }
+      if (!saved?.session && role.agent === 'claude') {
+        const id = current?.launchIntent?.id;
+        if (!id) throw new Error('Claude launch intent is missing; rerun start to prepare it');
+        // --session-id 只能创建一次；已有 transcript 说明上次启动已经发生，交给 start 对账而不是重复创建。
+        if (claudeTranscriptPath(id)) throw new Error('Launch intent already has a transcript; rerun start to reconcile it');
+        launch.args.push('--session-id', id, '--name', role.name,
           `Initialize the fixed ${role.name} role using the loaded instructions. Reply only "${role.name} ready". Do not call tools or start tasks.`);
       }
       if (role.agent === 'codex' && process.env.ORCA_CODEX_LAUNCH_PREFLIGHT) {

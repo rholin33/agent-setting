@@ -28,7 +28,7 @@ export function dispatchMarker(text) {
 async function scanTranscript(file, project) {
   const input = fs.createReadStream(file, { encoding: 'utf8' });
   const lines = readline.createInterface({ input, crlfDelay: Infinity });
-  let session, first = true;
+  let session, first = true, claude = false;
   const dispatches = new Map();
   try {
     for await (const line of lines) {
@@ -37,12 +37,21 @@ async function scanTranscript(file, project) {
       catch { throw new Error('invalid_jsonl'); }
       if (first) {
         first = false;
-        const meta = row.type === 'session' ? row : row.type === 'session_meta' ? row.payload : null;
-        if (!meta?.id || !sameWorktree(`local::${meta.cwd}`, project)) return null;
-        session = { id: meta.id, transcriptPath: file, provider: row.type === 'session' ? 'pi' : 'codex' };
-        continue;
+        // Claude transcript 没有 header，首行是带 sessionId 的元数据；会话归属由第一条带 cwd 的记录确定。
+        claude = row.type !== 'session' && row.type !== 'session_meta' && typeof row.sessionId === 'string';
+        if (!claude) {
+          const meta = row.type === 'session' ? row : row.type === 'session_meta' ? row.payload : null;
+          if (!meta?.id || !sameWorktree(`local::${meta.cwd}`, project)) return null;
+          session = { id: meta.id, transcriptPath: file, provider: row.type === 'session' ? 'pi' : 'codex' };
+          continue;
+        }
       }
-      const message = row.type === 'message' ? row.message : row.type === 'response_item' ? row.payload : null;
+      if (claude && !session) {
+        if (typeof row.cwd !== 'string') continue;
+        if (!sameWorktree(`local::${row.cwd}`, project)) return null;
+        session = { id: row.sessionId, transcriptPath: file, provider: 'claude' };
+      }
+      const message = row.type === 'message' ? row.message : row.type === 'response_item' ? row.payload : claude && row.type === 'user' ? row.message : null;
       if (message?.role !== 'user') continue;
       const content = typeof message.content === 'string' ? message.content :
         (message.content || []).filter(item => ['text', 'input_text'].includes(item.type)).map(item => item.text).join('\n');

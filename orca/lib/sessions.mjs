@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ompExecutable } from './omp.mjs';
+import { claudeExecutable } from './claude.mjs';
 import { StringDecoder } from 'node:string_decoder';
 import { normalizeProject } from './platform.mjs';
 
@@ -32,18 +33,21 @@ export function validateTranscript(saved, project) {
   const fd = fs.openSync(session.transcriptPath, 'r');
   let first = '';
   const decoder = new StringDecoder('utf8');
+  // Claude transcript 没有独立 header：开头是 last-prompt/mode 等元数据，第一条带 cwd 的记录才确定会话归属。
+  const identifies = record => saved.agent === 'claude' ? typeof record.cwd === 'string' && Boolean(record.sessionId) : record.type !== 'title';
   try {
     const buffer = Buffer.alloc(4096);
-    while (!first.split('\n').slice(0, -1).some(line => line && JSON.parse(line).type !== 'title') && first.length < 1024 * 1024) {
+    while (!first.split('\n').slice(0, -1).some(line => line && identifies(JSON.parse(line))) && first.length < 1024 * 1024) {
       const count = fs.readSync(fd, buffer); if (!count) break;
       first += decoder.write(buffer.subarray(0, count));
     }
   } finally { fs.closeSync(fd); }
   // OMP may prepend a title metadata record before the session header.
   const records = first.split('\n').slice(0, -1).filter(Boolean).map(line => JSON.parse(line));
-  const row = records.find(record => record.type !== 'title');
+  const row = records.find(identifies);
   if (!row) throw new Error('Original conversation header unavailable');
-  const meta = ['pi', 'omp'].includes(saved.agent) && row.type === 'session' ? row : saved.agent === 'codex' && row.type === 'session_meta' ? row.payload : null;
+  const meta = ['pi', 'omp'].includes(saved.agent) && row.type === 'session' ? row : saved.agent === 'codex' && row.type === 'session_meta' ? row.payload
+    : saved.agent === 'claude' ? { id: row.sessionId, cwd: row.cwd } : null;
   if (!meta || meta.id !== session.id || !sameWorktree(`local::${meta.cwd}`, project)) throw new Error('Original conversation identity/project mismatch');
   return session;
 }
@@ -87,6 +91,12 @@ export function launchArguments(role, prompt, session, project, home, { codexNoD
     }
     if (role.thinking) args.push('-c', `model_reasoning_effort="${role.thinking}"`);
     if (!session) args.push(fs.readFileSync(prompt, 'utf8'));
+  } else if (role.agent === 'claude') {
+    // 角色提示每次启动都追加（Claude 不在会话里持久化 system prompt），resume 时同样需要。
+    if (session) args.push('--resume', session.id);
+    args.push('--append-system-prompt-file', prompt);
+    if (role.thinking) args.push('--effort', role.thinking);
   } else throw new Error('Unknown provider');
-  return { executable: role.agent === 'omp' ? ompExecutable() : role.agent, args, env };
+  const executable = role.agent === 'omp' ? ompExecutable() : role.agent === 'claude' ? claudeExecutable() : role.agent;
+  return { executable, args, env };
 }

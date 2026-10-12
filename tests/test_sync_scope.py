@@ -206,6 +206,51 @@ class SyncScopeTests(unittest.TestCase):
             self.assertFalse(result)
             self.assertEqual(local.read_text(), '{"value": "local"}\n')
 
+    def test_claude_scope_is_common_and_excludes_account_synced_skills(self):
+        for target in ('ccb', 'orca'):
+            with patch.object(sync, 'TARGET', target):
+                pathspecs = sync.get_managed_remote_pathspecs()
+                self.assertIn('claude/CLAUDE.md', pathspecs)
+                self.assertIn('claude/skills', pathspecs)
+                self.assertEqual(sync.get_local_managed_path(Path('claude/CLAUDE.md')), sync.CLAUDE_HOME / 'CLAUDE.md')
+                self.assertEqual(sync.get_local_managed_path(Path('claude/skills/demo/SKILL.md')),
+                                 sync.CLAUDE_HOME / 'skills/demo/SKILL.md')
+        self.assertFalse(sync.is_portable_path(Path('claude/skills/synced/account/SKILL.md')))
+        self.assertFalse(sync.is_portable_path(Path('claude/skills/.trash/1-abc/docs/SKILL.md')))
+        with patch.object(sync, 'TARGET', 'orca'), self.assertRaises(ValueError):
+            sync.get_local_managed_path(Path('claude/skills/synced/account/SKILL.md'))
+
+    def test_claude_home_follows_config_dir_override(self):
+        with patch.dict(sync.os.environ, {'CLAUDE_CONFIG_DIR': '/tmp/claude-home'}):
+            self.assertEqual(sync.get_claude_home(), Path('/tmp/claude-home'))
+        with patch.dict(sync.os.environ, {}, clear=True), patch.object(sync.Path, 'home', return_value=Path('/home/user')):
+            self.assertEqual(sync.get_claude_home(), Path('/home/user/.claude'))
+
+    def test_claude_export_copies_instructions_and_skills_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            claude_home = root / 'claude-home'
+            (claude_home / 'skills/demo').mkdir(parents=True)
+            (claude_home / 'skills/synced/account').mkdir(parents=True)
+            (claude_home / 'skills/.trash/1-abc/docs').mkdir(parents=True)
+            (claude_home / 'skills/.trash/1-abc/docs/SKILL.md').write_text('---\nname: docs\n---\n')
+            (claude_home / 'projects').mkdir()
+            (claude_home / 'CLAUDE.md').write_text('# Global rules\n')
+            (claude_home / 'skills/demo/SKILL.md').write_text('---\nname: demo\n---\n')
+            (claude_home / 'skills/synced/account/SKILL.md').write_text('---\nname: account\n---\n')
+            (claude_home / 'settings.json').write_text('{"hooks": {}}\n')
+            (claude_home / 'projects/session.jsonl').write_text('{}\n')
+            with patch.object(exporter.sync, 'TARGET', 'orca'), \
+                 patch.object(exporter.sync, 'CLAUDE_HOME', claude_home), \
+                 patch.object(exporter.sync, 'get_project_root', return_value=root), \
+                 patch.object(exporter.sync, 'ORCA_HOME', root / 'orca'):
+                claude = [item for item in exporter.export_candidates() if item[0].parts[0] == 'claude']
+                with patch.object(exporter, 'export_candidates', return_value=claude):
+                    self.assertEqual(exporter.export_configuration(root / 'destination'), 2)
+            exported = sorted(path.relative_to(root / 'destination').as_posix()
+                              for path in (root / 'destination').rglob('*') if path.is_file())
+            self.assertEqual(exported, ['claude/CLAUDE.md', 'claude/skills/demo/SKILL.md'])
+
 
 if __name__ == '__main__':
     unittest.main()

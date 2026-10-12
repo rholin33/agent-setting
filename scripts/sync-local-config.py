@@ -28,6 +28,7 @@ def export_candidates():
     for prefix, home, files, directories in (
         (Path('codex'), sync.CODEX_HOME, sync.CODEX_MANAGED_FILES, sync.CODEX_MANAGED_DIRECTORIES),
         (Path('pi'), sync.PI_HOME, sync.PI_MANAGED_FILES, sync.PI_MANAGED_DIRECTORIES),
+        (Path('claude'), sync.CLAUDE_HOME, sync.CLAUDE_MANAGED_FILES, sync.CLAUDE_MANAGED_DIRECTORIES),
     ):
         for name in files:
             relative = prefix / name

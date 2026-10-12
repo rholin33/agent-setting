@@ -63,3 +63,30 @@ test('history indexes retries and reused sessions, scopes projects, caches offli
   assert.equal(missing.tasks[0].sessions.find(session => session.provider === 'pi').available, false);
   assert.equal(missing.tasks[0].sessions.find(session => session.provider === 'codex').available, true);
 });
+
+test('history indexes Claude transcripts by their first cwd record and skips other projects', async t => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'team-history-claude-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const project = normalizeProject(home);
+  saveJson(path.join(home, 'team.json'), [{ name: 'reviewer', agent: 'claude', model: 'opus' }]);
+  saveJson(path.join(home, 'layout.json'), { tabs: [{ title: 'reviewer', agents: ['reviewer'] }] });
+  const files = await initialize(home, project);
+  saveJson(files.state, { workspace: project, agents: { reviewer: { tabId: 't', leafId: 'l', agent: 'claude' } } });
+  const root = path.join(home, 'claude-projects'); fs.mkdirSync(root);
+  const transcript = (id, cwd) => [
+    { type: 'last-prompt', sessionId: id },
+    { type: 'user', sessionId: id, cwd, message: { role: 'user', content: prompt('task_c', 'ctx_c') } },
+  ].map(row => JSON.stringify(row)).join('\n') + '\n';
+  fs.writeFileSync(path.join(root, 'own.jsonl'), transcript('claude-own', project));
+  fs.writeFileSync(path.join(root, 'foreign.jsonl'), transcript('claude-foreign', project + '-other'));
+  const cli = async args => {
+    if (args[1] === 'run-list') return { runs: [{ id: 'run_c' }], nextCursor: null };
+    if (args[1] === 'worker-list') return { workers: [{ dispatchId: 'ctx_c', taskId: 'task_c', runId: 'run_c', agentTerminalHandle: 'term_worker', dispatchStatus: 'completed', resource: { worktreeId: `repo::${project}` } }], page: { nextCursor: null, hasMore: false } };
+    if (args[1] === 'task-list') return { tasks: [{ id: 'task_c', task_title: 'Claude task', status: 'completed', created_by_pane_key: 't:l' }] };
+    assert.fail('Only read-only metadata calls expected');
+  };
+  const history = await taskHistory({ home, project, cli, roots: [root] });
+  assert.equal(history.warnings.length, 0);
+  assert.equal(history.tasks.length, 1);
+  assert.deepEqual(history.tasks[0].sessions.map(session => [session.id, session.provider]), [['claude-own', 'claude']]);
+});
