@@ -249,3 +249,5 @@ OMP roles share the Windows launch arguments, model picker, role skill overlays,
 Default startup order is model selection, agent update prehook, configuration reconciliation, then layout/session verification. Update recovery applies the newly selected model and thinking level; matching roles are reused by reconciliation. Explicit restart uses the saved selections.
 
 The macOS changes have simulated process/PTY and lifecycle regression coverage; no Mac hardware was available for acceptance testing. macOS users must configure OMP providers locally. Credentials and original Windows session files are not portable configuration.
+
+Orca sync also manages `orca/omp-context.json` (OMP native auto-compaction disabled; Magic Context owns compression) and `cortexkit/magic-context.jsonc` → `${XDG_CONFIG_HOME:-~/.config}/cortexkit/magic-context.jsonc`. Historian/dreamer model choices are portable; credentials, service URLs, absolute paths and runtime databases are rejected. CCB sync excludes these files. Existing OMP sessions need an exact-session restart to load the overlay; sync does not restart agents.

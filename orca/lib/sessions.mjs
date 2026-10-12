@@ -69,6 +69,7 @@ export function launchArguments(role, prompt, session, project, home, { codexNoD
  } else args.push('--skill',skills);
  }
     }
+    if (role.agent === 'omp') args.push('--config', path.join(home, 'omp-context.json'));
     if (role.thinking) args.push('--thinking', role.thinking);
   } else if (role.agent === 'codex') {
     // Each pane needs its own server: a shared daemon sends every pane's

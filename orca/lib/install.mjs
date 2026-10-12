@@ -6,7 +6,7 @@ import { readJson, saveJson, validateConfig } from './team.mjs';
 export function deploy(source, home) {
   fs.mkdirSync(home, { recursive: true });
   if (path.resolve(source) !== path.resolve(home)) {
-    for (const name of ['bin', 'lib', 'roles', 'source', 'tests', 'docs', 'team.json', 'layout.json', 'package.json', 'README.md', 'FILE-INVENTORY.json']) {
+    for (const name of ['bin', 'lib', 'roles', 'source', 'tests', 'docs', 'team.json', 'layout.json', 'package.json', 'README.md', 'FILE-INVENTORY.json', 'omp-context.json']) {
       const from = path.join(source, name);
       if (fs.existsSync(from)) fs.cpSync(from, path.join(home, name), { recursive: true });
     }

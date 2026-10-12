@@ -45,8 +45,11 @@ def codex_agents_variant_relative(target: str) -> Path:
 INCLUDE_UNTRACKED = False
 ORCA_HOME = Path(os.environ.get("ORCA_TEAM_HOME", str(Path.home() / ".orca/roles/ccb-team"))).expanduser()
 ORCA_PACKAGE_DIRECTORIES = {"bin", "lib", "roles", "source", "tests", "docs"}
-ORCA_PACKAGE_FILES = {"team.json", "layout.json", "package.json", "README.md", "FILE-INVENTORY.json", "omp-models.json"}
+MAGIC_CONTEXT_RELATIVE = Path("cortexkit/magic-context.jsonc")
+MAGIC_CONTEXT_HOME = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))).expanduser() / "cortexkit"
+ORCA_PACKAGE_FILES = {"team.json", "layout.json", "package.json", "README.md", "FILE-INVENTORY.json", "omp-models.json", "omp-context.json"}
 TEXT_EXTENSIONS = {
+    ".jsonc",
     ".md",
     ".txt",
     ".toml",
@@ -204,7 +207,7 @@ def get_managed_remote_pathspecs() -> list[str]:
         *[str(PI_CONFIG_DIR / name) for name in PI_MANAGED_DIRECTORIES],
     ]
     if TARGET == "orca":
-        return [*pathspecs, "orca"]
+        return [*pathspecs, "orca", MAGIC_CONTEXT_RELATIVE.as_posix()]
     pathspecs.append(CCB_CONFIG_RELATIVE_PATH.as_posix())
     project_ccb_path = get_project_ccb_relative_path()
     if project_ccb_path is not None:
@@ -237,6 +240,8 @@ def is_portable_path(relative_path: Path) -> bool:
         return False
     if name in {"auth.json", "token.json", "tokens.json", "credentials.json", "state.json", ".env", "history.jsonl"} or name.endswith((".pyc", ".lock", ".sqlite", ".sqlite3", ".db", ".log")):
         return False
+    if parts[0] == "cortexkit":
+        return relative_path == MAGIC_CONTEXT_RELATIVE
     if parts[0] == "orca":
         if parts in {("orca", "bin", "orca-team"), ("orca", "bin", "orca-team.ps1")}:
             return False
@@ -288,6 +293,10 @@ def get_managed_remote_files() -> list[Path]:
 def get_local_managed_path(relative_path: Path) -> Path:
     if not is_portable_path(relative_path):
         raise ValueError(f"non-portable managed path: {relative_path}")
+    if relative_path == MAGIC_CONTEXT_RELATIVE:
+        if TARGET != "orca":
+            raise ValueError("Magic Context path outside selected target")
+        return MAGIC_CONTEXT_HOME / "magic-context.jsonc"
     if relative_path.parts[0] == "orca":
         if TARGET != "orca":
             raise ValueError("Orca path outside selected target")
@@ -588,8 +597,41 @@ def install_required_roles() -> None:
         write_log(f"installed CCB Role: {role}")
 
 
+def parse_jsonc(content: bytes) -> dict:
+    """Strip JSONC comments/trailing commas without altering quoted strings."""
+    text = content.decode("utf-8-sig")
+    pattern = r'"(?:\\.|[^"\\])*"|//[^\r\n]*|/\*[\s\S]*?\*/'
+    text = re.sub(pattern, lambda match: match.group() if match.group().startswith('"') else " ", text)
+    text = re.sub(r'"(?:\\.|[^"\\])*"|,(?=\s*[}\]])',
+                  lambda match: "" if match.group() == "," else match.group(), text)
+    value = json.loads(text)
+    if not isinstance(value, dict):
+        raise ValueError("Magic Context configuration must be an object")
+    return value
+
+
+def validate_magic_context(content: bytes) -> None:
+    config = parse_jsonc(content)
+    def inspect(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                normalized = re.sub(r"[^a-z]", "", key.lower())
+                if any(word in normalized for word in ("apikey", "token", "secret", "password", "credential", "authorization", "endpoint", "baseurl")):
+                    raise ValueError("Magic Context portable configuration contains a sensitive key")
+                inspect(child)
+        elif isinstance(value, list):
+            for child in value:
+                inspect(child)
+        elif isinstance(value, str) and (value.startswith(("/", "~", "file:", "http:", "https:", "!")) or re.match(r"^[A-Za-z]:[\\/]", value)):
+            raise ValueError("Magic Context portable configuration contains a machine path or service URL")
+    # Schema references are public metadata, not service endpoints.
+    inspect({key: value for key, value in config.items() if key != "$schema"})
+
+
 def validate_managed_content(relative_path: Path, content: bytes) -> None:
-    if relative_path.suffix.lower() == ".py":
+    if relative_path == MAGIC_CONTEXT_RELATIVE:
+        validate_magic_context(content)
+    elif relative_path.suffix.lower() == ".py":
         compile(content, str(relative_path), "exec")
     elif relative_path.suffix.lower() == ".json":
         json.loads(content)

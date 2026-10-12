@@ -15,6 +15,49 @@ export_spec.loader.exec_module(exporter)
 
 
 class SyncScopeTests(unittest.TestCase):
+    def test_magic_context_scope_and_jsonc_security(self):
+        relative = Path('cortexkit/magic-context.jsonc')
+        with patch.object(sync, 'TARGET', 'orca'):
+            self.assertIn(str(relative), sync.get_managed_remote_pathspecs())
+            self.assertEqual(sync.get_local_managed_path(relative), sync.MAGIC_CONTEXT_HOME / 'magic-context.jsonc')
+        with patch.object(sync, 'TARGET', 'ccb'):
+            self.assertNotIn(str(relative), sync.get_managed_remote_pathspecs())
+            with self.assertRaises(ValueError):
+                sync.get_local_managed_path(relative)
+        sync.validate_managed_content(relative, b'{/*comment*/"historian":{"pi":{"model":"local/model",}},"dreamer":{},}')
+        for content in [b'{"apiKey":"hidden"}', b'{"historian":{"endpoint":"https://service"}}', b'{broken']:
+            with self.assertRaises(ValueError):
+                sync.validate_managed_content(relative, content)
+        self.assertFalse(sync.is_portable_path(Path('cortexkit/context.db')))
+
+    def test_magic_context_pull_backs_up_and_copies(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            source = root / 'remote.jsonc'
+            source.write_text('{"historian":{"pi":{"model":"local/model"}}}')
+            with patch.object(sync, 'TARGET', 'orca'), patch.object(sync, 'MAGIC_CONTEXT_HOME', root / 'config'):
+                sync.copy_remote_to_local(Path('cortexkit/magic-context.jsonc'), source)
+                self.assertEqual((root / 'config/magic-context.jsonc').read_bytes(), source.read_bytes())
+
+    def test_magic_context_export_preserves_source_and_rejects_credentials(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            source = root / 'magic-context.jsonc'
+            content = b'{// models\n"historian":{"pi":{"model":"local/model"}},"dreamer":{"pi":{"model":"local/model"}},}'
+            source.write_bytes(content)
+            relative = Path('cortexkit/magic-context.jsonc')
+            with patch.object(exporter.sync, 'TARGET', 'orca'), \
+                 patch.object(exporter, 'export_candidates', return_value=[(relative, source)]), \
+                 patch.object(exporter.sync, 'get_project_root', return_value=root), \
+                 patch.object(exporter.sync, 'ORCA_HOME', root / 'orca'):
+                self.assertEqual(exporter.export_configuration(root / 'destination'), 1)
+                self.assertEqual((root / 'destination' / relative).read_bytes(), content)
+                self.assertEqual(source.read_bytes(), content)
+                source.write_bytes(b'{"historian":{"api_key":"secret"}}')
+                with self.assertRaises(ValueError):
+                    exporter.export_configuration(root / 'rejected')
+                self.assertFalse((root / 'rejected').exists())
+
     def test_duplicate_targets_rejected(self):
         for module, argv in [(sync, ['hook', '--target', 'ccb', '--target', 'orca']),
                              (exporter, ['export', '--target', 'ccb', '--target', 'orca', '--push'])]:

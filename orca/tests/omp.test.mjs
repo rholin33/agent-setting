@@ -19,6 +19,8 @@ test('OMP launch uses native executable, exact session and role skill overlay', 
  assert.equal(launch.args.includes('--skill'),false);
  const overlay=launch.args[launch.args.indexOf('--config')+1];
  assert.deepEqual(JSON.parse(fs.readFileSync(overlay)).skills.customDirectories,[skills]);
+ assert.ok(launch.args.includes(path.join(home,'omp-context.json')));
+ assert.equal(JSON.parse(fs.readFileSync(new URL('../omp-context.json',import.meta.url))).compaction.enabled,false);
 });
 test('native OMP is recognized separately from Pi and unknown children',()=>{
  const root={ProcessId:1,ParentProcessId:0,Name:'pwsh.exe',Created:'100',SessionId:1};

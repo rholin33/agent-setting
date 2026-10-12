@@ -114,3 +114,5 @@ credentials are not part of the Orca package.
 
 The pre-commit hook validates staged whitespace only. It must never export or
 stage local settings automatically, even during an unrelated development commit.
+
+Orca sync also manages `orca/omp-context.json` (OMP native auto-compaction disabled; Magic Context owns compression) and `cortexkit/magic-context.jsonc` → `${XDG_CONFIG_HOME:-~/.config}/cortexkit/magic-context.jsonc`. Historian/dreamer model choices are portable; credentials, service URLs, absolute paths and runtime databases are rejected. CCB sync excludes these files. Existing OMP sessions need an exact-session restart to load the overlay; sync does not restart agents.

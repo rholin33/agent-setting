@@ -102,3 +102,5 @@ node --test orca/tests/*.test.mjs
 
 Tests use isolated homes and mocked Orca. Native macOS/Linux desktop acceptance
 and closing business conversations are not part of these tests.
+
+Orca sync also manages `orca/omp-context.json` (OMP native auto-compaction disabled; Magic Context owns compression) and `cortexkit/magic-context.jsonc` → `${XDG_CONFIG_HOME:-~/.config}/cortexkit/magic-context.jsonc`. Historian/dreamer model choices are portable; credentials, service URLs, absolute paths and runtime databases are rejected. CCB sync excludes these files. Existing OMP sessions need an exact-session restart to load the overlay; sync does not restart agents.

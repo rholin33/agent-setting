@@ -49,6 +49,7 @@ def export_candidates():
         if project_pi:
             yield project_pi / 'settings.json', sync.get_project_root() / 'pi/settings.json'
     else:
+        yield sync.MAGIC_CONTEXT_RELATIVE, sync.MAGIC_CONTEXT_HOME / "magic-context.jsonc"
         for name in sync.ORCA_PACKAGE_FILES:
             yield Path('orca') / name, sync.ORCA_HOME / name
         for name in sync.ORCA_PACKAGE_DIRECTORIES:
