@@ -46,6 +46,12 @@
       "agents": [
         "simple"
       ]
+    },
+    {
+      "title": "deploy",
+      "agents": [
+        "deploy"
+      ]
     }
   ],
   "sourceSidebar": {

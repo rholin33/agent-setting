@@ -34,12 +34,15 @@ export function validateTranscript(saved, project) {
   const decoder = new StringDecoder('utf8');
   try {
     const buffer = Buffer.alloc(4096);
-    while (!first.includes('\n') && first.length < 1024 * 1024) {
+    while (!first.split('\n').slice(0, -1).some(line => line && JSON.parse(line).type !== 'title') && first.length < 1024 * 1024) {
       const count = fs.readSync(fd, buffer); if (!count) break;
       first += decoder.write(buffer.subarray(0, count));
     }
   } finally { fs.closeSync(fd); }
-  const row = JSON.parse(first.split('\n')[0]);
+  // OMP may prepend a title metadata record before the session header.
+  const records = first.split('\n').slice(0, -1).filter(Boolean).map(line => JSON.parse(line));
+  const row = records.find(record => record.type !== 'title');
+  if (!row) throw new Error('Original conversation header unavailable');
   const meta = ['pi', 'omp'].includes(saved.agent) && row.type === 'session' ? row : saved.agent === 'codex' && row.type === 'session_meta' ? row.payload : null;
   if (!meta || meta.id !== session.id || !sameWorktree(`local::${meta.cwd}`, project)) throw new Error('Original conversation identity/project mismatch');
   return session;

@@ -22,7 +22,7 @@ The installer generates these entry scripts without rewriting existing shell pro
 
 ## Projects
 
-Run `orca-team` in a project directory. It reconciles the team: reuses matching roles and reloads only changed agent/model/thinking configurations (keeping each original conversation), then creates missing roles and resumes stopped conversations in idle panes. `orca-team status` only inspects existing state; `orca-team init` only initializes. `--project PATH` selects a different project.
+Run `orca-team` in a project directory. It reconciles the team: stops every running role and resumes with current agent/model/thinking configuration (keeping each original conversation), then creates missing roles and resumes stopped conversations in idle panes. `orca-team status` only inspects existing state; `orca-team init` only initializes. `--project PATH` selects a different project.
 
 The default command first makes sure the Orca app is running: when the runtime metadata is
 missing it launches Orca and waits until the CLI answers. It then syncs role
@@ -41,8 +41,8 @@ Pi's default skill discovery; global Pi settings remain unchanged.
 Running roles are restarted through exact-session restart first, so after Orca
 itself resumes panes, one `orca-team` call brings all of them back to the
 configured agent, model, and thinking level. The command then recovers missing
-roles and creates new ones. Busy, ambiguous, or unverified roles are left running
-and reported as incomplete; rerun `orca-team` after they become idle. `start` is an alias for this default
+roles and creates new ones. Busy tasks are interrupted before exit. Ambiguous or unverified process identities
+are reported as incomplete. `start` is an alias for this default
 behavior. `restart ROLE` remains available for an explicit forced restart.
 When Orca has dropped a stopped role's pane and its saved conversation must not
 be resumed, `orca-team start --fresh ROLE` (repeatable) clears that role's pane
@@ -58,9 +58,9 @@ orca-team start --fresh simple
 orca-team status --group master
 ```
 
-Restart accepts one configured role, verifies its original transcript and idle
-agent, checks for an empty terminal draft, clears residual editor input, sends
-`/quit`, waits for a proven shell, then resumes the same conversation in the
+Restart accepts one configured role, verifies its original transcript and running agent, interrupts its task, requests
+`/quit` when idle, and falls back to terminating the verified provider process if
+needed. A proven shell is required before resuming the same conversation in the
 same pane. It shares the project startup lock. An ambiguous exit retains
 `restartIntent`: the next attempt only retries when native process evidence
 proves the same provider has been running since before the prior exit request.
@@ -105,9 +105,10 @@ multiple team commands from installing simultaneously. Update failures warn
 and continue startup with the available installation.
 The picker reads per-role model and thinking selections from local `pi-models.json`;
 `,` and `.` change the selected role's thinking level, and Enter saves it.
-Default startup reuses running roles whose recorded applied agent, model, and
-thinking match the current configuration. Only changed or unknown configurations
-are reloaded. Explicit `restart` still forces the selected roles to restart.
+Default startup stops every running role, even when its applied configuration
+matches. It interrupts busy tasks, requests graceful exit, and terminates only
+verified local provider processes if exit fails, then resumes original conversations.
+Explicit `restart` uses the same stop-first behavior for the selected roles.
 Startup prints elapsed time for connection, update, model selection, reload,
 and layout/conversation recovery. No overall time limit is imposed.
 
@@ -207,7 +208,7 @@ When all project terminals have been closed, two authenticated native/desktop in
 
 ## Reload local keys
 
-After updating local provider credentials, run `orca-team restart` in the project to restart all configured roles in their original panes and conversations. `orca-team restart ROLE` restarts one role. Busy roles are skipped and reported; other roles continue. Any incomplete role makes the command exit nonzero. Credentials are reread by the launch path and are never printed or copied by restart. Keys inherited from an unchanged parent shell must be refreshed at their source first.
+After updating local provider credentials, run `orca-team restart` in the project to restart all configured roles in their original panes and conversations. `orca-team restart ROLE` restarts one role. Busy tasks are interrupted and stopped before exact-session resume; unverifiable roles report failure. Any incomplete role makes the command exit nonzero. Credentials are reread by the launch path and are never printed or copied by restart. Keys inherited from an unchanged parent shell must be refreshed at their source first.
 ## Missing-pane recovery
 
 `orca-team` retains saved conversations when Orca's persisted tab snapshot differs

@@ -126,7 +126,7 @@ export async function confirmConversationOwnership({ name, saved, handle, cli, s
     const takeover = TAKEOVER_PROMPT.test(text);
     if (!update && !takeover && !/Resuming session…|Resuming session\.\.\./i.test(text)) return;
     if (update || takeover) {
-      const receipt = await cli(['terminal', 'send', '--terminal', handle, '--text', update ? '\x1b' : 'R']);
+      const receipt = await cli(['terminal', 'send', '--terminal', handle, '--text', update ? '\x1b' : 'r']);
       if (receipt.send?.accepted !== true) throw new Error(`${name}: startup prompt input was not confirmed`);
     }
     await sleep(500);

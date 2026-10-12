@@ -172,12 +172,12 @@ test('Codex resume takes over a conversation still open in another client', asyn
   const cli = async args => {
     calls.push(args);
     if (args[1] === 'read') return { terminal: { source: 'screen', tail: locked ? ['🔒 This conversation is open in another app', 'Close it there and press R to continue here.'] : ['› Ask Codex to do anything'] } };
-    if (args[1] === 'send' && args.at(-1) === 'R') { locked = false; return { send: { accepted: true } }; }
+    if (args[1] === 'send' && args.at(-1) === 'r') { locked = false; return { send: { accepted: true } }; }
     return { send: { accepted: true } };
   };
   await confirmConversationOwnership({ name: 'coder1', saved: { agent: 'codex' }, handle: 'h', cli, sleep: async () => {} });
   assert.equal(calls.filter(args => args[1] === 'send').length, 1);
-  assert.deepEqual(calls.find(args => args[1] === 'send'), ['terminal', 'send', '--terminal', 'h', '--text', 'R']);
+  assert.deepEqual(calls.find(args => args[1] === 'send'), ['terminal', 'send', '--terminal', 'h', '--text', 'r']);
   await assert.rejects(confirmConversationOwnership({ name: 'coder1', saved: { agent: 'codex' }, handle: 'h', attempts: 2, sleep: async () => {},
     cli: async args => args[1] === 'send' ? { send: { accepted: true } } : ({ terminal: { tail: ['This conversation is open in another app'] } }) }), /takeover was not confirmed/);
   await confirmConversationOwnership({ name: 'master', saved: { agent: 'pi' }, handle: 'h', cli: () => assert.fail('must not read Pi screens') });

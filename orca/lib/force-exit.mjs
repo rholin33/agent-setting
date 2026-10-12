@@ -90,7 +90,10 @@ export async function exitAgent({ name, saved, handle, terminal, cli, inspect, v
   saved.restartIntent = { sessionId: saved.session.id, createdAt: new Date().toISOString() };
   checkpoint();
   log(`${name}: interrupting current task before exit`);
-  const interrupt = await cli(['terminal', 'send', '--terminal', handle, '--interrupt']);
+  // OMP cancels its active turn with Escape; Ctrl-C does not cancel tool waits.
+  const interrupt = await cli(saved.agent === 'omp'
+    ? ['terminal', 'send', '--terminal', handle, '--text', '\x1b']
+    : ['terminal', 'send', '--terminal', handle, '--interrupt']);
   if (interrupt.send?.accepted !== true) throw new Error(`${name}: interrupt unconfirmed`);
   await sleep(500);
   live = await observe();

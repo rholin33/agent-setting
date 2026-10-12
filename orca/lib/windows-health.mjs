@@ -90,8 +90,28 @@ export function terminalHostVersion(directory = path.join(dataDirectory(), 'daem
 }
 
 // Read-only terminal-host protocol adapter: never attaches or writes a terminal.
+export function selectTerminalHost(inventories) {
+  const active = inventories.filter(value => value.sessions.length > 0);
+  if (active.length > 1) throw new Error('Multiple active terminal hosts; inventory is ambiguous');
+  if (active.length === 1) return active[0];
+  if (!inventories.length) throw new Error('terminal_host_inventory_unavailable');
+  return inventories[0];
+}
+
 export async function daemonSessions() {
-  const directory = path.join(dataDirectory(), 'daemon'), version = terminalHostVersion(directory);
+  const directory = path.join(dataDirectory(), 'daemon');
+  const versions = fs.readdirSync(directory)
+    .map(name => name.match(/^daemon-v(\d+)\.pid$/)?.[1])
+    .filter(Boolean).map(Number).sort((a, b) => b - a);
+  const inventories = [];
+  for (const version of versions) {
+    try { inventories.push(await readDaemonSessions(directory, version)); }
+    catch { /* Stale registrations must not hide the verified live host. */ }
+  }
+  return selectTerminalHost(inventories);
+}
+
+async function readDaemonSessions(directory, version) {
   const expected = JSON.parse(fs.readFileSync(path.join(directory, `daemon-v${version}.pid`), 'utf8'));
   const token = fs.readFileSync(path.join(directory, `daemon-v${version}.token`), 'utf8').trim();
   const suffix = createHash('sha256').update(directory).digest('hex').slice(0, 12);

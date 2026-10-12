@@ -66,9 +66,6 @@ async function restartCore({ home, project, role, cli, snapshot, state, checkpoi
     throw new Error(`${role}: launch pending; run orca-team to reconcile first`);
   }
   validateTranscript(saved, project);
-  saved.model = catalogRole.model;
-  saved.thinking = catalogRole.thinking;
-  saved.agent = catalogRole.agent;
   if (live.kind === 'agent') {
     if (!captureSession(saved, live, project, binding(await snapshot(), saved, project))) throw new Error(`${role}: live conversation is unverified`);
     if (forceExit) {
@@ -145,6 +142,11 @@ async function restartCore({ home, project, role, cli, snapshot, state, checkpoi
     log(`${role}: stopped for update; original conversation retained`);
     return;
   }
+  // Keep the old provider identity until its exit is proven.
+  saved.model = catalogRole.model;
+  saved.thinking = catalogRole.thinking;
+  saved.agent = catalogRole.agent;
+  checkpoint();
   const command = nodeCommand([path.join(home, 'bin', 'orca-team.mjs'), 'launch', '--home', home, '--project', project, '--role', role, '--resume']);
   await recoverInPane({ name: role, saved, handle, command, cli, inspect, checkpoint, verifyBinding: async () => {
     for (let attempt = 0; attempt < 30; attempt++) {

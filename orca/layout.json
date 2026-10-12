@@ -9,14 +9,7 @@
         "loader"
       ],
       "direction": "vertical",
-      "ratio": 0.5,
-      "displayTitle": "master · loader"
-    },
-    {
-      "title": "archi",
-      "agents": [
-        "archi"
-      ]
+      "ratio": 0.5
     },
     {
       "title": "coder",
@@ -25,14 +18,7 @@
         "coder2"
       ],
       "direction": "vertical",
-      "ratio": 0.5,
-      "displayTitle": "coder1 · coder2"
-    },
-    {
-      "title": "designer",
-      "agents": [
-        "designer"
-      ]
+      "ratio": 0.5
     },
     {
       "title": "reviewer",
@@ -41,13 +27,24 @@
         "test"
       ],
       "direction": "vertical",
-      "ratio": 0.5,
-      "displayTitle": "reviewer · test"
+      "ratio": 0.5
+    },
+    {
+      "title": "archi",
+      "agents": [
+        "archi"
+      ]
     },
     {
       "title": "simple",
       "agents": [
         "simple"
+      ]
+    },
+    {
+      "title": "designer",
+      "agents": [
+        "designer"
       ]
     }
   ],

@@ -44,3 +44,12 @@ test('changed pane never receives force termination', async () => {
   await assert.rejects(exitAgent(options), /pane changed/);
   assert.equal(killed, false);
 });
+
+test('OMP tool waits are cancelled with Escape before graceful exit', async () => {
+  const { options, calls } = fixture();
+  options.saved.agent = 'omp';
+  assert.equal((await exitAgent(options)).kind, 'shell');
+  assert.ok(calls.find(row => Array.isArray(row) && row.includes('\x1b')));
+  assert.ok(!calls.find(row => Array.isArray(row) && row.includes('--interrupt')));
+  assert.ok(!calls.includes('force'));
+});

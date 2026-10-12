@@ -38,27 +38,29 @@ function fixture(t) {
   return { home, project, cli, catalog };
 }
 
-test('reload reuses matching roles and restarts changed or unknown configurations', async t => {
+test('reload stops all running roles including unchanged configurations', async t => {
   const { home, project, cli } = fixture(t);
   const logs = [];
   const calls = [];
   const result = await reloadRunning({
     home, project, cli, snapshot: async () => ({}), inspect: async () => ({ kind: 'agent' }), log: msg => logs.push(msg),
-    restart: async options => { calls.push(options.roles); return { reloaded: options.roles, failed: [] }; },
+    restart: async options => { assert.equal(options.forceExit, true); calls.push(options.roles); return { reloaded: options.roles, failed: [] }; },
   });
-  assert.deepEqual(calls, [['coder1', 'idle']]);
-  assert.deepEqual(result.reloaded, ['coder1', 'idle']);
-  assert.deepEqual(result.current, ['master']);
-  assert.ok(logs.some(line => line.includes('Restarting 2 running role(s)')));
+  assert.deepEqual(calls, [['master', 'coder1', 'idle']]);
+  assert.deepEqual(result.reloaded, ['master', 'coder1', 'idle']);
+  assert.deepEqual(result.current, []);
+  assert.ok(logs.some(line => line.includes('Restarting 3 running role(s)')));
 });
 
-test('matching config does not inspect or restart its running pane', async t => {
+test('matching configuration still requests interrupt/exit before resume', async t => {
   const { home, project, cli } = fixture(t);
+  let inspected = 0;
   const result = await reloadRunning({ home, project, cli, names: ['master'], log: () => {},
-    inspect: async () => { throw new Error('unnecessary native inspection'); },
-    restart: async () => { throw new Error('unnecessary restart'); } });
-  assert.deepEqual(result.current, ['master']);
-  assert.deepEqual(result.reloaded, []);
+    inspect: async () => { inspected++; return { kind: 'agent' }; },
+    restart: async options => { assert.equal(options.forceExit, true); assert.deepEqual(options.roles, ['master']); return { reloaded: options.roles, failed: [] }; } });
+  assert.equal(inspected, 1);
+  assert.deepEqual(result.current, []);
+  assert.deepEqual(result.reloaded, ['master']);
 });
 
 test('reload without running panes performs no restarts', async t => {

@@ -10,13 +10,14 @@ import { normalizeProject, quote } from '../lib/platform.mjs';
 import { orca, snapshot, rpc } from '../lib/orca.mjs';
 import { initialize, runTeam, readJson, saveJson, projectFiles, withLock } from '../lib/team.mjs';
 import { launchArguments } from '../lib/sessions.mjs';
-import { restartTeam } from '../lib/restart.mjs';
+import { restartTeam, resolveRestartRoles } from '../lib/restart.mjs';
 import { inspectHealth } from '../lib/health.mjs';
 import { ensureOrca } from '../lib/orca-boot.mjs';
 import { syncModels } from '../lib/model-sync.mjs';
 import { updateAgentsBeforeStart } from '../lib/agent-update.mjs';
 import { updateLifecycle } from '../lib/update-lifecycle.mjs';
 import { reloadRunning } from '../lib/reload.mjs';
+import { restoreGroupLayout } from '../lib/layout.mjs';
 import { taskHistory } from '../lib/history.mjs';
 import { deploy, installQuickCommands, registerShellProfile } from '../lib/install.mjs';
 
@@ -47,7 +48,7 @@ try {
   if (values.group !== undefined && !['start', 'status'].includes(action)) throw new Error('--group is only supported for start/status');
   if (values.fresh?.length && action !== 'start') throw new Error('--fresh is only supported for start');
   if (values.help) {
-    console.log('orca-team [status|history [ROLE]|init|install|export-config] [--group TITLE] [--project PATH] [--home PATH] [--fresh ROLE] [--no-pick]\nDefault: bring the selected project to the configured state. Create missing roles, resume original conversations in idle panes, and reuse matching running roles and reload only changed agent/model/thinking configurations while keeping their conversations. Busy or unverifiable roles are reported as incomplete.\nstart is an alias for the default command; restart [ROLE|GROUP ...] restarts a subset on demand.\n--fresh ROLE (repeatable) drops one stopped role\'s saved pane/session binding and starts that role in a new pane; it refuses while the role is running.\n--no-pick skips the Pi model picker. install --quick-commands registers Orca grouped global shortcuts.');
+    console.log('orca-team [status|history [ROLE]|init|install|export-config] [--group TITLE] [--project PATH] [--home PATH] [--fresh ROLE] [--no-pick]\nDefault: bring the selected project to the configured state. Create missing roles, resume original conversations in idle panes, and stop all running roles, including busy roles, and resume with the configured agent/model/thinking while keeping their conversations. Busy or unverifiable roles are reported as incomplete.\nstart is an alias for the default command; restart [ROLE|GROUP ...] restarts a subset on demand.\n--fresh ROLE (repeatable) drops one stopped role\'s saved pane/session binding and starts that role in a new pane; it refuses while the role is running.\n--no-pick skips the Pi model picker. install --quick-commands registers Orca grouped global shortcuts.');
   } else {
     const home = path.resolve(values.home || process.env.ORCA_TEAM_HOME || path.join(os.homedir(), '.orca', 'roles', 'ccb-team'));
     const project = normalizeProject(fs.realpathSync(values.project || process.cwd()));
@@ -69,9 +70,13 @@ try {
     } else if (action === 'history') {
       console.log(JSON.stringify(await taskHistory({ home, project, role: roleName, cli: orca, cached: values.cached }), null, 2));
     } else if (action === 'restart') {
+      const files = projectFiles(home, project);
+      if (!fs.existsSync(files.config) || !fs.existsSync(files.state)) throw new Error(`No initialized Orca team for ${project}; specify --project PATH. Restart will not create a new team.`);
+      resolveRestartRoles(readJson(files.config), readJson(path.join(home, 'team.json')), [...(values.role ? [values.role] : []), ...positionals.slice(1)]);
       await stage('Orca connection', () => ensureOrca({ cli: orca }));
       await stage('Agent update prehook', () => updatePrehook(home));
-      await restartTeam({ home, project, targets: [...(values.role ? [values.role] : []), ...positionals.slice(1)], cli: orca, snapshot });
+      await restoreGroupLayout({ project, config: readJson(files.config), state: readJson(files.state) });
+      await restartTeam({ home, project, forceExit: true, targets: [...(values.role ? [values.role] : []), ...positionals.slice(1)], cli: orca, snapshot });
     } else if (action === 'start') {
       if (await stage('Orca connection', () => ensureOrca({ cli: orca }))) console.log('Orca was started automatically');
       const files = projectFiles(home, project);
@@ -117,7 +122,7 @@ try {
       }
       await stage('Model selection', () => syncModels({ home, names, pick: !values['no-pick'] }));
       await stage('Agent update prehook', () => updatePrehook(home, names));
-      // Reuse matching roles; only changed configurations need an exit/resume cycle.
+      // Stop running roles before exact-session resume, including unchanged/busy roles.
       const { skipped, current } = await stage('Configuration reload', () => reloadRunning({ home, project, names, cli: orca, snapshot,
         inspect: (handle, provider) => inspectHealth(orca, rpc, handle, provider) }));
       if (current.length) console.log(`Configuration unchanged; reusing: ${current.join(', ')}`);

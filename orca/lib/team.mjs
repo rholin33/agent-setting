@@ -7,6 +7,7 @@ import { binding, sameWorktree, validateTranscript } from './sessions.mjs';
 import { inspectHealth, recoverInPane } from './health.mjs';
 import { rpc } from './orca.mjs';
 import { prepareLaunch, captureSession } from './launch-state.mjs';
+import { restoreGroupLayout } from './layout.mjs';
 import { pinGroupTabs } from './tabs.mjs';
 import { verifyWindowsAbsence } from './windows-health.mjs';
 import { assertUniqueRoleTabs, assertConversationAbsent, reconcileRoleTabs } from './recovery-guards.mjs';
@@ -87,7 +88,7 @@ export function assertLayout(inventory, config, state) {
     if (tab.agents.length === 2) {
       const second = state.agents[tab.agents[1]];
       const leaves = [pane?.first?.leafId, pane?.second?.leafId];
-      if (pane?.type !== 'pane-split' || pane.direction !== 'vertical' || second.tabId !== first.tabId || !leaves.includes(first.leafId) || !leaves.includes(second.leafId)) throw new Error(`Tab ${tab.title} is missing visible left/right panes. Use Orca View > Reload, then retry.`);
+      if (pane?.type !== 'pane-split' || pane.direction !== 'vertical' || second.tabId !== first.tabId || leaves[0] !== first.leafId || leaves[1] !== second.leafId) throw new Error(`Tab ${tab.title} is missing visible left/right panes. Use Orca View > Reload, then retry.`);
     }
   }
 }
@@ -121,7 +122,7 @@ export async function focusDesktop(handle) {
   if (process.platform === 'darwin') execFileSync('/usr/bin/open', ['-a', 'Orca']);
   return rpc('terminal.focus', { terminal: handle, navigation: 'host' });
 }
-export async function runTeam({ home, project, action, group, cli, snapshot, published = worktree => rpc('session.tabs.list', { worktree }), pin = pinGroupTabs, focus = focusDesktop, verifyAbsent = process.platform === 'darwin' ? verifyMacAbsence : verifyWindowsAbsence, inspect = (handle, provider) => inspectHealth(cli, rpc, handle, provider), sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), log = console.log }) {
+export async function runTeam({ home, project, action, group, cli, snapshot, published = worktree => rpc('session.tabs.list', { worktree }), pin = pinGroupTabs, restoreLayout = restoreGroupLayout, focus = focusDesktop, verifyAbsent = process.platform === 'darwin' ? verifyMacAbsence : verifyWindowsAbsence, inspect = (handle, provider) => inspectHealth(cli, rpc, handle, provider), sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), log = console.log }) {
   project = normalizeProject(project);
   const files = projectFiles(home, project);
   if (action === 'start') await initialize(home, project);
@@ -338,6 +339,7 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pub
       if (saved.pending) issues.push(`${name}: launch unconfirmed; pending retained, no automatic resend`);
     }
     if (action === 'start') {
+      await restoreLayout({ project, config, state });
       assertLayout(await list(), config, state); saveJson(files.state, state);
       if (issues.length) throw new Error(issues.join('\n'));
       if (group !== undefined) await cli(['terminal', 'switch', '--terminal', resolved[config.tabs[0].agents[0]].handle]);

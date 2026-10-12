@@ -63,3 +63,39 @@ for (const provider of ['pi', 'codex']) for (const mode of ['ok', 'stop', 'busy'
     }
   });
 }
+
+for (const busy of [false, true]) test(`Pi to OMP keeps old provider for exit verification (busy=${busy})`, async t => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'omp-transition-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const project = normalizeProject(home);
+  saveJson(path.join(home, 'team.json'), [{ name: 'archi', agent: 'omp', model: 'model' }]);
+  saveJson(path.join(home, 'layout.json'), { tabs: [{ title: 'archi', agents: ['archi'] }] });
+  const files = await initialize(home, project), transcriptPath = path.join(home, 'original.jsonl');
+  fs.writeFileSync(transcriptPath, JSON.stringify({ type: 'session', id: 'original', cwd: project }) + '\n');
+  const state = readJson(files.state);
+  state.agents.archi = { agent: 'pi', tabId: 't', leafId: 'l', session: { id: 'original', transcriptPath } };
+  saveJson(files.state, state);
+  const terminal = { handle: 'h', incarnationId: 'i', tabId: 't', leafId: 'l', connected: true, worktreePath: project };
+  let phase = 'pi', sends = 0;
+  const options = { home, project, role: 'archi', snapshot: () => ({}), focus: async () => {}, log: () => {}, sleep: async () => {},
+    inspect: async (_, provider) => {
+      if (phase !== 'shell') assert.equal(provider, phase);
+      return { kind: phase === 'shell' ? 'shell' : 'agent', terminal, sessionPaths: [transcriptPath] };
+    },
+    cli: async args => {
+      const verb = args[1];
+      if (verb === 'list') return { terminals: [terminal] };
+      if (verb === 'wait') return { wait: { satisfied: !busy } };
+      if (verb === 'read') return { terminal: { source: 'screen', draft: '', tail: ['PS C:\\project>'] } };
+      if (verb === 'send') {
+        if (args[5] === '\u0015\u000b') return { send: { accepted: true } };
+        sends++;
+        if (args[5] === '/quit') { assert.equal(readJson(files.state).agents.archi.agent, 'pi'); phase = 'shell'; }
+        else { assert.equal(readJson(files.state).agents.archi.agent, 'omp'); phase = 'omp'; }
+        return { send: { accepted: true } };
+      }
+      assert.fail(`Unexpected ${verb}`);
+    } };
+  if (busy) { await assert.rejects(restartRole(options), /busy/); assert.equal(readJson(files.state).agents.archi.agent, 'pi'); assert.equal(sends, 0); }
+  else { await restartRole(options); assert.equal(sends, 2); assert.equal(readJson(files.state).agents.archi.appliedModel.agent, 'omp'); assert.equal(readJson(files.state).agents.archi.session.id, 'original'); }
+});

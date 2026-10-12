@@ -2,8 +2,8 @@
   {
     "name": "master",
     "agent": "omp",
-    "model": "pay/gpt-6-astra",
-    "thinking": "xhigh",
+    "model": "pay/gpt-6.1-sol",
+    "thinking": "max",
     "role": "agentroles.ccb_self"
   },
   {
@@ -16,7 +16,7 @@
   {
     "name": "archi",
     "agent": "omp",
-    "model": "pay/gpt-6-astra",
+    "model": "pay/gpt-6.1-sol",
     "thinking": "xhigh",
     "role": "agentroles.archi"
   },
@@ -61,5 +61,12 @@
     "model": "pay/gpt-6.1-sol",
     "thinking": "xhigh",
     "role": "agentroles.simple"
+  },
+  {
+    "name": "deploy",
+    "agent": "codex",
+    "model": "gpt-6.1-sol",
+    "thinking": "medium",
+    "role": "agentroles.deploy"
   }
 ]

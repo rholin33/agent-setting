@@ -7,8 +7,19 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { dataDirectory, normalizeProject, projectKey, nodeCommand } from '../lib/platform.mjs';
 import { validateTranscript, launchArguments, binding } from '../lib/sessions.mjs';
-import { initialize, runTeam, readJson, saveJson, projectFiles, withLock } from '../lib/team.mjs';
+import { initialize, runTeam as realRunTeam, readJson, saveJson, projectFiles, withLock } from '../lib/team.mjs';
 import { deploy, installQuickCommands, registerShellProfile } from '../lib/install.mjs';
+
+// Team lifecycle fixtures mock CLI inventory; layout RPC has its own behavioral suite.
+const runTeam = options => realRunTeam({ restoreLayout: async ({ config, state }) => {
+  const inventory = await options.cli(['terminal', 'list']);
+  for (const tab of config.tabs.filter(tab => tab.agents.length === 2)) {
+    const visible = inventory.visualLayouts[0].root.tabs.find(row => row.tabId === state.agents[tab.agents[0]].tabId);
+    if (visible?.panes?.first?.leafId === state.agents[tab.agents[1]].leafId) {
+      [visible.panes.first, visible.panes.second] = [visible.panes.second, visible.panes.first];
+    }
+  }
+}, ...options });
 
 const source = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 function fixture(t) {
@@ -105,7 +116,7 @@ test('fresh launch creates six tabs/nine roles and rerun has no mutations', asyn
   delete withUnrelatedPending.agents.archi;
   saveJson(stateFile, withUnrelatedPending);
   await runTeam(options); assert.equal(creations, 9); assert.equal(tabs.length, 6);
-  assert.deepEqual(pinned.at(-1), ['master', 'archi', 'coder', 'designer', 'reviewer', 'simple']);
+  assert.deepEqual(pinned.at(-1), ['master', 'coder', 'reviewer', 'archi', 'simple', 'designer']);
   await runTeam(options); assert.equal(creations, 9);
   const stateBeforeStatus = fs.readFileSync(stateFile, 'utf8');
   const pinCount = pinned.length;
@@ -132,9 +143,9 @@ test('exact resume checks ID, project, file and original Codex home', t => {
   fs.writeFileSync(transcriptPath, JSON.stringify({ type: 'session_meta', payload: { id: 'original', cwd: project } }) + '\n');
   const role = { agent: 'codex', model: 'model', thinking: 'medium', session: { id: 'original', transcriptPath } };
   validateTranscript(role, project);
-  const launch = launchArguments(role, 'unused', role.session, project);
+  const launch = launchArguments(role, 'unused', role.session, project, undefined, { codexNoDaemon: true });
   assert.deepEqual(launch.args.slice(0, 2), ['resume', 'original']);
-  assert.deepEqual(launch.args, ['resume', 'original', '--model', 'model', '-c', 'model_reasoning_effort="medium"']);
+  assert.deepEqual(launch.args, ['resume', 'original', '--model', 'model', '--no-daemon', '-c', 'model_reasoning_effort="medium"']);
   assert.equal(launch.env.CODEX_HOME, path.join(temp, 'codex'));
   assert.throws(() => validateTranscript({ ...role, session: { ...role.session, id: 'wrong' } }, project), /mismatch/);
   assert.throws(() => validateTranscript(role, project + '-other'), /mismatch/);
@@ -162,10 +173,10 @@ test('Codex launches pin the synced local model and thinking', t => {
   const prompt = path.join(home, 'prompt.md');
   fs.writeFileSync(prompt, 'Role instructions');
   const role = { agent: 'codex', model: 'local-config-model', thinking: 'medium' };
-  assert.deepEqual(launchArguments(role, prompt, null, project, home).args,
-    ['--model', 'local-config-model', '-c', 'model_reasoning_effort="medium"', 'Role instructions']);
-  const bound = launchArguments({ ...role, piProvider: 'pay' }, prompt, null, project, home);
-  assert.deepEqual(bound.args, ['--model', 'local-config-model', '-c', 'model_reasoning_effort="medium"', 'Role instructions']);
+  assert.deepEqual(launchArguments(role, prompt, null, project, home, { codexNoDaemon: true }).args,
+    ['--model', 'local-config-model', '--no-daemon', '-c', 'model_reasoning_effort="medium"', 'Role instructions']);
+  const bound = launchArguments({ ...role, piProvider: 'pay' }, prompt, null, project, home, { codexNoDaemon: true });
+  assert.deepEqual(bound.args, ['--model', 'local-config-model', '--no-daemon', '-c', 'model_reasoning_effort="medium"', 'Role instructions']);
 });
 test('installation retains runtime state and quick commands preserve unrelated entries', async t => {
   const { home, project } = fixture(t);
@@ -418,7 +429,7 @@ test('split receipt timeout reconciles six groups without duplicate launches', a
   delete withUnrelatedPending.agents.archi;
   saveJson(stateFile, withUnrelatedPending);
   await runTeam(options); assert.equal(creations, 9); assert.equal(tabs.length, 6);
-  assert.deepEqual(pinned.at(-1), ['master', 'archi', 'coder', 'designer', 'reviewer', 'simple']);
+  assert.deepEqual(pinned.at(-1), ['master', 'coder', 'reviewer', 'archi', 'simple', 'designer']);
   await runTeam(options); assert.equal(creations, 9);
   const stateBeforeStatus = fs.readFileSync(stateFile, 'utf8');
   const pinCount = pinned.length;
