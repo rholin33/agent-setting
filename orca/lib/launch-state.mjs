@@ -1,8 +1,45 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { validateTranscript } from './sessions.mjs';
 import { claudeTranscriptPath } from './claude.mjs';
+import { dataDirectory } from './platform.mjs';
+
+// 新 Codex 会话的进程参数和 Orca 实时接口都不带会话 ID：启动时首条消息附带本次 launchIntent 标记，
+// 再在 Codex 会话目录中按标记找到唯一的会话记录。macOS 与 Windows 通用。
+const CODEX_MARKER_SCAN_BYTES = 512 * 1024;
+const CODEX_CLOCK_SKEW_MS = 5000;
+export const codexLaunchMarker = id => `[orca-launch ${id}]`;
+export function codexSessionRoots(env = process.env, home = os.homedir()) {
+  return [env.CODEX_HOME || path.join(home, '.codex'), path.join(dataDirectory(), 'codex-runtime-home', 'home')].map(root => path.join(root, 'sessions'));
+}
+export function findCodexLaunch(intent, roots = codexSessionRoots(), now = Date.now()) {
+  const created = Date.parse(intent.createdAt), marker = codexLaunchMarker(intent.id);
+  const pad = value => String(value).padStart(2, '0');
+  // 会话目录按日期分组；本地时区与 UTC 都可能被使用，启动日与今天都要覆盖。
+  const days = new Set([created, now].flatMap(time => {
+    const date = new Date(time);
+    return [[date.getFullYear(), pad(date.getMonth() + 1), pad(date.getDate())], [date.getUTCFullYear(), pad(date.getUTCMonth() + 1), pad(date.getUTCDate())]].map(parts => path.join(...parts.map(String)));
+  }));
+  const matches = [];
+  for (const root of new Set(roots)) for (const day of days) {
+    const directory = path.join(root, day);
+    if (!fs.existsSync(directory)) continue;
+    for (const name of fs.readdirSync(directory)) {
+      const file = path.join(directory, name);
+      if (!/^rollout-.*\.jsonl$/.test(name) || fs.statSync(file).mtimeMs < created - CODEX_CLOCK_SKEW_MS) continue;
+      const fd = fs.openSync(file, 'r');
+      try {
+        const buffer = Buffer.alloc(CODEX_MARKER_SCAN_BYTES);
+        if (buffer.subarray(0, fs.readSync(fd, buffer, 0, buffer.length, 0)).toString('utf8').includes(marker)) matches.push(file);
+      } finally { fs.closeSync(fd); }
+    }
+  }
+  if (matches.length !== 1) return null;
+  const header = JSON.parse(fs.readFileSync(matches[0], 'utf8').split('\n')[0]);
+  return header.type === 'session_meta' && header.payload?.id ? { key: 'session_id', id: header.payload.id, transcriptPath: matches[0] } : null;
+}
 
 export function prepareLaunch(saved, role, directory) {
   if (saved.session || saved.launchIntent) return;
@@ -35,6 +72,13 @@ export function captureSession(saved, live, project, observed) {
     if (!transcriptPath || !fs.readFileSync(transcriptPath, 'utf8').split('\n').some(line => line.includes('"cwd"'))) return false;
     session = { key: 'session_id', id, transcriptPath };
   }
+  let markerProof = false;
+  if (!session && saved.agent === 'codex' && saved.launchIntent?.id) {
+    session = findCodexLaunch(saved.launchIntent);
+    // Codex 首轮写入会话记录前没有文件，启动期间重试。
+    if (!session) return false;
+    markerProof = true;
+  }
   if (session && explicit && session.transcriptPath !== explicit) throw new Error('Launch intent transcript differs from Orca binding');
   if (!session) return false;
   if (saved.session && saved.session.id !== session.id) throw new Error('Conversation changed; original binding retained');
@@ -44,9 +88,9 @@ export function captureSession(saved, live, project, observed) {
   if (paths.length && !paths.some(p => normalize(p) === normalize(session.transcriptPath))) throw new Error('Live conversation differs from saved binding');
   if (live.sessionIds?.length && !live.sessionIds.includes(session.id)) throw new Error('Live conversation differs from saved binding');
   if (live.kind !== 'agent') return false;
-  if (!observed && !paths.length && !live.sessionIds?.length) return false;
+  if (!observed && !paths.length && !live.sessionIds?.length && !markerProof) return false;
   saved.session = session;
-  saved.bindingSource = paths.length || live.sessionIds?.length ? 'process-arguments' : 'orca-pane';
+  saved.bindingSource = paths.length || live.sessionIds?.length ? 'process-arguments' : markerProof ? 'launch-marker' : 'orca-pane';
   saved.lastVerifiedAt = new Date().toISOString();
   if (live.terminal) Object.assign(saved, { handle: live.terminal.handle, incarnationId: live.terminal.incarnationId });
   return true;

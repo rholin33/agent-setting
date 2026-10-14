@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { readConversation, renderHandoff, prepareHandoff, switchProviders, handoffPrompt } from '../lib/handoff.mjs';
+import { readConversation, renderHandoff, prepareHandoff, switchProviders, pendingSwitches, handoffPrompt } from '../lib/handoff.mjs';
 import { launchArguments } from '../lib/sessions.mjs';
 import { projectFiles, readJson, saveJson } from '../lib/team.mjs';
 import { normalizeProject } from '../lib/platform.mjs';
@@ -105,31 +105,55 @@ test('prepareHandoff writes the document and clears the old provider binding', a
   await assert.rejects(prepareHandoff({ name: 'master', saved: { agent: 'omp', session: { id: 'other', transcriptPath: file } }, to: 'claude', directory: dir, project: dir }), /mismatch/);
 });
 
-test('switchProviders stops running roles and refuses a pane that is not a shell', async t => {
+test('switchProviders stops only running roles regardless of fingerprint, then hands off atomically', async t => {
   const dir = temp(t), home = path.join(dir, 'home'), project = dir;
   const files = projectFiles(home, project);
   fs.mkdirSync(files.directory, { recursive: true });
   const transcript = path.join(dir, 'omp.jsonl');
   ompTranscript(transcript, project);
-  const initial = { workspace: project, agents: { master: { agent: 'omp', tabId: 't', leafId: 'l', session: { id: 'omp-1', transcriptPath: transcript } } } };
-  saveJson(files.state, initial);
+  const session = { id: 'omp-1', transcriptPath: transcript };
+  // loader 的已应用指纹与当前目录一致（目录尚未保存新 CLI 时的真实情形），archi 没有窗格。
+  const initial = { workspace: project, agents: {
+    loader: { agent: 'omp', tabId: 't', leafId: 'l', appliedModel: { agent: 'omp', model: 'same', thinking: 'high' }, session },
+    archi: { agent: 'omp', tabId: 'gone', leafId: 'gone', session } } };
+  const reset = () => saveJson(files.state, initial);
   const cli = async () => ({ terminals: [{ tabId: 't', leafId: 'l', handle: 'h', connected: true, worktreePath: project }] });
-  const stopped = [];
-  const stop = async ({ names }) => { stopped.push(...names); return { skipped: [] }; };
-  const switches = [{ name: 'master', from: 'omp', to: 'claude' }];
+  const switches = [{ name: 'loader', from: 'omp', to: 'codex' }, { name: 'archi', from: 'omp', to: 'claude' }];
+  const run = (kinds, restart) => {
+    let index = 0;
+    return switchProviders({ switches, home, project, cli, log() {}, restart, inspect: async () => ({ kind: kinds[Math.min(index++, kinds.length - 1)] }) });
+  };
 
-  await assert.rejects(switchProviders({ switches, home, project, cli, stop, log() {}, inspect: async () => ({ kind: 'agent' }) }), /process is agent/);
+  reset();
+  await assert.rejects(run(['unverifiable'], async () => assert.fail('must not stop')), /loader: omp pane is unverifiable/);
   assert.deepEqual(readJson(files.state), initial);
-  await assert.rejects(switchProviders({ switches, home, project, cli, log() {}, inspect: async () => ({ kind: 'shell' }),
-    stop: async () => ({ skipped: [{ name: 'master', reason: 'agent is busy' }] }) }), /Cannot switch CLI: master: agent is busy/);
+  await assert.rejects(run(['agent'], async () => ({ reloaded: [], failed: [{ name: 'loader', reason: 'agent is busy' }] })), /loader: agent is busy/);
+  assert.deepEqual(readJson(files.state), initial);
+  await assert.rejects(run(['agent', 'agent'], async () => ({ reloaded: ['loader'], failed: [] })), /loader: omp pane is agent/);
+  assert.deepEqual(readJson(files.state), initial);
 
-  const logs = [];
-  await switchProviders({ switches, home, project, cli, stop, log: line => logs.push(line), inspect: async () => ({ kind: 'shell' }) });
-  assert.deepEqual(stopped, ['master', 'master']);
-  const saved = readJson(files.state).agents.master;
-  assert.equal(saved.session, undefined);
-  assert.ok(fs.existsSync(saved.handoff.path));
-  assert.match(logs.at(-1), /master: switching CLI omp → claude; handoff written to /);
+  const stopped = [];
+  await run(['agent', 'shell'], async options => {
+    stopped.push(options);
+    return { reloaded: options.roles, failed: [] };
+  });
+  assert.deepEqual(stopped.map(options => [options.roles, options.stopOnly, options.forceExit]), [[['loader'], true, true]]);
+  const state = readJson(files.state);
+  for (const name of ['loader', 'archi']) {
+    assert.equal(state.agents[name].session, undefined);
+    assert.equal(state.agents[name].handoff.sessionId, 'omp-1');
+    assert.ok(fs.existsSync(state.agents[name].handoff.path));
+  }
+});
+
+test('pendingSwitches compares the saved conversation CLI with the catalog for every start', () => {
+  const state = { agents: {
+    master: { agent: 'omp', session: { id: 'a' } }, loader: { agent: 'omp', launchIntent: { id: 'b' } },
+    coder1: { agent: 'codex', session: { id: 'c' } }, fresh: { agent: 'omp' } } };
+  const catalog = [{ name: 'master', agent: 'claude' }, { name: 'loader', agent: 'codex' }, { name: 'coder1', agent: 'codex' }, { name: 'fresh', agent: 'claude' }];
+  assert.deepEqual(pendingSwitches(state, catalog, ['master', 'loader', 'coder1', 'fresh']),
+    [{ name: 'master', from: 'omp', to: 'claude' }, { name: 'loader', from: 'omp', to: 'codex' }]);
+  assert.deepEqual(pendingSwitches(state, catalog, ['coder1']), []);
 });
 
 test('codex fresh launch appends the handoff note to the role prompt', t => {

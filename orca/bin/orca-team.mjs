@@ -14,11 +14,12 @@ import { orca, snapshot, rpc } from '../lib/orca.mjs';
 import { initialize, runTeam, readJson, saveJson, projectFiles, withLock } from '../lib/team.mjs';
 import { launchArguments } from '../lib/sessions.mjs';
 import { claudeTranscriptPath } from '../lib/claude.mjs';
+import { codexLaunchMarker } from '../lib/launch-state.mjs';
 import { restartTeam, resolveRestartRoles } from '../lib/restart.mjs';
 import { inspectHealth } from '../lib/health.mjs';
 import { ensureOrca } from '../lib/orca-boot.mjs';
 import { syncModels } from '../lib/model-sync.mjs';
-import { switchProviders, handoffPrompt } from '../lib/handoff.mjs';
+import { switchProviders, pendingSwitches, handoffPrompt } from '../lib/handoff.mjs';
 import { updateAgentsBeforeStart, autoUpdateAgents, clearUpdateCheck } from '../lib/agent-update.mjs';
 import { updateLifecycle } from '../lib/update-lifecycle.mjs';
 import { reloadRunning } from '../lib/reload.mjs';
@@ -130,6 +131,9 @@ try {
       if (!fs.existsSync(files.config) || !fs.existsSync(files.state)) throw new Error(`No initialized Orca team for ${project}; specify --project PATH. Restart will not create a new team.`);
       const targets = [...(values.role ? [values.role] : []), ...(values.group ? [values.group] : []), ...positionals.slice(1)];
       const restartNames = resolveRestartRoles(readJson(files.config), readJson(path.join(home, 'team.json')), targets);
+      // restart 只恢复原会话；换了 CLI 的角色没有可恢复的同 CLI 会话，必须由 start 执行切换。
+      const switching = pendingSwitches(readJson(files.state), readJson(path.join(home, 'team.json')), restartNames);
+      if (switching.length) throw new Error(`CLI changed for ${switching.map(item => `${item.name} (${item.from} → ${item.to})`).join(', ')}; run orca-team to switch them with a context handoff`);
       await stage('Orca connection', () => ensureOrca({ cli: orca }));
       await stage('Agent update', () => autoUpdate(home, restartNames));
       await restoreGroupLayout({ project, config: readJson(files.config), state: readJson(files.state) });
@@ -188,16 +192,17 @@ try {
       const menuResult = {};
       const confirmRemote = names.filter(name => continuity.roles[name]?.lastSetupOutcome?.status === 'preflight_failed');
       const remoteStates = Object.fromEntries(Object.entries(continuity.roles).map(([name, entry]) => [name, entry.runtime]));
-      const sessionAgents = fs.existsSync(files.state) ? Object.fromEntries(Object.entries(readJson(files.state).agents).filter(([, saved]) => saved.session || saved.launchIntent).map(([name, saved]) => [name, saved.agent])) : {};
-      // 远端接管或交接待确认的角色由 continuity 账本负责，不能同时切换本地 CLI。
-      const prepareSwitches = switches => {
+      await stage('Model selection', () => syncModels({ home, names, pick: !values['no-pick'], remoteStates, remoteRequests: pickerRequests, confirmRemote, menuResult }));
+      if (menuResult.status === 'cancelled') throw Object.assign(new Error('Startup cancelled; no roles restarted or remote requests sent.'), { code: 'STARTUP_CANCELLED' });
+      // 会话所用 CLI 与配置不同的角色先换 CLI（停止、写交接、清除旧绑定），再进入重载和恢复。
+      const switches = fs.existsSync(files.state) ? pendingSwitches(readJson(files.state), readJson(path.join(home, 'team.json')), names) : [];
+      if (switches.length) {
+        // 远端接管或交接待确认的角色由 continuity 账本负责，不能同时切换本地 CLI。
         const bound = switches.filter(({ name }) => continuity.roles[name]?.pending || continuity.roles[name]?.runtime).map(({ name }) => name);
         if (bound.length) throw new Error(`Cannot switch CLI for continuity-bound roles: ${bound.join(', ')}; settle remote handoffs first`);
-        return switchProviders({ switches, home, project, cli: orca, snapshot,
-          inspect: (handle, provider) => inspectHealth(orca, rpc, handle, provider) });
-      };
-      await stage('Model selection', () => syncModels({ home, names, pick: !values['no-pick'], sessionAgents, prepareSwitches, remoteStates, remoteRequests: pickerRequests, confirmRemote, menuResult }));
-      if (menuResult.status === 'cancelled') throw Object.assign(new Error('Startup cancelled; no roles restarted or remote requests sent.'), { code: 'STARTUP_CANCELLED' });
+        await stage('CLI switch', () => switchProviders({ switches, home, project, cli: orca, snapshot,
+          inspect: (handle, provider) => inspectHealth(orca, rpc, handle, provider) }));
+      }
       for (const request of pickerRequests) {
         if (!remoteRequests.some(item => item.role === request.role)) remoteRequests.push(request);
       }
@@ -254,8 +259,11 @@ try {
       const handoff = saved?.session ? null : current?.handoff ?? null;
       const initialMessage = handoff ? handoffPrompt(role.name, handoff)
         : `Initialize the fixed ${role.name} role using the loaded instructions. Reply only "${role.name} ready". Do not call tools or start tasks.`;
+      // 新 Codex 会话没有可见的会话 ID，首条消息附带启动标记供 start 认领会话记录。
+      if (role.agent === 'codex' && !saved?.session && !current?.launchIntent?.id) throw new Error('Codex launch intent is missing; rerun start to prepare it');
+      const codexNote = role.agent === 'codex' && !saved?.session ? [handoff && initialMessage, codexLaunchMarker(current.launchIntent.id)].filter(Boolean).join('\n\n') : null;
       const launch = launchArguments({ ...launchRole, role: role.role }, prompt, saved?.session, project, home,
-        { codexNoDaemon: role.agent === 'codex' && supportsNoDaemon(), initialNote: handoff && initialMessage });
+        { codexNoDaemon: role.agent === 'codex' && supportsNoDaemon(), initialNote: codexNote });
       if (role.agent === 'codex' && role.piProvider) {
         const provider = readJson(path.join(os.homedir(), '.pi', 'agent', 'models.json')).providers?.[role.piProvider];
         if (!provider || provider.api !== 'openai-responses' || !provider.models?.some(model => model.id === role.model)) {

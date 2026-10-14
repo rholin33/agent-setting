@@ -23,6 +23,8 @@ export function projectFiles(home, project) {
   // Legacy PowerShell keeps a zero-byte start.lock after releasing its OS lock.
   return { directory, config: path.join(directory, 'config.json'), state: path.join(directory, 'state.json'), lock: path.join(directory, 'start.node.lock') };
 }
+// 新会话（尤其冷启动的 Claude/Codex）写出首条会话记录可能需要数十秒；每次间隔 500ms。
+const NEW_CONVERSATION_ATTEMPTS = 60;
 // pid 复用容差：ps 的 lstart 只精确到秒。
 const LOCK_START_TOLERANCE_MS = 2000;
 export function withLock(file, action, { startTime = processStartTime } = {}) {
@@ -265,7 +267,7 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pub
           const command = nodeCommand([path.join(home, 'bin', 'orca-team.mjs'), 'launch', '--home', home, '--project', project, '--role', name]);
           await recoverInPane({ name, saved, handle: resolved[name].handle, command, cli, inspect,
             checkpoint: () => saveJson(files.state, state), verifyBinding: async () => {
-              for (let attempt = 0; attempt < 30; attempt++) {
+              for (let attempt = 0; attempt < NEW_CONVERSATION_ATTEMPTS; attempt++) {
                 const found = binding(await snapshot(), saved, project);
                 const live = await inspect(resolved[name].handle, saved.agent);
                 if (captureSession(saved, live, project, found)) return;

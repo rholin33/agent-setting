@@ -8,7 +8,9 @@ import { runDirectHandoff, decisionOf, mechanicalSummary, supportsDirectHandoff 
 import { beginRemoteSwitch, readRemoteSwitches } from '../lib/remote-switch.mjs';
 import { projectFiles } from '../lib/team.mjs';
 
-const SKILL = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'codex', 'skills', 'orca-remote', 'SKILL.md');
+// 仓库结构下技能与团队包同仓；安装后的团队包则使用已安装的 Codex 技能。
+const REPO_SKILL = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'codex', 'skills', 'orca-remote', 'SKILL.md');
+const SKILL = fs.existsSync(REPO_SKILL) ? REPO_SKILL : path.join(os.homedir(), '.codex', 'skills', 'orca-remote', 'SKILL.md');
 
 function fixture(t) {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'direct-handoff-')));

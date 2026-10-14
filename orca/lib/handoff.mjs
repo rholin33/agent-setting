@@ -3,8 +3,8 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { projectFiles, readJson, saveJson, withLock } from './team.mjs';
 import { sameWorktree, validateTranscript } from './sessions.mjs';
-import { reloadRunning } from './reload.mjs';
 import { restartRoles } from './restart.mjs';
+import { mapLimit, INSPECT_CONCURRENCY } from './platform.mjs';
 
 const MAX_HANDOFF_CHARS = 60_000;
 const MAX_MESSAGE_CHARS = 4_000;
@@ -148,29 +148,48 @@ export async function prepareHandoff({ name, saved, to, directory, project, now 
   return saved.handoff ?? null;
 }
 
-// syncModels 的 prepareSwitches 实现：先按原 CLI 停止运行中的角色，确认窗格已回到 shell，再写交接。
-// 任一角色无法停止或验证时抛错，此时 team.json 尚未保存，CLI 选择不会生效。
-export async function switchProviders({ switches, home, project, cli, snapshot, inspect, log = console.log,
-  stop = options => reloadRunning({ ...options, restart: args => restartRoles({ ...args, stopOnly: true }) }) }) {
-  const names = switches.map(item => item.name);
-  const { skipped } = await stop({ home, project, names, cli, snapshot, inspect, log });
-  if (skipped.length) throw new Error(`Cannot switch CLI: ${skipped.map(item => `${item.name}: ${item.reason}`).join('; ')}`);
+// 换 CLI：先按原 CLI 停止仍在运行的角色（不受配置指纹复用影响：此时目录里的配置可能已经是新 CLI），
+// 全部确认回到 shell 后，再在项目锁内一次性写交接并清除旧会话绑定。
+// 任一角色无法停止或验证时抛错且状态不变；下次启动会重新检测到同一切换并重试。
+export async function switchProviders({ switches, home, project, cli, snapshot, inspect, log = console.log, restart = restartRoles }) {
   const files = projectFiles(home, project);
-  await withLock(files.lock, async () => {
-    const state = readJson(files.state);
+  const inspectAll = async state => {
     const terminals = (await cli(['terminal', 'list', '--worktree', `path:${project}`])).terminals || [];
-    for (const { name, to } of switches) {
+    return mapLimit(switches, INSPECT_CONCURRENCY, async ({ name }) => {
       const saved = state.agents[name];
       const row = terminals.find(item => item.tabId === saved.tabId && item.leafId === saved.leafId &&
         item.connected && !item.orphaned && sameWorktree(`local::${item.worktreePath}`, project));
-      if (row) {
-        const live = await inspect(row.handle, saved.agent);
-        if (live.kind !== 'shell') throw new Error(`${name}: ${saved.agent} process is ${live.kind}; stop it before switching CLI`);
-      }
+      return { name, agent: saved.agent, live: row ? await inspect(row.handle, saved.agent) : null };
+    });
+  };
+  const before = await inspectAll(readJson(files.state));
+  const unverifiable = before.filter(item => item.live && !['agent', 'shell'].includes(item.live.kind));
+  if (unverifiable.length) throw new Error(`Cannot switch CLI: ${unverifiable.map(item => `${item.name}: ${item.agent} pane is ${item.live.kind}`).join('; ')}`);
+  const running = before.filter(item => item.live?.kind === 'agent').map(item => item.name);
+  if (running.length) {
+    log(`Stopping ${running.join(', ')} with the current CLI before switching`);
+    const { failed } = await restart({ home, project, roles: running, stopOnly: true, forceExit: true, cli, snapshot, log });
+    if (failed.length) throw new Error(`Cannot switch CLI: ${failed.map(item => `${item.name}: ${item.reason}`).join('; ')}`);
+  }
+  await withLock(files.lock, async () => {
+    const state = readJson(files.state);
+    const after = await inspectAll(state);
+    const busy = after.filter(item => item.live && item.live.kind !== 'shell');
+    if (busy.length) throw new Error(`Cannot switch CLI: ${busy.map(item => `${item.name}: ${item.agent} pane is ${item.live.kind}`).join('; ')}`);
+    for (const { name, to } of switches) {
+      const saved = state.agents[name];
       const from = saved.agent, hadSession = Boolean(saved.session);
       const handoff = await prepareHandoff({ name, saved, to, directory: files.directory, project });
       log(`${name}: switching CLI ${from} → ${to}; ${hadSession ? `handoff written to ${handoff.path}` : 'no previous conversation to hand off'}`);
     }
     saveJson(files.state, state);
+  });
+}
+
+// 已保存会话所用的 CLI 与目录配置不同的角色需要换 CLI；与 picker 无关，失败后下次启动会再次检测到。
+export function pendingSwitches(state, catalog, names) {
+  return names.flatMap(name => {
+    const saved = state.agents?.[name], role = catalog.find(item => item.name === name);
+    return saved && role && (saved.session || saved.launchIntent) && saved.agent !== role.agent ? [{ name, from: saved.agent, to: role.agent }] : [];
   });
 }
