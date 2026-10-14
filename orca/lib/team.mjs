@@ -168,7 +168,15 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pub
           if (candidates.length === 1) Object.assign(saved, { tabId: candidates[0].tabId, leafId: candidates[0].leafId });
         }
         const candidates = inventory.terminals.filter(row => row.tabId === saved.tabId && row.leafId === saved.leafId && row.connected && !row.orphaned && sameWorktree(`local::${row.worktreePath}`, project));
-        const live = candidates.length === 1 ? await inspect(candidates[0].handle, saved.agent) : null;
+        let live = candidates.length === 1 ? await inspect(candidates[0].handle, saved.agent) : null;
+        const desired = catalog.find(role => role.name === name);
+        if (live && live.kind !== 'agent' && saved.agent === 'pi' && desired?.agent === 'omp') {
+          const migrated = { ...saved, agent: 'omp' };
+          const candidate = await inspect(candidates[0].handle, 'omp');
+          if (captureSession(migrated, candidate, project, binding(snap, migrated, project))) {
+            Object.assign(saved, migrated); live = candidate;
+          }
+        }
         if (live) {
           if (!captureSession(saved, live, project, binding(snap, saved, project))) throw new Error(`Role ${name} has an interrupted launch; inspect Orca before retrying`);
           validateTranscript(saved, project);
@@ -235,6 +243,8 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pub
         if (action === 'status') { log(`${name}: ${status.kind} (${status.reason || 'agent not running'})`); continue; }
         if (status.kind !== 'shell') { issues.push(`${name}: process unverifiable (${status.reason})`); continue; }
         const saved = state.agents[name];
+        const desired = catalog.find(role => role.name === name);
+        if (saved.agent === 'pi' && desired?.agent === 'omp') saved.agent = 'omp';
         if (!saved.session) {
           prepareLaunch(saved, catalog.find(item => item.name === name), files.directory);
           const command = nodeCommand([path.join(home, 'bin', 'orca-team.mjs'), 'launch', '--home', home, '--project', project, '--role', name]);

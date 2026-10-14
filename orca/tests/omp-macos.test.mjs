@@ -55,3 +55,12 @@ test('macOS absence checks reject the original OMP conversation in another pane'
  assert.equal(await verifyMacAbsence({...options,inspect:async()=>({kind:'agent',sessionPaths:[other]})}),true);
  await assert.rejects(verifyMacAbsence({...options,inspect:async()=>({kind:'agent',sessionPaths:[]})}),/unbound/);
 });
+
+test('macOS proves Bun OMP entrypoint and rejects unrelated Bun commands',async()=>{
+ const bun={...agent,name:'bun'};
+ const options={inventory:async()=>host,processes:async()=>[root,bun],show:async()=>terminal,
+ execute:async()=>({stdout:'bun /Users/test/bin/omp --session /Users/test/original.jsonl'})};
+ const live=await inspectMac(terminal,'omp',options);
+ assert.equal(live.kind,'agent');assert.deepEqual(live.sessionPaths,['/Users/test/original.jsonl']);
+ await assert.rejects(inspectMac(terminal,'omp',{...options,execute:async()=>({stdout:'bun /Users/test/server.js --session /Users/test/original.jsonl'})}),/unverified/);
+});
