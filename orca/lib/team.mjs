@@ -201,7 +201,9 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pub
           throw new Error(`Role ${name} has an interrupted launch; inspect Orca before retrying`);
         }
       }
-      const foundBinding = binding(snap, saved, project);
+      // 已交接出去的旧会话不能被快照重新认领；新 CLI 会在本次启动时建立新会话。
+      const candidateBinding = binding(snap, saved, project);
+      const foundBinding = candidateBinding && !saved.session && candidateBinding.id === saved.handoff?.sessionId ? null : candidateBinding;
       if (foundBinding) saved.session = foundBinding;
       const matches = paneOf(saved);
       if (!matches.length) {

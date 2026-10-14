@@ -100,7 +100,7 @@ test('prepareHandoff writes the document and clears the old provider binding', a
   const handoff = await prepareHandoff({ name: 'master', saved, to: 'claude', directory: dir, project: dir, now: () => new Date('2026-10-14T00:00:00Z') });
   assert.equal(handoff.path, path.join(dir, 'handoff', 'master-omp-to-claude-2026-10-14T00-00-00-000Z.md'));
   assert.match(fs.readFileSync(handoff.path, 'utf8'), /# Orca role handoff: master \(omp → claude\)[\s\S]*kept answer/);
-  assert.deepEqual(saved, { agent: 'omp', tabId: 't', leafId: 'l', handoff: { path: handoff.path, from: 'omp', sessionId: 'omp-1', transcriptPath: file, createdAt: '2026-10-14T00:00:00.000Z' } });
+  assert.deepEqual(saved, { agent: 'claude', tabId: 't', leafId: 'l', handoff: { path: handoff.path, from: 'omp', sessionId: 'omp-1', transcriptPath: file, createdAt: '2026-10-14T00:00:00.000Z' } });
   await assert.rejects(prepareHandoff({ name: 'master', saved: { agent: 'omp', pending: true }, to: 'claude', directory: dir, project: dir }), /launch pending/);
   await assert.rejects(prepareHandoff({ name: 'master', saved: { agent: 'omp', session: { id: 'other', transcriptPath: file } }, to: 'claude', directory: dir, project: dir }), /mismatch/);
 });
@@ -139,6 +139,8 @@ test('switchProviders stops only running roles regardless of fingerprint, then h
   });
   assert.deepEqual(stopped.map(options => [options.roles, options.stopOnly, options.forceExit]), [[['loader'], true, true]]);
   const state = readJson(files.state);
+  assert.equal(state.agents.loader.agent, 'codex');
+  assert.equal(state.agents.archi.agent, 'claude');
   for (const name of ['loader', 'archi']) {
     assert.equal(state.agents[name].session, undefined);
     assert.equal(state.agents[name].handoff.sessionId, 'omp-1');

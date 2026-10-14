@@ -145,6 +145,8 @@ export async function prepareHandoff({ name, saved, to, directory, project, now 
     saved.handoff = { path: file, from: saved.agent, sessionId: saved.session.id, transcriptPath: saved.session.transcriptPath, createdAt };
   }
   for (const key of ['session', 'launchIntent', 'restartIntent', 'appliedModel']) delete saved[key];
+  // 记录的 CLI 立即改为新 CLI：Orca 快照里该窗格的旧会话标注的是旧 CLI，不能再被当作恢复目标认领回来。
+  saved.agent = to;
   return saved.handoff ?? null;
 }
 
