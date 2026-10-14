@@ -94,7 +94,8 @@ export async function inspectMac(terminal, provider, { inventory = daemonSession
   if (check !== b) throw new Error('macOS process changed while reading conversation arguments');
   const providerProcess = tree.find(row => row[5] === provider);
   return { terminal: current, kind: providerPids.length ? 'agent' : 'shell', sessionIds, sessionPaths, reason: 'macos_native_verified',
-    providerStartedAt: providerProcess ? new Date(providerProcess[2]).toISOString() : undefined };
+    providerStartedAt: providerProcess ? new Date(providerProcess[2]).toISOString() : undefined,
+    providerProcess: providerProcess ? `${providerProcess[0]}@${providerProcess[2]}` : undefined };
 }
 
 export function readPiProof(pid, created, terminal) {

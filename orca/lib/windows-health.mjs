@@ -239,5 +239,7 @@ export async function inspectWindows(terminal, provider, { inventory = daemonSes
     ...second.filter(row => descendants.has(row.ProcessId) && /^claude\.exe$/i.test(row.Name))
       .flatMap(row => claudeSessionIds(row.CommandLine || '')),
   ];
-  return { terminal: current, sessionPaths, sessionIds, kind: a === b ? b : 'unverifiable', reason: a === b && b !== 'unverifiable' ? 'windows_native_verified' : 'windows_process_tree_unverified' };
+  const providerRow = second.find(row => descendants.has(row.ProcessId) && new RegExp(`^${provider}\\.exe$`, 'i').test(row.Name || ''));
+  return { terminal: current, sessionPaths, sessionIds, kind: a === b ? b : 'unverifiable', reason: a === b && b !== 'unverifiable' ? 'windows_native_verified' : 'windows_process_tree_unverified',
+    providerProcess: providerRow?.Created ? `${providerRow.ProcessId}@${providerRow.Created}` : undefined };
 }

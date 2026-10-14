@@ -88,9 +88,15 @@ export function captureSession(saved, live, project, observed) {
   if (paths.length && !paths.some(p => normalize(p) === normalize(session.transcriptPath))) throw new Error('Live conversation differs from saved binding');
   if (live.sessionIds?.length && !live.sessionIds.includes(session.id)) throw new Error('Live conversation differs from saved binding');
   if (live.kind !== 'agent') return false;
-  if (!observed && !paths.length && !live.sessionIds?.length && !markerProof) return false;
+  // 新 Codex 会话的 ID 不出现在进程参数或 Orca 接口里：按标记认领后，只要仍是同一 PTY 代际中的同一个
+  // Codex 进程（进程号与启动时间不变），就仍是该会话。Codex 以 resume <id> 重启后改由参数证明。
+  const markerContinuity = !markerProof && saved.agent === 'codex' && saved.bindingSource === 'launch-marker' &&
+    saved.session?.id === session.id && Boolean(live.providerProcess) && live.providerProcess === saved.providerProcess &&
+    live.terminal?.incarnationId === saved.incarnationId;
+  if (!observed && !paths.length && !live.sessionIds?.length && !markerProof && !markerContinuity) return false;
   saved.session = session;
-  saved.bindingSource = paths.length || live.sessionIds?.length ? 'process-arguments' : markerProof ? 'launch-marker' : 'orca-pane';
+  saved.bindingSource = paths.length || live.sessionIds?.length ? 'process-arguments' : markerProof || markerContinuity ? 'launch-marker' : 'orca-pane';
+  if (markerProof) saved.providerProcess = live.providerProcess;
   saved.lastVerifiedAt = new Date().toISOString();
   if (live.terminal) Object.assign(saved, { handle: live.terminal.handle, incarnationId: live.terminal.incarnationId });
   return true;

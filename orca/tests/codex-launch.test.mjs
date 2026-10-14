@@ -42,11 +42,17 @@ test('captureSession binds a launched Codex conversation through the marker with
   t.after(() => { if (previous === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = previous; });
   const saved = {};
   prepareLaunch(saved, { name: 'loader', agent: 'codex', model: 'm', thinking: 'medium' }, dir);
-  const live = { kind: 'agent', sessionPaths: [], sessionIds: [], terminal: { handle: 'h', incarnationId: 'i' } };
+  const live = { kind: 'agent', sessionPaths: [], sessionIds: [], providerProcess: '42@Tue Oct 14 13:11:19 2026', terminal: { handle: 'h', incarnationId: 'i' } };
   assert.equal(captureSession(saved, live, project, null), false);
   const file = rollout(path.join(dir, 'codex', 'sessions'), project, 'codex-new', `prompt\n\n${codexLaunchMarker(saved.launchIntent.id)}`);
   assert.equal(captureSession(saved, { ...live, kind: 'shell' }, project, null), false);
   assert.equal(captureSession(saved, live, project, null), true);
   assert.deepEqual(saved.session, { key: 'session_id', id: 'codex-new', transcriptPath: file });
   assert.equal(saved.bindingSource, 'launch-marker');
+  // 第二次确认（例如 recoverInPane 恢复后复核）：同一 PTY 代际中的同一 Codex 进程仍证明该会话。
+  assert.equal(captureSession(saved, live, project, null), true);
+  // 换了进程（例如用户手动重开 Codex）或换了 PTY 代际都不再证明。
+  assert.equal(captureSession(saved, { ...live, providerProcess: '43@later' }, project, null), false);
+  assert.equal(captureSession(saved, { ...live, terminal: { handle: 'h', incarnationId: 'other' } }, project, null), false);
+  assert.equal(captureSession({ ...saved, providerProcess: undefined }, live, project, null), false);
 });

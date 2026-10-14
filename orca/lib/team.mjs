@@ -196,7 +196,12 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pub
         if (live) {
           if (!captureSession(saved, live, project, binding(snap, saved, project))) throw new Error(`Role ${name} has an interrupted launch; inspect Orca before retrying`);
           validateTranscript(saved, project);
-          if (action === 'start') { delete saved.pending; delete saved.restartIntent; saveJson(files.state, state); }
+          // 待确认的启动按当时写入的 CLI/模型/思考强度运行；记下已应用配置，避免下一步误判为配置变化而重启。
+          if (action === 'start') {
+            delete saved.pending; delete saved.restartIntent;
+            saved.appliedModel ??= { agent: saved.agent, model: saved.model, thinking: saved.thinking ?? null };
+            saveJson(files.state, state);
+          }
         } else if (candidates.length || !saved.session || action !== 'start') {
           throw new Error(`Role ${name} has an interrupted launch; inspect Orca before retrying`);
         }
