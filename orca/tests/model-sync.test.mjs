@@ -13,6 +13,38 @@ function temp(t) {
 }
 const noTTY = { isTTY: false };
 
+test('confirmed Claude selection persists and existing sessions reject CLI changes', async t => {
+  const { EventEmitter } = await import('node:events');
+  const home = temp(t), codexHome = temp(t);
+  const original = [{ name: 'master', agent: 'omp', model: 'pay/a', thinking: 'xhigh' }];
+  const file = path.join(home, 'team.json');
+  const run = async (sessionAgents, prepareSwitches) => {
+    fs.writeFileSync(file, JSON.stringify(original));
+    const stdin = new EventEmitter();
+    Object.assign(stdin, { isTTY: true, setRawMode() {}, resume() {}, pause() {}, setEncoding() {} });
+    let sent = false;
+    const stdout = { isTTY: true, write(text) {
+      if (text.includes('Up/Down') && !sent) {
+        sent = true;
+        queueMicrotask(() => stdin.emit('data', '\u001b[C\r'));
+      }
+    } };
+    return syncModels({ home, codexHome, stdin, stdout, sessionAgents, prepareSwitches, log() {} });
+  };
+  await run({});
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), [{ name: 'master', agent: 'claude', model: 'sonnet', thinking: 'high' }]);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(home, 'omp-models.json'), 'utf8')).roles.master.agent, 'claude');
+  await assert.rejects(run({ master: 'omp' }), /use --fresh master/);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), original);
+  // 交接准备失败时不保存选择；成功后按新 CLI 保存。
+  await assert.rejects(run({ master: 'omp' }, async () => { throw new Error('master: agent is busy'); }), /agent is busy/);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), original);
+  const prepared = [];
+  await run({ master: 'omp' }, async switches => { prepared.push(...switches); });
+  assert.deepEqual(prepared, [{ name: 'master', from: 'omp', to: 'claude' }]);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), [{ name: 'master', agent: 'claude', model: 'sonnet', thinking: 'high' }]);
+});
+
 test('readCodexModel reads only the top-level model key', t => {
   const home = temp(t);
   fs.writeFileSync(path.join(home, 'config.toml'),
@@ -59,16 +91,20 @@ test('Codex config supplies both model and thinking from top-level keys', t => {
   assert.deepEqual(readCodexConfig(home), { model: 'current', thinking: 'medium' });
 });
 
-test('picker shows Codex roles but does not allow changing their local configuration', () => {
+test('picker switches Codex roles to Claude while retaining local Codex thinking', () => {
   const state = createPickerState({
     roles: [{ name: 'master', agent: 'pi', model: 'pay/current' }, { name: 'coder1', agent: 'codex', model: 'local-codex', thinking: 'medium' }],
-    presets: [{ model: 'pay/current' }, { model: 'local/alternative' }],
+    presets: [{ agent: 'claude', model: 'sonnet', thinking: 'high' }, { model: 'local/alternative' }],
     initial: { coder1: { model: 'stale', thinking: 'xhigh' } },
   });
   const selected = pickerKey(state, 'down').state;
   assert.match(renderPicker(selected), /codex\/local-codex \(local config\)/);
-  assert.equal(pickerKey(selected, 'right').state, selected);
   assert.equal(pickerKey(selected, 'think-next').state, selected);
+  const claude = pickerKey(selected, 'right').state;
+  assert.equal(claude.rows[1].agent, 'claude');
+  assert.equal(claude.rows[1].model, 'sonnet');
+  assert.match(renderPicker(claude), /claude\/sonnet/);
+  assert.equal(pickerKey(claude, 'think-next').state.rows[1].thinking, 'max');
 });
 
 test('syncModels follows the local Codex config and leaves Pi roles alone off-terminal', async t => {
@@ -171,7 +207,7 @@ test('pickPiModels maps raw-mode keys to a confirmed selection or cancel', async
     return { selection, rendered: stdout.chunks.join('') };
   };
   const confirmed = await run(['\u001b[C', '\r']);
-  assert.deepEqual(confirmed.selection, { master: { model: 'preset-b', thinking: 'medium' } });
+  assert.deepEqual(confirmed.selection, { master: { agent: 'pi', model: 'preset-b', thinking: 'medium' }, coder1: { agent: 'codex', model: 'local-config', thinking: 'medium' } });
   assert.match(confirmed.rendered, /master/);
   assert.match(confirmed.rendered, /preset-b/);
   const cancelled = await run(['\u001b']);

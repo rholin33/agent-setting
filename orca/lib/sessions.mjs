@@ -31,27 +31,36 @@ export function validateTranscript(saved, project) {
   const session = saved.session;
   if (!session?.id || !session.transcriptPath || !fs.existsSync(session.transcriptPath)) throw new Error('Original conversation unavailable; refusing fresh fallback');
   const fd = fs.openSync(session.transcriptPath, 'r');
-  let first = '';
   const decoder = new StringDecoder('utf8');
   // Claude transcript 没有独立 header：开头是 last-prompt/mode 等元数据，第一条带 cwd 的记录才确定会话归属。
-  const identifies = record => saved.agent === 'claude' ? typeof record.cwd === 'string' && Boolean(record.sessionId) : record.type !== 'title';
+  let row;
   try {
     const buffer = Buffer.alloc(4096);
-    while (!first.split('\n').slice(0, -1).some(line => line && identifies(JSON.parse(line))) && first.length < 1024 * 1024) {
-      const count = fs.readSync(fd, buffer); if (!count) break;
-      first += decoder.write(buffer.subarray(0, count));
+    let text = '', bytes = 0;
+    for (let record = 0; bytes < 1024 * 1024 || text.includes('\n'); record++) {
+      while (!text.includes('\n') && bytes < 1024 * 1024) {
+        const count = fs.readSync(fd, buffer, 0, Math.min(buffer.length, 1024 * 1024 - bytes));
+        if (!count) { text += decoder.end(); break; }
+        bytes += count;
+        text += decoder.write(buffer.subarray(0, count));
+      }
+      const end = text.indexOf('\n');
+      if (!text.trim()) break;
+      row = JSON.parse(end < 0 ? text : text.slice(0, end));
+      const prelude = saved.agent === 'omp' && record === 0 && row.type === 'title' && row.v === 1 && typeof row.title === 'string';
+      const claudeMetadata = saved.agent === 'claude' && !(typeof row.cwd === 'string' && row.sessionId);
+      if (!prelude && !claudeMetadata || end < 0) break;
+      row = undefined;
+      text = text.slice(end + 1);
     }
   } finally { fs.closeSync(fd); }
-  // OMP may prepend a title metadata record before the session header.
-  const records = first.split('\n').slice(0, -1).filter(Boolean).map(line => JSON.parse(line));
-  const row = records.find(identifies);
   if (!row) throw new Error('Original conversation header unavailable');
   const meta = ['pi', 'omp'].includes(saved.agent) && row.type === 'session' ? row : saved.agent === 'codex' && row.type === 'session_meta' ? row.payload
     : saved.agent === 'claude' ? { id: row.sessionId, cwd: row.cwd } : null;
   if (!meta || meta.id !== session.id || !sameWorktree(`local::${meta.cwd}`, project)) throw new Error('Original conversation identity/project mismatch');
   return session;
 }
-export function launchArguments(role, prompt, session, project, home, { codexNoDaemon = false } = {}) {
+export function launchArguments(role, prompt, session, project, home, { codexNoDaemon = false, initialNote = null } = {}) {
   // 模型来自账本；Codex 账本在每次 start 时同步为本机 Codex 配置，显式传入
   // 可避免 resume 恢复会话内记录的旧模型和推理强度。
   const args = ['--model', role.model];
@@ -90,7 +99,8 @@ export function launchArguments(role, prompt, session, project, home, { codexNoD
       env.CODEX_HOME = path.dirname(directory);
     }
     if (role.thinking) args.push('-c', `model_reasoning_effort="${role.thinking}"`);
-    if (!session) args.push(fs.readFileSync(prompt, 'utf8'));
+    // Codex 没有追加系统提示参数，角色提示即首条消息；切换 CLI 的交接说明附在其后。
+    if (!session) args.push(fs.readFileSync(prompt, 'utf8') + (initialNote ? `\n\n${initialNote}` : ''));
   } else if (role.agent === 'claude') {
     // 角色提示每次启动都追加（Claude 不在会话里持久化 system prompt），resume 时同样需要。
     if (session) args.push('--resume', session.id);

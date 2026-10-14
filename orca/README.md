@@ -97,7 +97,20 @@ sync from the machine's Codex configuration. Role `thinking` maps to the
 provider's reasoning setting.
 
 Claude Code roles (`"agent": "claude"`) use `model` and `thinking` from
-`team.json` directly (`--model`, `--effort`); they are read-only in the picker.
+`team.json` directly (`--model`, `--effort`). The startup picker includes Claude
+CLI / sonnet, opus and haiku alongside local Codex and Pi/OMP presets. Left/Right
+or Tab selects CLI/model; comma/period changes effort. Enter saves the selected
+agent, model and thinking; Escape cancels. Codex model/effort follow local config.
+Conversations cannot be resumed across CLIs. When the picker confirms a different
+CLI for a role with a saved conversation, start first stops the running role with
+its original CLI, then writes a handoff document to
+`projects/<key>/handoff/<role>-<from>-to-<to>-<time>.md` and clears the old
+binding. The document is a mechanical extract of the active branch: user and
+assistant messages, condensed tool calls, and the latest compaction summary;
+tool outputs and reasoning are omitted. The new conversation's first message asks
+the role to read it. `state.json` keeps `handoff` with the source transcript path.
+If the role cannot be stopped or verified, team.json stays unchanged.
+`orca-team start --fresh ROLE` still starts without a handoff.
 The role prompt is passed with `--append-system-prompt-file` on every fresh launch
 and resume. A fresh launch pre-assigns the conversation with `--session-id` from
 `launchIntent`, so the binding is proven by the process arguments plus the
@@ -256,6 +269,8 @@ The six former Pi roles use OMP; Codex roles remain configured separately. OMP i
 ## macOS OMP parity
 
 OMP roles share the Windows launch arguments, model picker, role skill overlays, transcript validation and update lifecycle. macOS resolves ORCA_OMP_COMMAND first, then local installer/Homebrew paths and PATH. Native inspection verifies the foreground OMP process and exact --session/--resume transcript path, rechecking the PTY and process identities. Closed-pane recovery refuses duplicate conversations, including when Orca labels OMP as Pi. Updates stop managed roles sequentially, run omp update and omp update --plugins, then resume their exact conversations. External OMP instances are preserved and do not preemptively block updates.
+
+OMP transcripts may contain one version-1 title metadata record before the session header. Validation preserves support for that prelude and still checks the exact session ID and project directory.
 
 Default startup order is model selection, agent update prehook, configuration reconciliation, then layout/session verification. Update recovery applies the newly selected model and thinking level; matching roles are reused by reconciliation. Explicit restart uses the saved selections.
 

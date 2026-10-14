@@ -64,7 +64,7 @@ export function loadPiModelConfig(home, seed = seedPiModelConfig, filename = 'pi
 // config model; Pi roles go through the interactive picker when attached to a
 // terminal. The picker is skipped (and team.json stays untouched for Pi) when
 // stdin is not a TTY, e.g. Orca quick commands.
-export async function syncModels({ home, names, pick = true, log = console.log, stdin = process.stdin, stdout = process.stdout, codexHome, seed } = {}) {
+export async function syncModels({ home, names, pick = true, log = console.log, stdin = process.stdin, stdout = process.stdout, codexHome, seed, sessionAgents = {}, prepareSwitches } = {}) {
   const catalogFile = path.join(home, 'team.json');
   const catalog = readJson(catalogFile);
   const inScope = role => !names || names.includes(role.name);
@@ -84,25 +84,36 @@ export async function syncModels({ home, names, pick = true, log = console.log, 
   }
   const piRoles = catalog.filter(role => ['pi', 'omp'].includes(role.agent) && inScope(role));
   if (!seed && piRoles.some(role => role.agent === 'omp')) seed = () => ({ presets: piRoles.map(role => ({ model: role.model, thinking: role.thinking, label: role.model })), roles: {} });
-  const modelConfigFile = piRoles.some(role => role.agent === 'omp') ? 'omp-models.json' : 'pi-models.json';
+  const modelConfigFile = piRoles.some(role => role.agent === 'omp') || fs.existsSync(path.join(home, 'omp-models.json')) ? 'omp-models.json' : 'pi-models.json';
   let config = null;
   let selectionMade = false;
-  if (piRoles.length && pick) {
+  if (catalog.some(inScope) && pick) {
     const interactive = Boolean(stdin.isTTY && stdout.isTTY);
     let loaded = null;
-    try { loaded = loadPiModelConfig(home, seed, modelConfigFile); }
+    try { loaded = piRoles.length ? loadPiModelConfig(home, seed, modelConfigFile) : { config: fs.existsSync(path.join(home, modelConfigFile)) ? readJson(path.join(home, modelConfigFile)) : { presets: [], roles: {} } }; }
     catch (error) { if (interactive) throw error; log(`Warning: ${error.message}`); }
     config = loaded?.config ?? null;
     if (config && interactive) {
-      const selection = await pickPiModels({ roles: catalog.filter(inScope), presets: config.presets, initial: config.roles, stdin, stdout });
+      const presets = [...config.presets, ...(codexModel ? [{ agent: 'codex', model: codexModel, thinking: codexThinking }] : []),
+        ...['sonnet', 'opus', 'haiku'].map(model => ({ agent: 'claude', model, thinking: 'high', label: `Claude CLI / ${model}` }))];
+      const selection = await pickPiModels({ roles: catalog.filter(inScope), presets, initial: config.roles, stdin, stdout });
       if (selection) {
+        const switches = Object.entries(selection).filter(([name, chosen]) => sessionAgents[name] && sessionAgents[name] !== chosen.agent)
+          .map(([name, chosen]) => ({ name, from: sessionAgents[name], to: chosen.agent }));
+        // 会话无法跨 CLI 续接；未提供交接处理时拒绝切换，处理失败时 team.json 保持不变。
+        if (switches.length) {
+          if (!prepareSwitches) throw new Error(`${switches[0].name}: cannot change CLI with an existing conversation; use --fresh ${switches[0].name}`);
+          await prepareSwitches(switches);
+        }
         selectionMade = true;
-        for (const role of piRoles) {
+        for (const role of catalog.filter(inScope)) {
           const chosen = selection[role.name];
-          if (chosen && (role.model !== chosen.model || (role.thinking ?? null) !== chosen.thinking)) {
+          if (chosen && (role.agent !== chosen.agent || role.model !== chosen.model || (role.thinking ?? null) !== chosen.thinking)) {
             changes.push(`${role.name}: model ${role.model} → ${chosen.model}, thinking ${role.thinking ?? 'default'} → ${chosen.thinking ?? 'default'}`);
             role.model = chosen.model;
             role.thinking = chosen.thinking;
+            if (role.agent !== chosen.agent) delete role.piProvider;
+            role.agent = chosen.agent;
           }
         }
         config.roles = { ...config.roles, ...selection };

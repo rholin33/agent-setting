@@ -111,14 +111,14 @@ test('claude exits with /exit while other providers keep /quit', () => {
   assert.equal(exitCommand('omp'), '/quit');
 });
 
-test('claude rows are read-only in the model picker', () => {
+test('claude rows retain native models and permit CLI selection', () => {
   const state = createPickerState({
     roles: [{ name: 'reviewer', agent: 'claude', model: 'opus', thinking: 'high' }, { name: 'master', agent: 'omp', model: 'pay/a' }],
     presets: [{ model: 'pay/a', thinking: null }],
     initial: { reviewer: { model: 'pay/a', thinking: null } },
   });
-  assert.deepEqual([state.rows[0].editable, state.rows[0].model, state.rows[1].editable], [false, 'opus', true]);
-  assert.match(renderPicker(state), /claude\/opus \(team\.json\)/);
+  assert.deepEqual([state.rows[0].editable, state.rows[0].model, state.rows[1].editable], [true, 'opus', true]);
+  assert.match(renderPicker(state), /claude\/opus/);
 });
 
 const winRoot = { ProcessId: 10, ParentProcessId: 1, Name: 'pwsh.exe', Created: '100', SessionId: 1 };

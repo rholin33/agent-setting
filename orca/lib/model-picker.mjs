@@ -15,10 +15,11 @@ export function createPickerState({ roles, presets, initial = {} }) {
   for (const preset of presets) if (!preset || typeof preset.model !== 'string' || !preset.model.trim()) throw new Error('Invalid Pi model preset');
   const rows = roles.map(role => {
     // Codex 跟随本机配置，Claude 直接使用 team.json；其余角色使用 Pi/OMP 预设。
-    const editable = !['codex', 'claude'].includes(role.agent);
-    const chosen = (editable && initial[role.name]) || { model: role.model, thinking: role.thinking ?? null };
+    const editable = true;
+    const saved = initial[role.name];
+    const chosen = !['codex', 'claude'].includes(role.agent) && (!saved?.agent || saved.agent === role.agent) && saved || { model: role.model, thinking: role.thinking ?? null };
     if (typeof chosen.model !== 'string' || !chosen.model.trim()) throw new Error(`Invalid model for role ${role.name}`);
-    return { name: role.name, agent: role.agent, editable, model: chosen.model, thinking: chosen.thinking ?? null, presetIndex: presets.findIndex(p => p.model === chosen.model) };
+    return { name: role.name, agent: role.agent, presetAgent: role.agent === 'pi' ? 'pi' : 'omp', editable, model: chosen.model, thinking: chosen.thinking ?? null, presetIndex: presets.findIndex(p => p.model === chosen.model && (!p.agent || p.agent === role.agent)) };
   });
   return { rows, presets, cursor: 0 };
 }
@@ -40,14 +41,16 @@ export function pickerKey(state, key) {
     const base = row.presetIndex >= 0 ? row.presetIndex : (direction > 0 ? -1 : 0);
     const index = ((base + direction) % count + count) % count;
     const preset = state.presets[index];
-    const next = { ...row, presetIndex: index, model: preset.model, thinking: preset.thinking ?? null };
+    const next = { ...row, agent: preset.agent || (row.agent ? row.presetAgent : undefined), presetIndex: index, model: preset.model, thinking: preset.thinking ?? null };
     return { state: { ...state, rows: rows.map((item, i) => (i === state.cursor ? next : item)) } };
   }
   if (key === 'think-next' || key === 'think-prev') {
     const row = rows[state.cursor];
-    const current = THINKING_CYCLE.indexOf(row.thinking ?? null);
+    if (row.agent === 'codex') return { state };
+    const cycle = row.agent === 'claude' ? [null, 'low', 'medium', 'high', 'max'] : THINKING_CYCLE;
+    const current = cycle.indexOf(row.thinking ?? null);
     const base = current >= 0 ? current : 0;
-    const thinking = THINKING_CYCLE[(base + (key === 'think-next' ? 1 : THINKING_CYCLE.length - 1)) % THINKING_CYCLE.length];
+    const thinking = cycle[(base + (key === 'think-next' ? 1 : cycle.length - 1)) % cycle.length];
     const next = { ...row, thinking };
     return { state: { ...state, rows: rows.map((item, i) => (i === state.cursor ? next : item)) } };
   }
@@ -58,12 +61,12 @@ export function renderPicker(state) {
   const lines = [
     '',
     '  orca-team roles: agent models from provider presets; Codex uses local config',
-    '  Up/Down: role   Left/Right or Tab: model   , / .: thinking   Enter: confirm   Esc: cancel',
+    '  Up/Down: role   Left/Right or Tab: CLI/model   , / .: thinking   Enter: confirm   Esc: cancel',
     '',
   ];
   state.rows.forEach((row, index) => {
     const preset = row.presetIndex >= 0 ? state.presets[row.presetIndex] : null;
-    const model = !row.editable ? (row.agent === 'claude' ? `claude/${row.model} (team.json)` : `codex/${row.model} (local config)`) : preset ? (preset.label || preset.model) : `${row.model} (custom)`;
+    const model = row.agent === 'codex' ? `codex/${row.model} (local config)` : row.agent === 'claude' ? `claude/${row.model}` : preset ? (preset.label || preset.model) : `${row.model} (custom)`;
     lines.push(`  ${index === state.cursor ? '\u25b8' : ' '} ${row.name.padEnd(10)} ${model.padEnd(42)} thinking: ${row.thinking ?? 'default'}`);
   });
   lines.push('');
@@ -100,7 +103,7 @@ export async function pickPiModels({ roles, presets, initial = {}, stdin = proce
         state = result.state;
         write(renderPicker(state));
         if (result.done === 'confirm') {
-          finish(Object.fromEntries(state.rows.filter(row => row.editable).map(row => [row.name, { model: row.model, thinking: row.thinking }])));
+          finish(Object.fromEntries(state.rows.map(row => [row.name, { ...(row.agent ? { agent: row.agent } : {}), model: row.model, thinking: row.thinking }])));
           return;
         }
         if (result.done === 'cancel') { finish(null); return; }

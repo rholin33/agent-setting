@@ -15,6 +15,7 @@ import { restartTeam, resolveRestartRoles } from '../lib/restart.mjs';
 import { inspectHealth } from '../lib/health.mjs';
 import { ensureOrca } from '../lib/orca-boot.mjs';
 import { syncModels } from '../lib/model-sync.mjs';
+import { switchProviders, handoffPrompt } from '../lib/handoff.mjs';
 import { updateAgentsBeforeStart } from '../lib/agent-update.mjs';
 import { updateLifecycle } from '../lib/update-lifecycle.mjs';
 import { reloadRunning } from '../lib/reload.mjs';
@@ -49,7 +50,7 @@ try {
   if (values.group !== undefined && !['start', 'status'].includes(action)) throw new Error('--group is only supported for start/status');
   if (values.fresh?.length && action !== 'start') throw new Error('--fresh is only supported for start');
   if (values.help) {
-    console.log('orca-team [status|history [ROLE]|init|install|export-config] [--group TITLE] [--project PATH] [--home PATH] [--fresh ROLE] [--no-pick]\nDefault: bring the selected project to the configured state. Create missing roles, resume original conversations in idle panes, and stop all running roles, including busy roles, and resume with the configured agent/model/thinking while keeping their conversations. Busy or unverifiable roles are reported as incomplete.\nstart is an alias for the default command; restart [ROLE|GROUP ...] restarts a subset on demand.\n--fresh ROLE (repeatable) drops one stopped role\'s saved pane/session binding and starts that role in a new pane; it refuses while the role is running.\n--no-pick skips the Pi model picker. install --quick-commands registers Orca grouped global shortcuts.');
+    console.log('orca-team [status|history [ROLE]|init|install|export-config] [--group TITLE] [--project PATH] [--home PATH] [--fresh ROLE] [--no-pick]\nDefault: bring the selected project to the configured state. Create missing roles, resume original conversations in idle panes, and stop all running roles, including busy roles, and resume with the configured agent/model/thinking while keeping their conversations. Busy or unverifiable roles are reported as incomplete.\nstart is an alias for the default command; restart [ROLE|GROUP ...] restarts a subset on demand.\n--fresh ROLE (repeatable) drops one stopped role\'s saved pane/session binding and starts that role in a new pane; it refuses while the role is running.\nSelecting a different CLI in the picker stops the role, writes a handoff document from its previous conversation, and starts a new conversation that reads it first.\n--no-pick skips the Pi model picker. install --quick-commands registers Orca grouped global shortcuts.');
   } else {
     const home = path.resolve(values.home || process.env.ORCA_TEAM_HOME || path.join(os.homedir(), '.orca', 'roles', 'ccb-team'));
     const project = normalizeProject(fs.realpathSync(values.project || process.cwd()));
@@ -121,7 +122,10 @@ try {
           saveJson(files.state, state);
         }
       }
-      await stage('Model selection', () => syncModels({ home, names, pick: !values['no-pick'] }));
+      const sessionAgents = fs.existsSync(files.state) ? Object.fromEntries(Object.entries(readJson(files.state).agents).filter(([, saved]) => saved.session || saved.launchIntent).map(([name, saved]) => [name, saved.agent])) : {};
+      await stage('Model selection', () => syncModels({ home, names, pick: !values['no-pick'], sessionAgents,
+        prepareSwitches: switches => switchProviders({ switches, home, project, cli: orca, snapshot,
+          inspect: (handle, provider) => inspectHealth(orca, rpc, handle, provider) }) }));
       await stage('Agent update prehook', () => updatePrehook(home, names));
       // Stop running roles before exact-session resume, including unchanged/busy roles.
       const { skipped, current } = await stage('Configuration reload', () => reloadRunning({ home, project, names, cli: orca, snapshot,
@@ -142,7 +146,12 @@ try {
       const saved = values.resume || current?.session ? current : null;
       if (values.resume && !saved?.session) throw new Error('Original session is unavailable');
       const launchRole = saved ? { ...saved, model: role.model, thinking: role.thinking, agent: role.agent } : role;
-      const launch = launchArguments({ ...launchRole, role: role.role }, prompt, saved?.session, project, home, { codexNoDaemon: role.agent === 'codex' && supportsNoDaemon() });
+      // 切换 CLI 后的首次启动先读取旧会话交接文档；已绑定新会话后不再注入。
+      const handoff = saved?.session ? null : current?.handoff ?? null;
+      const initialMessage = handoff ? handoffPrompt(role.name, handoff)
+        : `Initialize the fixed ${role.name} role using the loaded instructions. Reply only "${role.name} ready". Do not call tools or start tasks.`;
+      const launch = launchArguments({ ...launchRole, role: role.role }, prompt, saved?.session, project, home,
+        { codexNoDaemon: role.agent === 'codex' && supportsNoDaemon(), initialNote: handoff && initialMessage });
       if (role.agent === 'codex' && role.piProvider) {
         const provider = readJson(path.join(os.homedir(), '.pi', 'agent', 'models.json')).providers?.[role.piProvider];
         if (!provider || provider.api !== 'openai-responses' || !provider.models?.some(model => model.id === role.model)) {
@@ -172,16 +181,14 @@ try {
         // 预创建空文件让 Pi 立即写入 header，Orca 才能在 session_start 时记下
         // session_file/session_id，角色启动后无需等待首轮对话即可完成会话绑定。
         if (!fs.existsSync(transcript)) fs.writeFileSync(transcript, role.agent === 'omp' ? JSON.stringify({type:'session',version:3,id:current.launchIntent.id,timestamp:new Date().toISOString(),cwd:project})+'\n' : '');
-        launch.args.push('--session', transcript,
-          `Initialize the fixed ${role.name} role using the loaded instructions. Reply only "${role.name} ready". Do not call tools or start tasks.`);
+        launch.args.push('--session', transcript, initialMessage);
       }
       if (!saved?.session && role.agent === 'claude') {
         const id = current?.launchIntent?.id;
         if (!id) throw new Error('Claude launch intent is missing; rerun start to prepare it');
         // --session-id 只能创建一次；已有 transcript 说明上次启动已经发生，交给 start 对账而不是重复创建。
         if (claudeTranscriptPath(id)) throw new Error('Launch intent already has a transcript; rerun start to reconcile it');
-        launch.args.push('--session-id', id, '--name', role.name,
-          `Initialize the fixed ${role.name} role using the loaded instructions. Reply only "${role.name} ready". Do not call tools or start tasks.`);
+        launch.args.push('--session-id', id, '--name', role.name, initialMessage);
       }
       if (role.agent === 'codex' && process.env.ORCA_CODEX_LAUNCH_PREFLIGHT) {
         const preparation = spawnSync(process.env.ORCA_CODEX_LAUNCH_PREFLIGHT,
