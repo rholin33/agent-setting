@@ -1,9 +1,13 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { ompExecutable } from './omp.mjs';
 import { windowsProcesses } from './windows-health.mjs';
 
 const packages = { codex: '@openai/codex', pi: '@earendil-works/pi-coding-agent' };
+// 只读版本检查的超时；离线时不能拖住启动。
+const CHECK_TIMEOUT_MS = 20000;
 const execute = promisify(execFile);
 
 async function processInventory() {
@@ -21,8 +25,8 @@ function active(rows, agent) {
 
 export async function runUpdateCommand(command, args) {
   // Only fixed command templates reach cmd.exe; never interpolate project paths.
-  if (command === 'omp' && ['update', 'update --plugins'].includes(args.join(' '))) {
- try { return {status:0,...await execute(ompExecutable(),args,{windowsHide:true,maxBuffer:16*1024*1024})}; }
+  if (command === 'omp' && ['update', 'update --plugins', 'update --check'].includes(args.join(' '))) {
+ try { return {status:0,...await execute(ompExecutable(),args,{windowsHide:true,maxBuffer:16*1024*1024,timeout:args.includes('--check')?CHECK_TIMEOUT_MS:0})}; }
  catch(error) {return {status:error.code || 1,stderr:error.stderr || error.message};}
  }
  const allowed = command === 'npm' && (args.join(' ') === 'list --global --depth=0 --json' ||
@@ -33,7 +37,8 @@ export async function runUpdateCommand(command, args) {
   try {
     const executable = process.platform === 'win32' ? process.env.ComSpec || 'cmd.exe' : command;
     const argv = process.platform === 'win32' ? ['/d', '/s', '/c', `${command}.cmd ${args.join(' ')}`] : args;
-    const result = await execute(executable, argv, { windowsHide: true, maxBuffer: 16 * 1024 * 1024 });
+    const readOnly = ['list', 'view'].includes(args[0]);
+    const result = await execute(executable, argv, { windowsHide: true, maxBuffer: 16 * 1024 * 1024, timeout: readOnly ? CHECK_TIMEOUT_MS : 0 });
     return { status: 0, ...result };
   } catch (error) { return { status: error.code || 1, stderr: error.stderr || error.message }; }
 }
@@ -102,4 +107,45 @@ export async function updateAgentsBeforeStart({ agents, processes = processInven
     }
   }
   return result;
+}
+
+// 启动只做只读的版本检查：每 24 小时最多联网一次，不停止任何角色；真正的更新交给 `orca-team update`。
+const UPDATE_CHECK_TTL_MS = 24 * 60 * 60 * 1000;
+export async function checkAgentUpdates({ home, agents, run = runUpdateCommand, log = console.log, now = Date.now, ttlMs = UPDATE_CHECK_TTL_MS }) {
+  const file = path.join(home, 'agent-update-check.json');
+  const names = [...new Set(agents)].filter(name => packages[name] || name === 'omp').sort();
+  let cache = null;
+  try { cache = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { /* 没有缓存时联网检查 */ }
+  const fresh = cache && now() - Date.parse(cache.checkedAt) < ttlMs && names.every(name => name in (cache.agents || {}));
+  if (!fresh) {
+    const latestOf = async name => {
+      if (name === 'omp') {
+        const reply = await run('omp', ['update', '--check']);
+        if (reply.status !== 0) throw new Error(reply.stderr?.trim() || `exit ${reply.status}`);
+        const current = reply.stdout.match(/Current version:\s*(\S+)/)?.[1] ?? null;
+        return { current, latest: reply.stdout.match(/New version available:\s*(\S+)/)?.[1] ?? current };
+      }
+      const [listed, viewed] = await Promise.all([run('npm', ['list', '--global', '--depth=0', '--json']), run('npm', ['view', packages[name], 'version', '--json'])]);
+      if (viewed.status !== 0) throw new Error(viewed.stderr?.trim() || `exit ${viewed.status}`);
+      return { current: JSON.parse(listed.stdout || '{}').dependencies?.[packages[name]]?.version ?? null, latest: JSON.parse(viewed.stdout) };
+    };
+    const results = await Promise.allSettled(names.map(latestOf));
+    cache = { checkedAt: new Date(now()).toISOString(), agents: {} };
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') cache.agents[names[index]] = result.value;
+      else {
+        // 失败也缓存到下一个检查周期，离线时不在每次启动重复等待。
+        cache.agents[names[index]] = { error: result.reason.message };
+        log(`Warning: ${names[index]} update check failed: ${result.reason.message}`);
+      }
+    });
+    fs.writeFileSync(file, JSON.stringify(cache, null, 2) + '\n');
+  }
+  const available = names.filter(name => cache.agents[name]?.current && cache.agents[name].latest && cache.agents[name].current !== cache.agents[name].latest);
+  if (available.length) log(`Updates available: ${available.map(name => `${name} ${cache.agents[name].current} → ${cache.agents[name].latest}`).join(', ')}; run \`orca-team update\` to install`);
+  return available;
+}
+
+export function clearUpdateCheck(home) {
+  fs.rmSync(path.join(home, 'agent-update-check.json'), { force: true });
 }

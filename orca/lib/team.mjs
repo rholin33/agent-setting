@@ -2,11 +2,11 @@ import { verifyMacAbsence } from './macos-health.mjs';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { normalizeProject, projectKey, nodeCommand } from './platform.mjs';
+import { normalizeProject, projectKey, nodeCommand, processStartTime, mapLimit, INSPECT_CONCURRENCY } from './platform.mjs';
 import { binding, sameWorktree, validateTranscript } from './sessions.mjs';
 import { inspectHealth, recoverInPane } from './health.mjs';
 import { rpc } from './orca.mjs';
-import { prepareLaunch, captureSession } from './launch-state.mjs';
+import { prepareLaunch, captureSession, appliedModelOf } from './launch-state.mjs';
 import { restoreGroupLayout } from './layout.mjs';
 import { pinGroupTabs } from './tabs.mjs';
 import { verifyWindowsAbsence } from './windows-health.mjs';
@@ -23,7 +23,9 @@ export function projectFiles(home, project) {
   // Legacy PowerShell keeps a zero-byte start.lock after releasing its OS lock.
   return { directory, config: path.join(directory, 'config.json'), state: path.join(directory, 'state.json'), lock: path.join(directory, 'start.node.lock') };
 }
-export function withLock(file, action) {
+// pid 复用容差：ps 的 lstart 只精确到秒。
+const LOCK_START_TOLERANCE_MS = 2000;
+export function withLock(file, action, { startTime = processStartTime } = {}) {
   let fd;
   try { fd = fs.openSync(file, 'wx'); } catch (error) {
     if (error.code !== 'EEXIST') throw error;
@@ -35,6 +37,11 @@ export function withLock(file, action) {
     } catch (ownerError) {
       if (ownerError.code === 'ESRCH') ownerAlive = false;
       else throw ownerError;
+    }
+    // 持锁进程必然在建锁之前启动；同一 pid 的进程晚于建锁时间启动，说明 pid 已被复用。
+    if (ownerAlive) {
+      const started = startTime(lock.pid), created = Date.parse(lock.createdAt);
+      if (started && Number.isFinite(created) && started > created + LOCK_START_TOLERANCE_MS) ownerAlive = false;
     }
     if (ownerAlive) throw new Error(`Project is locked by live process ${lock.pid}: ${file}`);
     const stale = `${file}.stale-${lock.pid}-${Date.now()}`;
@@ -153,6 +160,13 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pub
       // Persist the absence proof before creating any replacement pane.
       saveJson(files.state, state);
     }
+    // 各角色的进程检查只读且互相独立，先并行完成；循环里窗格或 agent 变化时再现场检查。
+    const paneOf = saved => inventory.terminals.filter(row => sameWorktree(`local::${row.worktreePath}`, project) && row.tabId === saved.tabId && row.leafId === saved.leafId);
+    const prefetched = new Map(await mapLimit(names.filter(name => state.agents[name] && !state.agents[name].pending), INSPECT_CONCURRENCY, async name => {
+      const saved = state.agents[name], rows = paneOf(saved);
+      if (rows.length !== 1 || !rows[0].connected || rows[0].orphaned) return [name, null];
+      return [name, { handle: rows[0].handle, agent: saved.agent, result: await inspect(rows[0].handle, saved.agent) }];
+    }));
     for (const name of names) {
       const saved = state.agents[name];
       if (!saved) continue;
@@ -187,7 +201,7 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pub
       }
       const foundBinding = binding(snap, saved, project);
       if (foundBinding) saved.session = foundBinding;
-      const matches = inventory.terminals.filter(row => sameWorktree(`local::${row.worktreePath}`, project) && row.tabId === saved.tabId && row.leafId === saved.leafId);
+      const matches = paneOf(saved);
       if (!matches.length) {
         if (action === 'status') { log(`${name}: missing`); continue; }
         assertConversationAbsent(snap, project, [{ name, saved }], inventory.terminals);
@@ -207,7 +221,8 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pub
       } else {
         if (matches.length !== 1 || !matches[0].connected || matches[0].orphaned) throw new Error(`Cannot verify running role ${name}`);
         resolved[name] = matches[0];
-        health[name] = await inspect(matches[0].handle, saved.agent);
+        const cached = prefetched.get(name);
+        health[name] = cached && cached.handle === matches[0].handle && cached.agent === saved.agent ? cached.result : await inspect(matches[0].handle, saved.agent);
         if (health[name].kind === 'agent') captureSession(saved, health[name], project, foundBinding);
       }
     }
@@ -259,7 +274,7 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pub
               throw new Error(`${name}: new conversation is unconfirmed; pending retained`);
             } });
           const role = catalog.find(item => item.name === name);
-          saved.appliedModel = { agent: role.agent, model: role.model, thinking: role.thinking ?? null };
+          saved.appliedModel = appliedModelOf(role, home);
           saveJson(files.state, state);
           log(`${name}: new conversation started in existing pane`);
           continue;
@@ -278,7 +293,7 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pub
             throw new Error(`${name}: original conversation recovery is unconfirmed; pending retained`);
           } });
         const restoredRole = catalog.find(item => item.name === name);
-        if (restoredRole) saved.appliedModel = { agent: restoredRole.agent, model: restoredRole.model, thinking: restoredRole.thinking ?? null };
+        if (restoredRole) saved.appliedModel = appliedModelOf(restoredRole, home);
         log(`${name}: original conversation restored in existing pane`);
         delete saved.restartIntent; saveJson(files.state, state);
         continue;
@@ -340,7 +355,7 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pub
         if (captureSession(saved, live, project, found)) {
           found = saved.session;
           delete saved.pending;
-          saved.appliedModel = { agent: role.agent, model: role.model, thinking: role.thinking ?? null };
+          saved.appliedModel = appliedModelOf(role, home);
           saveJson(files.state, state); break;
         }
         await sleep(500);

@@ -10,7 +10,7 @@ Each role uses the existing project lock, interrupts the running task, requests 
 New provider processes read current local configuration. Codex roles with piProvider read the latest Pi models.json key at launch. Ordinary Codex uses its local authentication/configuration. Restart does not change credential files or update keys inherited from an unchanged parent shell environment.
 
 ## Verification
-The Node suite passes, including reload tests that assert every running role is queued for restart, that none is queued when no pane is live, and that plain shells are left to the startup phase. Live runs restarted all nine roles; roles that were mid-turn reported `agent is busy` or an unverified exit and restarted successfully when retried individually. No credential values were changed for testing.
+The Node suite passes, including reload tests that assert only running roles with a changed fingerprint are queued for restart, that unchanged roles are reused without inspection, that none is queued when no pane is live, and that plain shells are left to the startup phase. Live runs restarted all nine roles; roles that were mid-turn reported `agent is busy` or an unverified exit and restarted successfully when retried individually. No credential values were changed for testing.
 
 ## UI
 No new UI; terminal output reports each role.

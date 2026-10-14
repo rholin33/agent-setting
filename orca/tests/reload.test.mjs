@@ -38,7 +38,7 @@ function fixture(t) {
   return { home, project, cli, catalog };
 }
 
-test('reload stops all running roles including unchanged configurations', async t => {
+test('reload restarts only running roles whose configuration changed', async t => {
   const { home, project, cli } = fixture(t);
   const logs = [];
   const calls = [];
@@ -46,20 +46,31 @@ test('reload stops all running roles including unchanged configurations', async 
     home, project, cli, snapshot: async () => ({}), inspect: async () => ({ kind: 'agent' }), log: msg => logs.push(msg),
     restart: async options => { assert.equal(options.forceExit, true); calls.push(options.roles); return { reloaded: options.roles, failed: [] }; },
   });
-  assert.deepEqual(calls, [['master', 'coder1', 'idle']]);
-  assert.deepEqual(result.reloaded, ['master', 'coder1', 'idle']);
-  assert.deepEqual(result.current, []);
-  assert.ok(logs.some(line => line.includes('Restarting 3 running role(s)')));
+  assert.deepEqual(calls, [['coder1', 'idle']]);
+  assert.deepEqual(result.reloaded, ['coder1', 'idle']);
+  assert.deepEqual(result.current, ['master']);
+  assert.ok(logs.some(line => line.includes('Restarting 2 running role(s)')));
 });
 
-test('matching configuration still requests interrupt/exit before resume', async t => {
+test('matching configuration is reused without inspection; a changed role prompt restarts it', async t => {
   const { home, project, cli } = fixture(t);
   let inspected = 0;
-  const result = await reloadRunning({ home, project, cli, names: ['master'], log: () => {},
+  const run = () => reloadRunning({ home, project, cli, names: ['master'], log: () => {},
     inspect: async () => { inspected++; return { kind: 'agent' }; },
     restart: async options => { assert.equal(options.forceExit, true); assert.deepEqual(options.roles, ['master']); return { reloaded: options.roles, failed: [] }; } });
+  let result = await run();
+  assert.equal(inspected, 0);
+  assert.deepEqual(result.current, ['master']);
+  assert.deepEqual(result.reloaded, []);
+  // 记录过提示指纹后，角色提示内容变化也要重启。
+  fs.mkdirSync(path.join(home, 'roles'));
+  fs.writeFileSync(path.join(home, 'roles', 'master.md'), 'new prompt');
+  const file = path.join(home, 'projects', projectKey(project), 'state.json');
+  const state = JSON.parse(fs.readFileSync(file, 'utf8'));
+  state.agents.master.appliedModel.prompt = 'stale-prompt-hash';
+  fs.writeFileSync(file, JSON.stringify(state));
+  result = await run();
   assert.equal(inspected, 1);
-  assert.deepEqual(result.current, []);
   assert.deepEqual(result.reloaded, ['master']);
 });
 

@@ -92,6 +92,9 @@ export function terminalHostVersion(directory = path.join(dataDirectory(), 'daem
 }
 
 // Read-only terminal-host protocol adapter: never attaches or writes a terminal.
+// Orca 升级后旧宿主会继续托管升级前的终端，多个宿主同时存活是常态。
+// 指定终端时只返回唯一拥有它的宿主；全局清单则合并所有存活宿主，
+// 组合标识让前后两次采样仍能发现任何一个宿主的重启。
 export function selectTerminalHost(inventories, terminal) {
   if (terminal) {
     if (!terminal.handle || !terminal.ptyId || !terminal.incarnationId) throw new Error('Incomplete terminal host selector');
@@ -101,24 +104,38 @@ export function selectTerminalHost(inventories, terminal) {
     if (matches.length !== 1) throw new Error('Terminal host ownership unavailable or ambiguous');
     return matches[0];
   }
-  const active = inventories.filter(value => value.sessions.length > 0);
-  if (active.length > 1) throw new Error('Multiple active terminal hosts; inventory is ambiguous');
-  if (active.length === 1) return active[0];
   if (!inventories.length) throw new Error('terminal_host_inventory_unavailable');
-  return inventories[0];
+  const active = inventories.filter(value => value.sessions.length > 0);
+  if (active.length <= 1) return active[0] ?? inventories[0];
+  const handles = active.flatMap(host => host.sessions.map(session => session.terminalHandle));
+  if (new Set(handles).size !== handles.length) throw new Error('Terminal handle is claimed by multiple hosts; inventory is ambiguous');
+  return { identity: { launchNonce: active.map(host => host.identity?.launchNonce).join('+') }, sessions: active.flatMap(host => host.sessions) };
 }
 
-export async function daemonSessions(terminal) {
-  const directory = path.join(dataDirectory(), 'daemon');
+export async function daemonSessions(terminal, { directory = path.join(dataDirectory(), 'daemon'), read = readDaemonSessions, alive = processAlive } = {}) {
   const versions = fs.readdirSync(directory)
     .map(name => name.match(/^daemon-v(\d+)\.pid$/)?.[1])
     .filter(Boolean).map(Number).sort((a, b) => b - a);
   const inventories = [];
   for (const version of versions) {
-    try { inventories.push(await readDaemonSessions(directory, version)); }
-    catch { /* Stale registrations must not hide the verified live host. */ }
+    try { inventories.push(await read(directory, version)); }
+    catch (error) {
+      // 进程已退出的过期登记可以忽略；存活宿主读不到时全局清单不完整，必须失败。
+      if (!terminal && registeredHostAlive(directory, version, alive)) throw new Error('terminal_host_inventory_incomplete', { cause: error });
+    }
   }
   return selectTerminalHost(inventories, terminal);
+}
+
+function registeredHostAlive(directory, version, alive) {
+  try { return alive(JSON.parse(fs.readFileSync(path.join(directory, `daemon-v${version}.pid`), 'utf8')).pid); }
+  catch { return false; }
+}
+
+export function processAlive(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+  try { process.kill(pid, 0); return true; }
+  catch (error) { return error.code === 'EPERM'; }
 }
 
 async function readDaemonSessions(directory, version) {

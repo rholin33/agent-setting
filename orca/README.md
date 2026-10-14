@@ -58,7 +58,7 @@ The installer generates these entry scripts without rewriting existing shell pro
 
 ## Projects
 
-Run `orca-team` in a project directory. It reconciles the team: stops every running role and resumes with current agent/model/thinking configuration (keeping each original conversation), then creates missing roles and resumes stopped conversations in idle panes. `orca-team status` only inspects existing state; `orca-team init` only initializes. `--project PATH` selects a different project.
+Run `orca-team` in a project directory. It reconciles the team: running roles whose applied fingerprint (agent, model, thinking and role prompt) is unchanged are reused untouched; changed roles stop and resume with the current configuration (keeping each original conversation); then missing roles are created and stopped conversations resume in idle panes. `orca-team status` only inspects existing state; `orca-team init` only initializes. `--project PATH` selects a different project.
 
 Exception: context-switch requests, pending intents, or remotely owned roles in the selected scope defer ordinary start's update/reload/layout recovery; no source or original return conversation is stopped. Use `remote-status` to inspect confirmed owners and pending switches. Explicit `restart` is not a context handoff.
 
@@ -155,10 +155,13 @@ and resume. A fresh launch pre-assigns the conversation with `--session-id` from
 `$CLAUDE_CONFIG_DIR/projects/*/<id>.jsonl` transcript (default `~/.claude`);
 resume uses `--resume <id>`. Exit uses `/exit`, interrupt uses Escape. Packaged
 Pi role skills are not loaded into Claude, and Claude Code updates itself, so
-the update prehook skips it. `ORCA_CLAUDE_COMMAND` overrides the executable.
+update checks skip it. `ORCA_CLAUDE_COMMAND` overrides the executable.
 
-`orca-team` checks Codex and Pi updates once before team startup or explicit
-restart. It scans running processes across projects and stops tracked blocking roles before
+`orca-team start` and `restart` only run a read-only update check: at most once per
+24 hours (cached in `agent-update-check.json`, failures included) they compare
+installed OMP, Codex and Pi versions with the latest release and print
+`Updates available: …`; they never stop a role for an update. `orca-team update`
+performs the update: it scans running processes across projects and stops tracked blocking roles before
 updates, then resumes their original conversations. Busy tasks are interrupted; verified local Windows and macOS provider processes can be forcibly terminated if graceful exit fails. External Codex and Pi processes are left running and do not preemptively block program or extension installation; actual installer errors are reported. Idle npm-installed providers query the
 registry and install only when their version differs from the latest version;
 idle Pi then runs `pi update --extensions` for its packages. A shared update lock keeps
@@ -166,10 +169,12 @@ multiple team commands from installing simultaneously. Update failures warn
 and continue startup with the available installation.
 The picker reads per-role model and thinking selections from local `pi-models.json`;
 `,` and `.` change the selected role's thinking level, and Enter saves it.
-Default startup stops every running role, even when its applied configuration
-matches. It interrupts busy tasks, requests graceful exit, and terminates only
+Default startup reuses running roles whose applied fingerprint matches and stops
+only changed roles. A legacy fingerprint without the role prompt hash compares
+agent, model and thinking only. Stopping interrupts busy tasks, requests graceful exit, and terminates only
 verified local provider processes if exit fails, then resumes original conversations.
-Explicit `restart` uses the same stop-first behavior for the selected roles.
+Explicit `restart` always uses this stop-first behavior for the selected roles.
+Role process inspections run in parallel (4 at a time on macOS, 2 on Windows).
 Startup prints elapsed time for connection, update, model selection, reload,
 and layout/conversation recovery. No overall time limit is imposed.
 
@@ -310,7 +315,7 @@ OMP roles share the Windows launch arguments, model picker, role skill overlays,
 
 OMP transcripts may contain one version-1 title metadata record before the session header. Validation preserves support for that prelude and still checks the exact session ID and project directory.
 
-Default startup order is model selection, agent update prehook, configuration reconciliation, then layout/session verification. Update recovery applies the newly selected model and thinking level; matching roles are reused by reconciliation. Explicit restart uses the saved selections.
+Default startup order is model selection, agent update check, configuration reconciliation, then layout/session verification. Changed roles restart with the newly selected model and thinking level; matching roles are reused by reconciliation. Explicit restart uses the saved selections.
 
 The macOS changes have simulated process/PTY and lifecycle regression coverage; no Mac hardware was available for acceptance testing. macOS users must configure OMP providers locally. Credentials and original Windows session files are not portable configuration.
 
@@ -337,7 +342,7 @@ project `startup-repair.json` retains the original arguments and error; uncertai
 creation is never repeated. The original command still exits nonzero until verified
 recovery. Repair retries use `--no-repair` to prevent recursion. This does not replace
 business roles or change their models. `restart --group TITLE` selects that group;
-restart's update prehook selects only its requested runtime families. Pending remote
+restart's update check covers only its requested runtime families. Pending remote
 handoffs preserve their groups while independent groups can recover; they no longer
 silently report a complete startup. Shell recovery reads the rendered screen so old
 TUI scrollback does not falsely block an empty prompt.
@@ -364,3 +369,5 @@ tests and 7 handoff tests passed. macOS synchronization tests use a canonical
 `TMPDIR=/private/tmp` to preserve symlink rejection. Native connections and Bun
 relay integration are not exercised by this configuration push; the latter
 requires an explicit `COLLAB_TEST_BIND` tailnet interface.
+
+Multiple Orca terminal hosts may stay alive after an Orca upgrade (the old host keeps pre-upgrade terminals). Pane-specific inspection selects the unique owning host; global inventories used by absence proofs merge every live host under a combined identity, and fail closed when a registered live host cannot be read. Project locks also treat a live PID whose process started after the lock was created as a reused PID and recover the stale lock.

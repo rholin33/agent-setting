@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { updateAgentsBeforeStart } from '../lib/agent-update.mjs';
 
 const options = (extra = {}) => ({ agents: ['codex', 'pi'], log: () => {},
@@ -156,4 +159,33 @@ test('managed Pi shutdown is checked even when macOS hides its CLI process title
     run: async (command, args) => { calls.push(args[0]); return defaults.run(command, args); } }));
   assert.ok(calls.indexOf('stop') < calls.indexOf('update'));
   assert.equal(calls.at(-1), 'resume');
+});
+
+test('startup update check is read-only, cached for 24h, and caches failures', async t => {
+  const { checkAgentUpdates, clearUpdateCheck } = await import('../lib/agent-update.mjs');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-update-check-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const calls = [];
+  let clock = Date.parse('2026-10-14T00:00:00Z');
+  const run = async (command, args) => {
+    calls.push(`${command} ${args.join(' ')}`);
+    if (command === 'omp') return { status: 0, stdout: 'Current version: 1.0.0\nNew version available: 1.0.1\n' };
+    if (args[0] === 'list') return { status: 0, stdout: JSON.stringify({ dependencies: { '@openai/codex': { version: '0.1.0' } } }) };
+    return { status: 1, stderr: 'offline' };
+  };
+  const logs = [];
+  const check = () => checkAgentUpdates({ home, agents: ['omp', 'codex', 'omp', 'claude'], run, log: line => logs.push(line), now: () => clock });
+  assert.deepEqual(await check(), ['omp']);
+  assert.ok(calls.every(call => !/^omp update$|install/.test(call)));
+  assert.ok(logs.some(line => /Updates available: omp 1\.0\.0 → 1\.0\.1/.test(line)));
+  assert.ok(logs.some(line => /codex update check failed: offline/.test(line)));
+  const networkCalls = calls.length;
+  clock += 23 * 60 * 60 * 1000;
+  assert.deepEqual(await check(), ['omp']);
+  assert.equal(calls.length, networkCalls);
+  clock += 2 * 60 * 60 * 1000;
+  await check();
+  assert.ok(calls.length > networkCalls);
+  clearUpdateCheck(home);
+  assert.equal(fs.existsSync(path.join(home, 'agent-update-check.json')), false);
 });

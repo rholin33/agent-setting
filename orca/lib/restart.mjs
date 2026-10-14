@@ -2,15 +2,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { projectFiles, readJson, saveJson, withLock, validateConfig, focusDesktop } from './team.mjs';
 import { validateTranscript, sameWorktree, binding } from './sessions.mjs';
-import { captureSession } from './launch-state.mjs';
+import { captureSession, appliedModelOf } from './launch-state.mjs';
 import { inspectHealth, recoverInPane, confirmConversationOwnership } from './health.mjs';
 import { nodeCommand } from './platform.mjs';
 import { rpc } from './orca.mjs';
 import { exitAgent, exitCommand } from './force-exit.mjs';
 
-export function appliedModelOf(catalogRole) {
-  return { agent: catalogRole.agent, model: catalogRole.model, thinking: catalogRole.thinking ?? null };
-}
+export { appliedModelOf };
 
 // Core assumes the caller holds the project lock and owns `state`; multiple
 // roles may run it concurrently because every mutation targets its own agent
@@ -157,7 +155,7 @@ async function restartCore({ home, project, role, cli, snapshot, state, checkpoi
   } });
   await confirmConversationOwnership({ name: role, saved, handle, cli });
   delete saved.restartIntent;
-  saved.appliedModel = appliedModelOf(catalogRole);
+  saved.appliedModel = appliedModelOf(catalogRole, home);
   checkpoint();
   log(`${role}: restarted in original pane; original conversation verified`);
 }

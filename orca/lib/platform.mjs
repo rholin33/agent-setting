@@ -1,6 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 
 export function dataDirectory(platform = process.platform, env = process.env, home = os.homedir()) {
   if (env.ORCA_TEAM_DATA_DIR) return env.ORCA_TEAM_DATA_DIR;
@@ -24,4 +25,26 @@ export function nodeCommand(args, platform = process.platform, executable = proc
   const command = [executable, ...args].map(value => quote(value, platform)).join(' ');
   // Orca Windows terminals use PowerShell; encoded scripts avoid nested command quoting.
   return platform === 'win32' ? 'powershell.exe -NoLogo -NoProfile -EncodedCommand ' + Buffer.from('& ' + command, 'utf16le').toString('base64') : command;
+}
+
+// 进程启动时间（毫秒）；查询失败或进程不存在时返回 null，由调用方按"无法证明"处理。
+export function processStartTime(pid, platform = process.platform, run = execFileSync) {
+  try {
+    if (platform === 'win32') {
+      const script = `(Get-Process -Id ${Number(pid)} -ErrorAction Stop).StartTime.ToUniversalTime().ToString('o')`;
+      return Date.parse(run('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', windowsHide: true, timeout: 10000, stdio: ['ignore', 'pipe', 'ignore'] }).trim()) || null;
+    }
+    return Date.parse(run('/bin/ps', ['-o', 'lstart=', '-p', String(Number(pid))], { encoding: 'utf8', timeout: 5000, env: { ...process.env, LC_ALL: 'C' }, stdio: ['ignore', 'pipe', 'ignore'] }).trim()) || null;
+  } catch { return null; }
+}
+
+// 进程检查的并发上限：Windows 的 CIM 查询并发过高会失败，取更保守的值。
+export const INSPECT_CONCURRENCY = process.platform === 'win32' ? 2 : 4;
+// 按固定并发执行，结果保持输入顺序；任一任务失败即整体失败，语义与串行一致。
+export async function mapLimit(items, limit, task) {
+  const results = new Array(items.length);
+  let next = 0;
+  const worker = async () => { while (next < items.length) { const index = next++; results[index] = await task(items[index], index); } };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
 }

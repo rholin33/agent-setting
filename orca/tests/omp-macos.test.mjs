@@ -30,11 +30,13 @@ test('macOS OMP force exit preserves shell and external agents',async()=>{
  kill:pid=>{killed.push(pid);rows=rows.filter(row=>row.pid!==pid);}});
  assert.deepEqual(killed,[3,2]);assert.deepEqual(rows.map(row=>row.pid),[1,99]);
 });
-test('startup selects models before the update prehook resumes roles',()=>{
+test('startup only checks agent updates; stopping roles to update is reserved for the update command',()=>{
  const source=fs.readFileSync(new URL('../bin/orca-team.mjs',import.meta.url),'utf8');
  const selection=source.indexOf("await stage('Model selection'");
- const update=source.indexOf("await stage('Agent update prehook', () => updatePrehook(home, names))");
- assert.ok(selection>=0 && update>selection);
+ const check=source.indexOf("await stage('Agent update check', () => updateCheck(home, names))");
+ assert.ok(selection>=0 && check>selection);
+ assert.equal(source.match(/=> updatePrehook\(/g).length,1);
+ assert.ok(source.indexOf("action === 'update'")<source.indexOf("updatePrehook(home)"));
 });
 
 import os from 'node:os';

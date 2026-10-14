@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { validateTranscript } from './sessions.mjs';
 import { claudeTranscriptPath } from './claude.mjs';
 
@@ -50,4 +50,19 @@ export function captureSession(saved, live, project, observed) {
   saved.lastVerifiedAt = new Date().toISOString();
   if (live.terminal) Object.assign(saved, { handle: live.terminal.handle, incarnationId: live.terminal.incarnationId });
   return true;
+}
+
+// 配置指纹：CLI、模型、思考强度和角色提示内容。指纹不变的运行中角色在 start 时直接复用。
+export function appliedModelOf(catalogRole, home) {
+  const applied = { agent: catalogRole.agent, model: catalogRole.model, thinking: catalogRole.thinking ?? null };
+  const prompt = home && path.join(home, 'roles', `${catalogRole.name}.md`);
+  if (prompt && fs.existsSync(prompt)) applied.prompt = createHash('sha256').update(fs.readFileSync(prompt)).digest('hex').slice(0, 16);
+  return applied;
+}
+// 旧状态没有提示指纹时只比较模型字段，升级后不会因此重启全部角色。
+export function sameAppliedConfig(saved, catalogRole, home) {
+  const applied = saved.appliedModel, desired = appliedModelOf(catalogRole, home);
+  if (!applied) return false;
+  return applied.agent === desired.agent && applied.model === desired.model && (applied.thinking ?? null) === desired.thinking &&
+    (applied.prompt === undefined || applied.prompt === desired.prompt);
 }
