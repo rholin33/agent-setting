@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { openRepair } from '../lib/startup-repair.mjs';
+import { parseRemoteRequests, startRemoteRequests } from '../lib/remote-start.mjs';
+import { readRemoteSwitches, commitRemoteSwitch, rejectRemoteSwitch, abortRemotePreflight, preflightFailureMessage, remotePreflightError, resolvePreflightChoices } from '../lib/remote-switch.mjs';
 import { supportsNoDaemon } from '../lib/codex-capabilities.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -24,6 +27,7 @@ import { deploy, installQuickCommands, registerShellProfile } from '../lib/insta
 
 const source = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const startedAt = Date.now();
+let requestedAction;
 async function stage(label, action) {
   const before = Date.now();
   try { return await action(); }
@@ -41,15 +45,21 @@ async function updatePrehook(home, names) {
   }
 }
 try {
-  const { values, positionals } = parseArgs({ allowPositionals: true, options: { home: { type: 'string' }, project: { type: 'string' }, role: { type: 'string' }, group: { type: 'string' }, fresh: { type: 'string', multiple: true }, cached: { type: 'boolean' }, resume: { type: 'boolean' }, 'quick-commands': { type: 'boolean' }, 'shell-profile': { type: 'string' }, 'no-pick': { type: 'boolean' }, help: { type: 'boolean' } } });
+  const { values, positionals } = parseArgs({ allowPositionals: true, options: { remote: { type: 'string', multiple: true }, environment: { type: 'string' }, 'from-agent': { type: 'string' }, intent: { type: 'string' }, report: { type: 'string' }, home: { type: 'string' }, project: { type: 'string' }, role: { type: 'string' }, group: { type: 'string' }, fresh: { type: 'string', multiple: true }, cached: { type: 'boolean' }, resume: { type: 'boolean' }, 'quick-commands': { type: 'boolean' }, 'shell-profile': { type: 'string' }, 'no-pick': { type: 'boolean' }, 'no-repair': { type: 'boolean' }, help: { type: 'boolean' } } });
   const action = positionals[0] || 'start';
+  requestedAction = action;
   const roleName = values.role || positionals[1];
   if (action !== 'restart' && positionals.length > (action === 'history' ? 2 : 1)) throw new Error('Unexpected positional arguments');
   if (values.role && positionals[1] && action !== 'restart' && values.role !== positionals[1]) throw new Error('Conflicting role arguments');
-  if (values.group !== undefined && !['start', 'status'].includes(action)) throw new Error('--group is only supported for start/status');
+  if (values.group !== undefined && !['start', 'status', 'restart'].includes(action)) throw new Error('--group is only supported for start/status/restart');
   if (values.fresh?.length && action !== 'start') throw new Error('--fresh is only supported for start');
+  if (values.remote?.length && !['start', 'remote'].includes(action)) throw new Error('--remote is only supported for start/remote');
+  if (values.environment !== undefined && !['start', 'remote'].includes(action)) throw new Error('--environment is only supported for start/remote');
+  if (values['from-agent'] !== undefined && !['start', 'remote'].includes(action)) throw new Error('--from-agent is only supported for start/remote');
+  if (values.intent !== undefined && !['remote-commit', 'remote-reject', 'remote-abort-preflight'].includes(action)) throw new Error('--intent is only supported for remote-commit/remote-reject');
+  if (values.report !== undefined && action !== 'remote-abort-preflight') throw new Error('--report is only supported for remote-abort-preflight');
   if (values.help) {
-    console.log('orca-team [status|history [ROLE]|init|install|export-config] [--group TITLE] [--project PATH] [--home PATH] [--fresh ROLE] [--no-pick]\nDefault: bring the selected project to the configured state. Create missing roles, resume original conversations in idle panes, and stop all running roles, including busy roles, and resume with the configured agent/model/thinking while keeping their conversations. Busy or unverifiable roles are reported as incomplete.\nstart is an alias for the default command; restart [ROLE|GROUP ...] restarts a subset on demand.\n--fresh ROLE (repeatable) drops one stopped role\'s saved pane/session binding and starts that role in a new pane; it refuses while the role is running.\n--no-pick skips the Pi model picker. install --quick-commands registers Orca grouped global shortcuts.');
+    console.log('orca-team [status|history [ROLE]|init|install|export-config] [--group TITLE] [--project PATH] [--home PATH] [--fresh ROLE] [--no-pick] [--remote codex:ROLE|omp:ROLE|off:ROLE] [--environment NAME] [--from-agent HANDLE]\nremote --remote codex:ROLE|omp:ROLE|off:ROLE requests a context handoff without restarting the local team. Picker r selects codex/omp/off; off hands back to the original local agent. Selections commit only after verified acknowledgement.\nremote-abort-preflight --role ROLE --intent ID --report FILE settles only proven pre-delivery OMP failures, preserving the execution report. remote-status shows confirmed owners, pending intents and preflight failures. remote-commit / remote-reject --role ROLE --intent ID settle only against the matching verified handoff ledger.\nPending or remotely owned groups are preserved; independent groups still recover. Incomplete start/restart automatically opens one Codex repair terminal.\nOtherwise start brings the selected project to its configured state. restart [ROLE|GROUP ...] or restart --group TITLE explicitly restarts roles; --fresh ROLE starts a stopped role with a new conversation and refuses continuity-bound roles.\n--no-pick skips the model picker. --no-repair disables recursive repair launch. install --quick-commands registers Orca grouped global shortcuts.');
   } else {
     const home = path.resolve(values.home || process.env.ORCA_TEAM_HOME || path.join(os.homedir(), '.orca', 'roles', 'ccb-team'));
     const project = normalizeProject(fs.realpathSync(values.project || process.cwd()));
@@ -70,14 +80,42 @@ try {
       console.log(`Initialized: ${(await initialize(home, project)).config}`);
     } else if (action === 'history') {
       console.log(JSON.stringify(await taskHistory({ home, project, role: roleName, cli: orca, cached: values.cached }), null, 2));
+    } else if (action === 'remote-status') {
+      console.log(JSON.stringify(readRemoteSwitches({ home, project }), null, 2));
+    } else if (action === 'remote-abort-preflight') {
+      if (!roleName || !values.intent || !values.report) throw new Error('remote-abort-preflight requires --role, --intent and --report');
+      const outcome = await abortRemotePreflight({ home, project, role: roleName, intentId: values.intent, reportFile: values.report, cli: orca });
+      console.log(`${roleName}: ${outcome.status}; source retained; ${outcome.reasons.join('; ')}`);
+    } else if (['remote-commit', 'remote-reject'].includes(action)) {
+      if (!roleName || !values.intent) throw new Error(`${action} requires --role and --intent`);
+      const settle = action === 'remote-commit' ? commitRemoteSwitch : rejectRemoteSwitch;
+      await settle({ home, project, role: roleName, intentId: values.intent, cli: orca });
+      const settled = readRemoteSwitches({ home, project }).roles[roleName];
+      if (action === 'remote-commit') {
+        const focusArgs = ['terminal', 'switch', '--terminal', settled.owner.terminal];
+        if (settled.owner.environment !== 'local') focusArgs.push('--environment', settled.owner.environment);
+        await orca(focusArgs);
+      }
+      console.log(`${roleName}: ${action === 'remote-commit' ? 'handoff accepted; owner updated and focused' : 'handoff rejected; source retained'}`);
+    } else if (action === 'remote') {
+      const configFile = [path.join(project, '.orca', 'team.json'), projectFiles(home, project).config, path.join(home, 'layout.json')].find(file => fs.existsSync(file));
+      if (!configFile) throw new Error('No project or default layout configuration found');
+      const names = readJson(configFile).tabs.flatMap(tab => tab.agents);
+      const catalog = readJson(path.join(home, 'team.json'));
+      const requests = parseRemoteRequests(values.remote, names.filter(name => catalog.some(role => role.name === name)));
+      if (!requests.length) throw new Error('remote requires --remote codex:ROLE, omp:ROLE or off:ROLE');
+      await ensureOrca({ cli: orca });
+      const result = await startRemoteRequests({ requests, home, project, environment: values.environment, sourceHandle: values['from-agent'], cli: orca, snapshot });
+      console.log(result?.reused ? 'Confirmed current owner reused and focused.' : `Handoff coordinator opened and focused: ${result.terminal.handle}. Follow progress there; source remains owner until verified remote-commit.`);
     } else if (action === 'restart') {
       const files = projectFiles(home, project);
       if (!fs.existsSync(files.config) || !fs.existsSync(files.state)) throw new Error(`No initialized Orca team for ${project}; specify --project PATH. Restart will not create a new team.`);
-      resolveRestartRoles(readJson(files.config), readJson(path.join(home, 'team.json')), [...(values.role ? [values.role] : []), ...positionals.slice(1)]);
+      const targets = [...(values.role ? [values.role] : []), ...(values.group ? [values.group] : []), ...positionals.slice(1)];
+      const restartNames = resolveRestartRoles(readJson(files.config), readJson(path.join(home, 'team.json')), targets);
       await stage('Orca connection', () => ensureOrca({ cli: orca }));
-      await stage('Agent update prehook', () => updatePrehook(home));
+      await stage('Agent update prehook', () => updatePrehook(home, restartNames));
       await restoreGroupLayout({ project, config: readJson(files.config), state: readJson(files.state) });
-      await restartTeam({ home, project, forceExit: true, targets: [...(values.role ? [values.role] : []), ...positionals.slice(1)], cli: orca, snapshot });
+      await restartTeam({ home, project, forceExit: true, targets, cli: orca, snapshot });
     } else if (action === 'start') {
       if (await stage('Orca connection', () => ensureOrca({ cli: orca }))) console.log('Orca was started automatically');
       const files = projectFiles(home, project);
@@ -104,9 +142,13 @@ try {
         if (!tab) throw new Error(`Unknown group: ${values.group}`);
         names = tab.agents;
       } else names = tabs.flatMap(tab => tab.agents);
+      const continuity = readRemoteSwitches({ home, project });
+      const preflightFailure = preflightFailureMessage(continuity, names);
+      if (preflightFailure) console.log(preflightFailure);
       if (values.fresh?.length) {
         const wanted = [...new Set(values.fresh)];
         for (const name of wanted) if (!names.includes(name)) throw new Error(`${name}: role is not in the selected scope`);
+        if (wanted.some(name => continuity.roles[name])) throw new Error('--fresh cannot discard a context-continuity binding; preserve the original conversation');
         if (fs.existsSync(files.state)) {
           const state = readJson(files.state);
           const inventory = await orca(['terminal', 'list', '--worktree', `path:${project}`]);
@@ -121,14 +163,54 @@ try {
           saveJson(files.state, state);
         }
       }
-      await stage('Model selection', () => syncModels({ home, names, pick: !values['no-pick'] }));
-      await stage('Agent update prehook', () => updatePrehook(home, names));
-      // Stop running roles before exact-session resume, including unchanged/busy roles.
-      const { skipped, current } = await stage('Configuration reload', () => reloadRunning({ home, project, names, cli: orca, snapshot,
-        inspect: (handle, provider) => inspectHealth(orca, rpc, handle, provider) }));
-      if (current.length) console.log(`Configuration unchanged; reusing: ${current.join(', ')}`);
-      await stage('Layout and conversation recovery', () => runTeam({ home, project, action, group: values.group, cli: orca, snapshot }));
-      if (skipped.length) throw new Error(`Roles not restarted: ${skipped.map(item => `${item.name}: ${item.reason}`).join('; ')}`);
+      let remoteRequests = parseRemoteRequests(values.remote, names);
+      const interactivePicker = !values['no-pick'] && process.stdin.isTTY && process.stdout.isTTY;
+      if (preflightFailure && !interactivePicker) remoteRequests = resolvePreflightChoices(continuity, names, remoteRequests);
+      const pickerRequests = [];
+      const menuResult = {};
+      const confirmRemote = names.filter(name => continuity.roles[name]?.lastSetupOutcome?.status === 'preflight_failed');
+      const remoteStates = Object.fromEntries(Object.entries(continuity.roles).map(([name, entry]) => [name, entry.runtime]));
+      await stage('Model selection', () => syncModels({ home, names, pick: !values['no-pick'], remoteStates, remoteRequests: pickerRequests, confirmRemote, menuResult }));
+      if (menuResult.status === 'cancelled') throw Object.assign(new Error('Startup cancelled; no roles restarted or remote requests sent.'), { code: 'STARTUP_CANCELLED' });
+      for (const request of pickerRequests) {
+        if (!remoteRequests.some(item => item.role === request.role)) remoteRequests.push(request);
+      }
+      for (const name of names) {
+        if (continuity.roles[name]?.runtime === 'omp' && !continuity.roles[name].pending && !remoteRequests.some(item => item.role === name)) {
+          remoteRequests.push({ role: name, runtime: 'omp' });
+        }
+      }
+      if (preflightFailure && interactivePicker) remoteRequests = resolvePreflightChoices(continuity, names, remoteRequests);
+      const protectedRoles = names.filter(name => continuity.roles[name]?.pending || continuity.roles[name]?.runtime);
+      if (remoteRequests.length || protectedRoles.length) {
+        // Never reload a source or its original local return conversation before handoff.
+        if (remoteRequests.length) {
+          const result = await startRemoteRequests({ requests: remoteRequests, home, project, environment: values.environment, sourceHandle: values['from-agent'], cli: orca, snapshot });
+          console.log(result?.reused ? 'Confirmed current owner reused and focused.' : `Handoff coordinator opened and focused: ${result.terminal.handle}. Follow progress there; source remains owner until verified remote-commit.`);
+        } else console.log(`Continuity-bound roles preserved: ${protectedRoles.join(', ')}; inspect remote-status for pending handoffs.`);
+        const protectedNames = new Set([...protectedRoles, ...remoteRequests.map(item => item.role)]);
+        const independent = tabs.filter(tab => tab.agents.every(name => !protectedNames.has(name)) && tab.agents.some(name => names.includes(name)));
+        const failures = [];
+        for (const tab of independent) {
+          try {
+            const result = await reloadRunning({ home, project, names: tab.agents, cli: orca, snapshot,
+              inspect: (handle, provider) => inspectHealth(orca, rpc, handle, provider) });
+            await runTeam({ home, project, action, group: tab.title, cli: orca, snapshot });
+            failures.push(...result.skipped.map(item => `${item.name}: ${item.reason}`));
+          } catch (error) { failures.push(`${tab.title}: ${error.message}`); }
+        }
+        console.log(`Protected handoffs retained; recovered independent groups: ${independent.map(tab => tab.title).join(', ') || 'none'}.`);
+        if (failures.length) throw new Error(`Independent group recovery incomplete: ${failures.join('; ')}`);
+        const unresolved = protectedRoles.filter(name => continuity.roles[name]?.pending);
+        if (unresolved.length) throw Object.assign(new Error(`Existing handoffs require reconciliation: ${unresolved.join(', ')}`), { code: 'REMOTE_HANDOFF_BLOCKED' });
+      } else {
+        await stage('Agent update prehook', () => updatePrehook(home, names));
+        const { skipped, current } = await stage('Configuration reload', () => reloadRunning({ home, project, names, cli: orca, snapshot,
+          inspect: (handle, provider) => inspectHealth(orca, rpc, handle, provider) }));
+        if (current.length) console.log(`Configuration unchanged; reusing: ${current.join(', ')}`);
+        await stage('Layout and conversation recovery', () => runTeam({ home, project, action, group: values.group, cli: orca, snapshot }));
+        if (skipped.length) throw new Error(`Roles not restarted: ${skipped.map(item => `${item.name}: ${item.reason}`).join('; ')}`);
+      }
     } else if (action === 'status') {
       await runTeam({ home, project, action, group: values.group, cli: orca, snapshot });
     } else if (action === 'launch') {
@@ -198,5 +280,18 @@ try {
       process.exitCode = result.status ?? 1;
     } else throw new Error(`Unknown action: ${action}`);
   }
-} catch (error) { console.error(error.message); process.exitCode = 1; }
+} catch (error) {
+  console.error(error.message); process.exitCode = 1;
+  const args = process.argv.slice(2);
+  const action = requestedAction;
+  if (!['REMOTE_PREFLIGHT_FAILED', 'REMOTE_HANDOFF_BLOCKED', 'STARTUP_CANCELLED'].includes(error.code) && ['start', 'restart'].includes(action) && !args.includes('--no-repair') && !args.includes('--help')) {
+    try {
+      const value = flag => { const index = args.indexOf(flag); return index < 0 ? undefined : args[index + 1]; };
+      const home = path.resolve(value('--home') || process.env.ORCA_TEAM_HOME || path.join(os.homedir(), '.orca', 'roles', 'ccb-team'));
+      const project = normalizeProject(fs.realpathSync(value('--project') || process.cwd()));
+      const result = await openRepair({ home, project, args, error: error.message, cli: orca });
+      console.error(`Startup incomplete; Codex repair ${result.status}: ${result.terminal || result.file}. Original command remains failed.`);
+    } catch (repairError) { console.error(`Codex repair unavailable: ${repairError.message}`); }
+  }
+}
 finally { if (!process.argv.includes('--help') && !process.argv.includes('export-config')) console.log(`Total: ${((Date.now() - startedAt) / 1000).toFixed(1)}s`); }

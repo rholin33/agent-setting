@@ -15,3 +15,17 @@ test('multiple active hosts and missing inventories fail closed', () => {
   ]), /ambiguous/);
   assert.throws(() => selectTerminalHost([]), /unavailable/);
 });
+
+test('pane selection finds its exact host without hiding global ambiguity', () => {
+  const terminal = { handle: 'archi', ptyId: 'pty-a', incarnationId: 'epoch-a' };
+  const row = { terminalHandle: 'archi', sessionId: 'pty-a', incarnationId: 'epoch-a', isAlive: true };
+  const owner = { sessions: [row] };
+  const unrelated = { sessions: [{ ...row, terminalHandle: 'other' }] };
+  assert.equal(selectTerminalHost([unrelated, owner], terminal), owner);
+  assert.throws(() => selectTerminalHost([unrelated, owner]), /ambiguous/);
+  for (const patch of [{ sessionId: 'old-pty' }, { incarnationId: 'old-epoch' }, { isAlive: false }]) {
+    assert.throws(() => selectTerminalHost([{ sessions: [{ ...row, ...patch }] }], terminal), /unavailable/);
+  }
+  assert.throws(() => selectTerminalHost([owner, { sessions: [row] }], terminal), /ambiguous/);
+  assert.throws(() => selectTerminalHost([{ sessions: [row, row] }], terminal), /ambiguous/);
+});

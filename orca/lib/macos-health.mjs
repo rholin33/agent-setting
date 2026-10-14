@@ -35,11 +35,11 @@ export function macTree(rows, pid, provider) {
 }
 export async function inspectMac(terminal, provider, { inventory = daemonSessions, processes = macProcesses, show, execute = promisify(execFile) } = {}) {
   const match = r => r.sessions.filter(s => s.terminalHandle === terminal.handle && s.sessionId === terminal.ptyId && s.incarnationId === terminal.incarnationId && s.isAlive === true);
-  const before = await inventory(), first = match(before);
+  const before = await inventory(terminal), first = match(before);
   if (first.length !== 1) throw new Error('macOS pane identity unavailable');
   const a = macTree(await processes(), first[0].pid, provider);
   const b = macTree(await processes(), first[0].pid, provider);
-  const after = await inventory(), last = match(after), current = await show();
+  const after = await inventory(terminal), last = match(after), current = await show();
   if (!a || a !== b || last.length !== 1 || first[0].pid !== last[0].pid || before.identity.launchNonce !== after.identity.launchNonce || current.incarnationId !== terminal.incarnationId || current.ptyId !== terminal.ptyId || !current.connected || current.orphaned) throw new Error('macOS process identity unverified');
   const tree = JSON.parse(b), providerPids = tree.filter(row => row[5] === provider).map(row => row[0]);
   const sessionIds = [], sessionPaths = [];

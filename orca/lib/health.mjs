@@ -61,7 +61,7 @@ export async function recoverInPane({ name, saved, handle, command, cli, inspect
   if (before.kind !== 'shell') throw new Error(`${name}: idle shell cannot be verified (${before.reason})`);
   // Reading the terminal immediately before send avoids pasting into a nonempty prompt.
   const readPrompt = async () => {
-    const screen = (await cli(['terminal', 'read', '--terminal', handle, '--limit', '2000'])).terminal;
+    const screen = (await cli(['terminal', 'read', '--terminal', handle, '--screen', '--limit', '2000'])).terminal;
     return (screen.tail || []).filter(line => line.trim()).at(-1)?.trim() || '';
   };
   const prompt = /^(?:PS .+>|[^\n]*[$#%>]|➜ .+ [✗✔])$/;

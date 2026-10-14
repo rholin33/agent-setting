@@ -69,6 +69,7 @@ class AgentsVariantTests(unittest.TestCase):
                     patch.object(sync, "CLAUDE_MANAGED_FILES", ()), \
                     patch.object(sync, "CLAUDE_MANAGED_DIRECTORIES", ()), \
                     patch.object(sync, "ORCA_HOME", root / "orca"), \
+                    patch.object(sync, "MAGIC_CONTEXT_HOME", root / "magic-context"), \
                     patch.object(exporter, "REPO_ROOT", root / "repo"), \
                     patch.object(sync, "get_project_root", return_value=root / "project"), \
                     patch.object(sync, "get_project_key", return_value="projectkey"):

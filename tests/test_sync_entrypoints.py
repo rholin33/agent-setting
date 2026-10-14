@@ -38,7 +38,10 @@ class EntrypointTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertTrue((home / 'orca/bin/orca-team.mjs').is_file())
             self.assertTrue((home / 'orca/bin/orca-team.ps1').is_file())
-            self.assertEqual(sum(file.is_file() for file in (home / 'orca/source').rglob('*')), 199)
+            self.assertEqual(sum(file.is_file() for file in (home / 'orca/source').rglob('*')),
+                             sum(file.is_file() for file in (ROOT / 'orca/source').rglob('*')))
+            self.assertTrue((home / 'orca/remote-master/omp_adapter.py').is_file())
+            self.assertFalse((home / 'orca/remote-master/runtime').exists())
             self.assertFalse((home / 'ccb').exists())
             self.assertFalse((home / '.ccb').exists())
 

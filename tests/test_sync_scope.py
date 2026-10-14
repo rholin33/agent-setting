@@ -15,6 +15,19 @@ export_spec.loader.exec_module(exporter)
 
 
 class SyncScopeTests(unittest.TestCase):
+    def test_remote_sources_are_portable_but_runtime_and_backups_are_not(self):
+        self.assertTrue(sync.is_portable_path(Path('orca/remote-master/omp_adapter.py')))
+        for name in ['orca/remote-master/runtime/adapter.json',
+                     'orca/remote-master/credentials.json',
+                     'orca/lib/health.mjs.startup-repair.bak',
+                     'orca/lib/windows-health.mjs.backup-20261012T194854',
+                     'orca/remote-master/local-config.json']:
+            self.assertFalse(sync.is_portable_path(Path(name)), name)
+        with patch.object(sync, 'TARGET', 'orca'):
+            self.assertIn('orca', sync.get_managed_remote_pathspecs())
+        with patch.object(sync, 'TARGET', 'ccb'):
+            self.assertNotIn('orca', sync.get_managed_remote_pathspecs())
+
     def test_magic_context_scope_and_jsonc_security(self):
         relative = Path('cortexkit/magic-context.jsonc')
         with patch.object(sync, 'TARGET', 'orca'):

@@ -64,7 +64,7 @@ export function loadPiModelConfig(home, seed = seedPiModelConfig, filename = 'pi
 // config model; Pi roles go through the interactive picker when attached to a
 // terminal. The picker is skipped (and team.json stays untouched for Pi) when
 // stdin is not a TTY, e.g. Orca quick commands.
-export async function syncModels({ home, names, pick = true, log = console.log, stdin = process.stdin, stdout = process.stdout, codexHome, seed } = {}) {
+export async function syncModels({ home, names, pick = true, log = console.log, stdin = process.stdin, stdout = process.stdout, codexHome, seed, remoteRequests = [], remoteStates = {}, confirmRemote = [], menuResult = {} } = {}) {
   const catalogFile = path.join(home, 'team.json');
   const catalog = readJson(catalogFile);
   const inScope = role => !names || names.includes(role.name);
@@ -87,6 +87,14 @@ export async function syncModels({ home, names, pick = true, log = console.log, 
   const modelConfigFile = piRoles.some(role => role.agent === 'omp') ? 'omp-models.json' : 'pi-models.json';
   let config = null;
   let selectionMade = false;
+  if (!piRoles.length && pick && stdin.isTTY && stdout.isTTY) {
+    const selectedRoles = catalog.filter(inScope);
+    if (selectedRoles.length) {
+      const selection = await pickPiModels({ roles: selectedRoles, presets: selectedRoles.map(role => ({ model: role.model })), initialRemote: remoteStates, confirmRemote, stdin, stdout });
+      menuResult.status = selection ? 'confirmed' : 'cancelled';
+      for (const [role, chosen] of Object.entries(selection || {})) if (Object.prototype.hasOwnProperty.call(chosen, 'remote')) remoteRequests.push({ runtime: chosen.remote, role });
+    }
+  }
   if (piRoles.length && pick) {
     const interactive = Boolean(stdin.isTTY && stdout.isTTY);
     let loaded = null;
@@ -94,9 +102,11 @@ export async function syncModels({ home, names, pick = true, log = console.log, 
     catch (error) { if (interactive) throw error; log(`Warning: ${error.message}`); }
     config = loaded?.config ?? null;
     if (config && interactive) {
-      const selection = await pickPiModels({ roles: catalog.filter(inScope), presets: config.presets, initial: config.roles, stdin, stdout });
+      const selection = await pickPiModels({ roles: catalog.filter(inScope), presets: config.presets, initial: config.roles, initialRemote: remoteStates, confirmRemote, stdin, stdout });
+      menuResult.status = selection ? 'confirmed' : 'cancelled';
       if (selection) {
         selectionMade = true;
+        for (const [role, chosen] of Object.entries(selection)) if (Object.prototype.hasOwnProperty.call(chosen, 'remote')) remoteRequests.push({ runtime: chosen.remote, role });
         for (const role of piRoles) {
           const chosen = selection[role.name];
           if (chosen && (role.model !== chosen.model || (role.thinking ?? null) !== chosen.thinking)) {
@@ -105,12 +115,15 @@ export async function syncModels({ home, names, pick = true, log = console.log, 
             role.thinking = chosen.thinking;
           }
         }
-        config.roles = { ...config.roles, ...selection };
+        config.roles = { ...config.roles, ...Object.fromEntries(Object.entries(selection)
+          .filter(([name]) => piRoles.some(role => role.name === name))
+          .map(([name, chosen]) => [name, { model: chosen.model, thinking: chosen.thinking }])) };
       } else {
         log('Pi model picker cancelled; Pi role models unchanged');
       }
     }
   }
+  if (menuResult.status === 'cancelled') return [];
   if (changes.length) saveJson(catalogFile, catalog);
   if (selectionMade) saveJson(path.join(home, modelConfigFile), config);
   for (const change of changes) log(`Model sync: ${change}`);

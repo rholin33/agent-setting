@@ -33,15 +33,15 @@
   ],
   "roles": {
     "master": {
-      "model": "pay/gpt-6.1-sol",
-      "thinking": "max"
+      "model": "pay/gpt-6-astra",
+      "thinking": "xhigh"
     },
     "loader": {
-      "model": "local/cline-pass/deepseek-v4.1-flash",
-      "thinking": "high"
+      "model": "pay/gpt-6-astra",
+      "thinking": "medium"
     },
     "archi": {
-      "model": "pay/gpt-6.1-sol",
+      "model": "pay/gpt-6-astra",
       "thinking": "xhigh"
     },
     "designer": {
@@ -53,8 +53,8 @@
       "thinking": "high"
     },
     "simple": {
-      "model": "pay/gpt-6.1-sol",
-      "thinking": "xhigh"
+      "model": "pay/gpt-6-astra",
+      "thinking": "medium"
     }
   }
 }

@@ -92,7 +92,15 @@ export function terminalHostVersion(directory = path.join(dataDirectory(), 'daem
 }
 
 // Read-only terminal-host protocol adapter: never attaches or writes a terminal.
-export function selectTerminalHost(inventories) {
+export function selectTerminalHost(inventories, terminal) {
+  if (terminal) {
+    if (!terminal.handle || !terminal.ptyId || !terminal.incarnationId) throw new Error('Incomplete terminal host selector');
+    const matches = inventories.flatMap(host => host.sessions.filter(session =>
+      session.terminalHandle === terminal.handle && session.sessionId === terminal.ptyId &&
+      session.incarnationId === terminal.incarnationId && session.isAlive === true).map(() => host));
+    if (matches.length !== 1) throw new Error('Terminal host ownership unavailable or ambiguous');
+    return matches[0];
+  }
   const active = inventories.filter(value => value.sessions.length > 0);
   if (active.length > 1) throw new Error('Multiple active terminal hosts; inventory is ambiguous');
   if (active.length === 1) return active[0];
@@ -100,7 +108,7 @@ export function selectTerminalHost(inventories) {
   return inventories[0];
 }
 
-export async function daemonSessions() {
+export async function daemonSessions(terminal) {
   const directory = path.join(dataDirectory(), 'daemon');
   const versions = fs.readdirSync(directory)
     .map(name => name.match(/^daemon-v(\d+)\.pid$/)?.[1])
@@ -110,7 +118,7 @@ export async function daemonSessions() {
     try { inventories.push(await readDaemonSessions(directory, version)); }
     catch { /* Stale registrations must not hide the verified live host. */ }
   }
-  return selectTerminalHost(inventories);
+  return selectTerminalHost(inventories, terminal);
 }
 
 async function readDaemonSessions(directory, version) {
