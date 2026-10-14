@@ -2,21 +2,21 @@
   {
     "name": "master",
     "agent": "omp",
-    "model": "pay/gpt-6.1-sol",
-    "thinking": "max",
+    "model": "pay/gpt-6-astra",
+    "thinking": "xhigh",
     "role": "agentroles.ccb_self"
   },
   {
     "name": "loader",
     "agent": "omp",
-    "model": "local/cline-pass/deepseek-v4.1-flash",
-    "thinking": "high",
+    "model": "pay/gpt-6-astra",
+    "thinking": "medium",
     "role": "agentroles.ccb_self"
   },
   {
     "name": "archi",
     "agent": "omp",
-    "model": "pay/gpt-6.1-sol",
+    "model": "pay/gpt-6-astra",
     "thinking": "xhigh",
     "role": "agentroles.archi"
   },
@@ -58,8 +58,8 @@
   {
     "name": "simple",
     "agent": "omp",
-    "model": "pay/gpt-6.1-sol",
-    "thinking": "xhigh",
+    "model": "pay/gpt-6-astra",
+    "thinking": "medium",
     "role": "agentroles.simple"
   },
   {

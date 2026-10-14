@@ -47,7 +47,7 @@ def codex_agents_variant_relative(target: str) -> Path:
     return CODEX_CONFIG_DIR / f"AGENTS.{target}.md"
 INCLUDE_UNTRACKED = False
 ORCA_HOME = Path(os.environ.get("ORCA_TEAM_HOME", str(Path.home() / ".orca/roles/ccb-team"))).expanduser()
-ORCA_PACKAGE_DIRECTORIES = {"bin", "lib", "roles", "source", "tests", "docs"}
+ORCA_PACKAGE_DIRECTORIES = {"bin", "lib", "roles", "source", "tests", "docs", "remote-master"}
 MAGIC_CONTEXT_RELATIVE = Path("cortexkit/magic-context.jsonc")
 MAGIC_CONTEXT_HOME = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))).expanduser() / "cortexkit"
 ORCA_PACKAGE_FILES = {"team.json", "layout.json", "package.json", "README.md", "FILE-INVENTORY.json", "omp-models.json", "omp-context.json"}
@@ -242,13 +242,17 @@ def is_portable_path(relative_path: Path) -> bool:
     # synced/ 是 claude.ai 账号同步的技能，.trash 等隐藏目录是 Claude Code 自身的管理数据，都不能跨机器复制。
     if parts[:2] == ("claude", "skills") and len(parts) > 2 and (parts[2] == "synced" or parts[2].startswith(".")):
         return False
-    excluded = {".git", ".system", "__pycache__", "node_modules", ".cache", "sessions", "credentials", "logs", "log", "shell_snapshots", "tmp", ".tmp"}
+    excluded = {".git", ".system", "__pycache__", "node_modules", ".cache", "sessions", "credentials", "logs", "log", "shell_snapshots", "tmp", ".tmp", "runtime", "backups"}
     if any(part.lower() in excluded for part in parts):
         return False
     name = parts[-1].lower()
     if parts in {("codex", "rules", "default.rules"), ("codex", "hooks", "sync-codex-setting.ps1")}:
         return False
     if parts[:2] == ("pi", "bin") and parts != ("pi", "bin", "pi"):
+        return False
+    if name.endswith((".bak", ".backup")) or ".backup-" in name:
+        return False
+    if parts[:2] == ("orca", "remote-master") and relative_path.suffix.lower() not in {".py", ".ts"}:
         return False
     if name.startswith((".env.", "local-legacy")) or name == ".coverage" or (name.startswith("coverage") and name.endswith(".json")):
         return False

@@ -6,9 +6,19 @@ import { readJson, saveJson, validateConfig } from './team.mjs';
 export function deploy(source, home) {
   fs.mkdirSync(home, { recursive: true });
   if (path.resolve(source) !== path.resolve(home)) {
-    for (const name of ['bin', 'lib', 'roles', 'source', 'tests', 'docs', 'team.json', 'layout.json', 'package.json', 'README.md', 'FILE-INVENTORY.json', 'omp-context.json']) {
+    for (const name of ['bin', 'lib', 'roles', 'source', 'tests', 'docs', 'remote-master', 'team.json', 'layout.json', 'package.json', 'README.md', 'FILE-INVENTORY.json', 'omp-context.json']) {
       const from = path.join(source, name);
-      if (fs.existsSync(from)) fs.cpSync(from, path.join(home, name), { recursive: true });
+      if (fs.existsSync(from)) fs.cpSync(from, path.join(home, name), {
+        recursive: true,
+        filter: file => {
+          const relative = path.relative(source, file);
+          const parts = relative.split(path.sep);
+          const basename = path.basename(file);
+          if (parts.some(part => ['runtime', 'backups', '__pycache__'].includes(part)) ||
+              /\.(?:bak|backup|pyc)$|\.backup-/.test(basename)) return false;
+          return name !== 'remote-master' || fs.lstatSync(file).isDirectory() || /\.(?:py|ts)$/.test(file);
+        },
+      });
     }
   }
   const entry = path.join(home, 'bin', 'orca-team.mjs');

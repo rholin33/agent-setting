@@ -46,6 +46,12 @@
       "agents": [
         "designer"
       ]
+    },
+    {
+      "title": "deploy",
+      "agents": [
+        "deploy"
+      ]
     }
   ],
   "sourceSidebar": {

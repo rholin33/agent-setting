@@ -64,7 +64,7 @@ export function loadPiModelConfig(home, seed = seedPiModelConfig, filename = 'pi
 // config model; Pi roles go through the interactive picker when attached to a
 // terminal. The picker is skipped (and team.json stays untouched for Pi) when
 // stdin is not a TTY, e.g. Orca quick commands.
-export async function syncModels({ home, names, pick = true, log = console.log, stdin = process.stdin, stdout = process.stdout, codexHome, seed, sessionAgents = {}, prepareSwitches } = {}) {
+export async function syncModels({ home, names, pick = true, log = console.log, stdin = process.stdin, stdout = process.stdout, codexHome, seed, sessionAgents = {}, prepareSwitches, remoteRequests = [], remoteStates = {}, confirmRemote = [], menuResult = {} } = {}) {
   const catalogFile = path.join(home, 'team.json');
   const catalog = readJson(catalogFile);
   const inScope = role => !names || names.includes(role.name);
@@ -96,7 +96,8 @@ export async function syncModels({ home, names, pick = true, log = console.log, 
     if (config && interactive) {
       const presets = [...config.presets, ...(codexModel ? [{ agent: 'codex', model: codexModel, thinking: codexThinking }] : []),
         ...['sonnet', 'opus', 'haiku'].map(model => ({ agent: 'claude', model, thinking: 'high', label: `Claude CLI / ${model}` }))];
-      const selection = await pickPiModels({ roles: catalog.filter(inScope), presets, initial: config.roles, stdin, stdout });
+      const selection = await pickPiModels({ roles: catalog.filter(inScope), presets, initial: config.roles, initialRemote: remoteStates, confirmRemote, stdin, stdout });
+      menuResult.status = selection ? 'confirmed' : 'cancelled';
       if (selection) {
         const switches = Object.entries(selection).filter(([name, chosen]) => sessionAgents[name] && sessionAgents[name] !== chosen.agent)
           .map(([name, chosen]) => ({ name, from: sessionAgents[name], to: chosen.agent }));
@@ -106,6 +107,7 @@ export async function syncModels({ home, names, pick = true, log = console.log, 
           await prepareSwitches(switches);
         }
         selectionMade = true;
+        for (const [role, chosen] of Object.entries(selection)) if (Object.prototype.hasOwnProperty.call(chosen, 'remote')) remoteRequests.push({ runtime: chosen.remote, role });
         for (const role of catalog.filter(inScope)) {
           const chosen = selection[role.name];
           if (chosen && (role.agent !== chosen.agent || role.model !== chosen.model || (role.thinking ?? null) !== chosen.thinking)) {
@@ -116,14 +118,18 @@ export async function syncModels({ home, names, pick = true, log = console.log, 
             role.agent = chosen.agent;
           }
         }
-        config.roles = { ...config.roles, ...selection };
+        config.roles = { ...config.roles, ...Object.fromEntries(Object.entries(selection)
+          .filter(([name]) => piRoles.some(role => role.name === name))
+          .map(([name, chosen]) => [name, { agent: chosen.agent, model: chosen.model, thinking: chosen.thinking }])) };
       } else {
         log('Pi model picker cancelled; Pi role models unchanged');
       }
     }
   }
+  if (menuResult.status === 'cancelled') return [];
   if (changes.length) saveJson(catalogFile, catalog);
-  if (selectionMade) saveJson(path.join(home, modelConfigFile), config);
+  // 只有 Codex/Claude 角色时不创建 Pi/OMP 模型文件。
+  if (selectionMade && (piRoles.length || fs.existsSync(path.join(home, modelConfigFile)))) saveJson(path.join(home, modelConfigFile), config);
   for (const change of changes) log(`Model sync: ${change}`);
   return changes;
 }

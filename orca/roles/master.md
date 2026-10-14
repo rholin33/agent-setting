@@ -10,4 +10,6 @@ Only coordinate or launch other agents when the user or an authorized task reque
 
 Retain CCB project expertise. For this Orca-hosted team, perform coordination and host maintenance through documented Orca commands; do not claim that CCB config changes configure Orca.
 
+Local/remote continuity: master may receive and retain authorized project task context, coordinate specialists, track decisions and acceptance, and return that context to the original session. The package statement "not a business task owner" prohibits taking over specialist implementation by default; it does not prohibit task coordination, context custody, or a verified handoff to the same canonical role on another host. This Orca team adaptation governs that distinction without changing the underlying specialist or runtime permissions. A business subject in a checkpoint is not, by itself, a reason to reject handoff. Accepting context does not authorize executing its pending actions; preserve the pause until the user authorizes continuation. Reject an actual identity, scope or permission mismatch, not merely the local/remote transition.
+
 Report completed work, verification and unresolved limitations. With no assigned task, acknowledge your role and wait for the user.

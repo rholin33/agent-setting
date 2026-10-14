@@ -68,7 +68,7 @@ test('init retains per-project overrides and refuses concurrent locks', async t 
   assert.equal(fs.existsSync(files.lock), false);
   assert.ok(fs.readdirSync(files.directory).some(name => name.startsWith('start.node.lock.stale-')));
 });
-test('fresh launch creates six tabs/nine roles and rerun has no mutations', async t => {
+test('fresh launch creates seven tabs/ten roles and rerun has no mutations', async t => {
   const { home, project } = fixture(t);
   const terminals = [], tabs = []; let creations = 0;
   const cli = async args => {
@@ -115,9 +115,9 @@ test('fresh launch creates six tabs/nine roles and rerun has no mutations', asyn
   await runTeam({ ...options, group: 'master' }); assert.equal(creations, 2);
   delete withUnrelatedPending.agents.archi;
   saveJson(stateFile, withUnrelatedPending);
-  await runTeam(options); assert.equal(creations, 9); assert.equal(tabs.length, 6);
-  assert.deepEqual(pinned.at(-1), ['master', 'coder', 'reviewer', 'archi', 'simple', 'designer']);
-  await runTeam(options); assert.equal(creations, 9);
+  await runTeam(options); assert.equal(creations, 10); assert.equal(tabs.length, 7);
+  assert.deepEqual(pinned.at(-1), ['master', 'coder', 'reviewer', 'archi', 'simple', 'designer', 'deploy']);
+  await runTeam(options); assert.equal(creations, 10);
   const stateBeforeStatus = fs.readFileSync(stateFile, 'utf8');
   const pinCount = pinned.length;
   await runTeam({ ...options, action: 'status', group: 'master' });
@@ -131,10 +131,10 @@ test('fresh launch creates six tabs/nine roles and rerun has no mutations', asyn
   const warnings = [];
   await runTeam({ ...options, log: line => warnings.push(line), pin: async () => { throw new Error('pin not applied'); } });
   assert.ok(warnings.some(line => /Warning:.*pin not applied/.test(line)));
-  assert.equal(creations, 9);
+  assert.equal(creations, 10);
   terminals.pop();
   await assert.rejects(runTeam(options), /No confirmed close record/);
-  assert.equal(creations, 9);
+  assert.equal(creations, 10);
 });
 test('exact resume checks ID, project, file and original Codex home', t => {
   const { temp, project } = fixture(t);
@@ -183,6 +183,7 @@ test('installation retains runtime state and quick commands preserve unrelated e
   const files = await initialize(home, project);
   const before = fs.readFileSync(files.state, 'utf8');
   deploy(source, home);
+  assert.ok(fs.existsSync(path.join(home, 'remote-master', 'omp_adapter.py')));
   assert.equal(fs.readFileSync(files.state, 'utf8'), before);
   assert.ok(fs.existsSync(path.join(home, 'bin', 'orca-team.ps1')));
   assert.ok(fs.existsSync(path.join(home, 'bin', 'orca-team')));
@@ -200,8 +201,8 @@ test('installation retains runtime state and quick commands preserve unrelated e
     if (index === -1) commands.push(params.mutation.command); else commands[index] = params.mutation.command;
   };
   await installQuickCommands(home, rpc); await installQuickCommands(home, rpc);
-  assert.equal(commands.length, 7); assert.equal(commands[0].command, 'hello');
-  assert.deepEqual(commands.slice(1).map(row => row.label).sort(), ['CCB / master + loader', 'CCB / archi', 'CCB / coder1 + coder2', 'CCB / designer', 'CCB / reviewer + test', 'CCB / simple'].sort());
+  assert.equal(commands.length, 8); assert.equal(commands[0].command, 'hello');
+  assert.deepEqual(commands.slice(1).map(row => row.label).sort(), ['CCB / master + loader', 'CCB / archi', 'CCB / coder1 + coder2', 'CCB / designer', 'CCB / reviewer + test', 'CCB / simple', 'CCB / deploy'].sort());
   for (const row of commands.slice(1)) {
     const text = process.platform === 'win32' ? Buffer.from(row.command.split(' ').at(-1), 'base64').toString('utf16le') : row.command;
     assert.match(text, /'--group'/);
@@ -380,7 +381,7 @@ test('unconfirmed new pane retains pending and retry never duplicates its launch
   assert.equal(created, 1);
 });
 
-test('split receipt timeout reconciles six groups without duplicate launches', async t => {
+test('split receipt timeout reconciles seven groups without duplicate launches', async t => {
   const { home, project } = fixture(t);
   const terminals = [], tabs = []; let creations = 0;
   const cli = async args => {
@@ -428,9 +429,9 @@ test('split receipt timeout reconciles six groups without duplicate launches', a
   await runTeam({ ...options, group: 'master' }); assert.equal(creations, 2);
   delete withUnrelatedPending.agents.archi;
   saveJson(stateFile, withUnrelatedPending);
-  await runTeam(options); assert.equal(creations, 9); assert.equal(tabs.length, 6);
-  assert.deepEqual(pinned.at(-1), ['master', 'coder', 'reviewer', 'archi', 'simple', 'designer']);
-  await runTeam(options); assert.equal(creations, 9);
+  await runTeam(options); assert.equal(creations, 10); assert.equal(tabs.length, 7);
+  assert.deepEqual(pinned.at(-1), ['master', 'coder', 'reviewer', 'archi', 'simple', 'designer', 'deploy']);
+  await runTeam(options); assert.equal(creations, 10);
   const stateBeforeStatus = fs.readFileSync(stateFile, 'utf8');
   const pinCount = pinned.length;
   await runTeam({ ...options, action: 'status', group: 'master' });
@@ -444,10 +445,10 @@ test('split receipt timeout reconciles six groups without duplicate launches', a
   const warnings = [];
   await runTeam({ ...options, log: line => warnings.push(line), pin: async () => { throw new Error('pin not applied'); } });
   assert.ok(warnings.some(line => /Warning:.*pin not applied/.test(line)));
-  assert.equal(creations, 9);
+  assert.equal(creations, 10);
   terminals.pop();
   await assert.rejects(runTeam(options), /No confirmed close record/);
-  assert.equal(creations, 9);
+  assert.equal(creations, 10);
 });
 
 test('Codex no-daemon is opt-in for supported CLI versions', t => {

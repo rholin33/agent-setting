@@ -2,6 +2,42 @@
 
 The shared package preserves 199 original role resource files and nine adapted prompts. Orca, Pi/OMP, Codex or Claude Code, their models and credentials must already be configured. Node.js 22 or later runs the portable manager. No provider settings or credentials are installed.
 
+## Scoped remote master test console (2026-10-14)
+
+The `remote-master/bridge.py` adapter provides a `master-remote` console inside the local hainanpolicy `fix-bug` worktree while the real Claude Code process and its existing login remain on the paired `claude` Mac. This is a custom MCP/console adapter, not a native cross-host Orca role or a replacement for the original master. It reuses the master/ccb_self role resources; it is intentionally excluded from `orca-team` bulk restart and model synchronization.
+
+Local tools bind only to the local Tailscale address on port 18761; the remote Claude transport binds only to its Tailscale address on port 18762. Requests require a random bearer credential and an allowed peer address; browser origins are rejected. Initial bootstrap is one-use and restricted to the configured remote peer, over the encrypted tailnet. Credentials live in mode-0600 private runtime files, never in this README or the repository. No public Funnel, SSH server, provider credential copying or repository synchronization is used.
+
+Allowed tools: tracked non-sensitive local project reads, compare-and-set Markdown document writes under `docs/` and `.codex/`, and listing/reading/messaging proven existing agents in this exact worktree. Traversal, symlinks, credential/deployment/storage paths, arbitrary shell execution, cross-worktree terminals, shell panes, raw control characters, agent creation/restart and production operations are excluded. Agent messaging delegates to an existing trusted agent and is not an operating-system sandbox. With no user task the remote master waits; it does not automatically coordinate the original master.
+
+The current workspace has the visible `master-remote` console and a `master-remote-tools` support terminal. The remote machine retains the dedicated `master-remote-engine` support terminal; its neutral control files are under `~/.orca/remote-master-fix-bug/`, not in the remote Revisited project. Both computers, Tailscale, and both bridge processes must remain running. A remote request survives console disconnection but is not an unattended task queue. The console is line-based, not Claude's native TUI; Claude sessions resume across turns. `/recover` retrieves the same pending request without submitting it again; `/exit` closes only the console. Do not replay an unknown request automatically.
+
+Local console relaunch: `python3 ~/.orca/roles/ccb-team/remote-master/bridge.py console --config ~/.orca/roles/ccb-team/remote-master/runtime/fix-bug.json`. Local tool process relaunch uses `local` in place of `console`. On the remote computer, relaunch the engine with `python3 ~/.orca/remote-master-fix-bug/bridge.py remote --config ~/.orca/remote-master-fix-bug/engine.json`. First verify the corresponding process is stopped; never create duplicate listeners. Full disablement means closing the specific console, local tool bridge and remote engine terminals recorded in `remote-master/runtime/session-bindings.json`; do not stop unrelated team terminals. Tailscale address changes require an explicit configuration update, not fallback to another host.
+
+Verification: `python3 -m unittest discover -s ~/.orca/roles/ccb-team/remote-master -p test_bridge.py -v` covers authorization, path/secret/symlink boundaries, optimistic document conflicts, and rejection of shell/unknown terminal targets. Real remote Claude successfully read the local worktree identity and package file, listed local terminals and received a traversal denial; no business files were changed and no task was dispatched. Existing provider credentials and application production services were not modified.
+
+### Remote Codex master (2026-10-14)
+
+`master-codex-remote` now runs the official Codex 0.162.1 interactive TUI with `--remote`, connected to the remote machine's native `codex app-server`. The former line console and per-turn `exec/resume` engine have been stopped. `remote-master/native_codex.py` only launches official processes or forwards transport bytes; it does not relay conversation turns. The remote provider/model remains in place and its credentials are not copied. Orca detects the local client as Codex. This is still excluded from the team's bulk restart manager.
+
+The independently authenticated writable MCP service remains at local tailnet port 18765; Claude retains its Markdown-only service at 18761. Native app-server binds the remote tailnet address on port 18766 and requires a capability token. A loopback-only forwarder on local port 18767 connects over encrypted Tailscale, satisfying the TUI's loopback-or-TLS bearer requirement without exposing an unauthenticated endpoint or using public Funnel. The client credential is in mode-0600 `runtime/master-codex-remote/native.json`; the remote server only receives its SHA256 digest. Process-only proxy bypass does not change system or model-provider configuration. Remote shell tools remain disabled, and the TUI explicitly uses a read-only remote sandbox with on-request approval; authorized MCP source writes remain available.
+
+The user explicitly authorized current-worktree source editing. `write_file` creates/replaces non-sensitive, non-ignored UTF-8 project files in existing directories; `edit_file` replaces exactly one literal occurrence while preserving all other bytes. Both require the latest SHA256 (`absent` only for new files). New non-ignored source files can be listed/read without staging them. Stale hashes, ambiguous replacements, symlinks, hard-linked writes, binaries, ignored files, secrets, CI/agent-policy changes, deletion and arbitrary shell access remain blocked. Existing business code may now be changed; this is not limited to Markdown. No builds/tests are claimed unless actually run through separately available execution facilities.
+
+The native TUI starts a new native conversation. Old `session.json`/`session-code.json` conversations remain preserved, but the stopped legacy engine is not used to continue the native session. Exact live terminals and the native session ID are recorded in `remote-master/runtime/session-bindings.json`. The TUI's directory, `@` file selection and shell context refer to the neutral remote runtime directory; they are not a mount of the local project. Local source access and edits continue through the worktree MCP tools, and arbitrary local shell/build execution has not been added.
+
+Native client relaunch: `python3 ~/.orca/roles/ccb-team/remote-master/native_codex.py client --config ~/.orca/roles/ccb-team/remote-master/runtime/master-codex-remote/native.json`. Its local transport uses the same command with `tunnel` instead of `client`. Local source tools still use `bridge.py local --config ~/.orca/roles/ccb-team/remote-master/runtime/master-codex-remote/tools.json`. The remote service uses `native_codex.py server --config ~/.orca/master-codex-remote/engine.json --token-sha256 <capability-token-digest>` with the existing bridge directory on `PYTHONPATH`. Confirm a listener is stopped before relaunching it. Keep `master-codex-code-tools`, `master-codex-tailnet` and remote `master-codex-app-server` running while using the native client. Native slash commands replace the old custom `/recover` interface.
+
+Earlier exec-adapter evidence (before native cutover):
+
+Verified with real remote Codex: worktree reads, role listing, parent-directory denial and session continuation. After source-write authorization, Codex edited only the requested comment in `src/lib/useCountUp.ts`, a stale-SHA second edit was rejected, then the real console restored the comment using the latest hash. Local byte-for-byte comparison confirmed the entire file exactly matches its pre-test content. The writable session remained the same across edit and restore; old read-only history is retained. Eight adapter tests pass (`python3 -m unittest discover -s ~/.orca/roles/ccb-team/remote-master -p 'test_*.py' -v`), including new-file visibility, source-write isolation, credentials, ignored files, ambiguous edits and hash conflicts. No business change remains and no role task was dispatched; no application build was claimed. The remote user's existing warnings for `disable_response_storage` and `stream_max_retries` were not changed.
+
+Native cutover verification: both direct tailnet and loopback-forwarded unauthenticated WebSocket handshakes returned 401; authenticated handshakes returned 101. The real TUI rendered `/status` with `GPT-6.1-Sol/custom` and `Read Only (Ask for approval)`, streamed real worktree tool cards, edited the requested `useCountUp.ts` comment and restored it with matching SHA256. Local byte comparison independently confirmed exact restoration. No business changes or build claims were introduced.
+
+Reusable local-agent entry: `$orca-remote -codex <role> [--environment <name>] [--worktree <path>]` or `$orca-remote -omp <role> ...`; select one runtime independently of role and model provider. The canonical skill is `~/.codex/skills/orca-remote/SKILL.md`, with an OMP discovery symlink and Chinese `references/operations.md` manual. This is an agent skill, not a shell executable, and requires a local orchestration-capable agent. Healthy matching instances are reused. Codex retains its native adapter; OMP now uses the separate deterministic `remote-master/omp_adapter.py` private-collab adapter. Master/archi native OMP and a real isolated bidirectional handoff are verified; this is not a claim that designer or all providers have been tested. Existing Codex services and ports are unchanged.
+
+Skill-driven switches now default to bidirectional task-context handoff, including `--to-agent <existing-handle>` for returning to an existing agent. `--no-handoff` is focus-only. The skill's `references/handoff.md` and `scripts/handoff.py` define private task/revision records, source checkpoints, one claimed delivery, explicit accepted/rejected assistant receipts, and current-owner checks. Original conversations stay in place; this is cooperative coordination, not an OS write lock or full conversation migration. Plain Orca tab clicks do not invoke it. Unknown delivery is not resent, and rejected handoffs retain source ownership.
+
 ## Installation
 
 Run `node orca/bin/orca-team.mjs install --quick-commands` from the configuration repository. Omit `--quick-commands` to deploy without writing Orca settings. Deployment defaults to `~/.orca/roles/ccb-team`; `ORCA_TEAM_HOME` or `--home PATH` overrides it. Existing project state is preserved. Quick command registration uses Orca's local authenticated RPC socket, backs up previous commands locally, preserves unrelated commands, and verifies the six grouped entries. Legacy individual-role entries are removed from Orca settings, not from disk.
@@ -23,6 +59,8 @@ The installer generates these entry scripts without rewriting existing shell pro
 ## Projects
 
 Run `orca-team` in a project directory. It reconciles the team: stops every running role and resumes with current agent/model/thinking configuration (keeping each original conversation), then creates missing roles and resumes stopped conversations in idle panes. `orca-team status` only inspects existing state; `orca-team init` only initializes. `--project PATH` selects a different project.
+
+Exception: context-switch requests, pending intents, or remotely owned roles in the selected scope defer ordinary start's update/reload/layout recovery; no source or original return conversation is stopped. Use `remote-status` to inspect confirmed owners and pending switches. Explicit `restart` is not a context handoff.
 
 The default command first makes sure the Orca app is running: when the runtime metadata is
 missing it launches Orca and waits until the CLI answers. It then syncs role
@@ -276,4 +314,53 @@ Default startup order is model selection, agent update prehook, configuration re
 
 The macOS changes have simulated process/PTY and lifecycle regression coverage; no Mac hardware was available for acceptance testing. macOS users must configure OMP providers locally. Credentials and original Windows session files are not portable configuration.
 
-Orca sync also manages `orca/omp-context.json` (OMP native auto-compaction disabled; Magic Context owns compression) and `cortexkit/magic-context.jsonc` → `${XDG_CONFIG_HOME:-~/.config}/cortexkit/magic-context.jsonc`. Historian/dreamer model choices are portable; credentials, service URLs, absolute paths and runtime databases are rejected. CCB sync excludes these files. Existing OMP sessions need an exact-session restart to load the overlay; sync does not restart agents.
+## Terminal remote selection
+
+In the startup picker, press `r` on any role to cycle `remote: off / codex / omp`. Each row starts from its confirmed owner runtime; Enter emits only changes and Esc cancels picker requests. `off` requests a context handoff back to the exact original local agent. The runtime selection changes persistently only after a verified assistant acknowledgement and commit. Remote choices live in private per-project ownership state, never model presets. `--no-pick` and non-TTY starts only use explicit remote flags.
+
+```sh
+orca-team remote --remote codex:master --environment claude --project /path/to/worktree
+orca-team start --remote omp:designer --project /path/to/worktree
+orca-team remote --remote off:master --project /path/to/worktree
+orca-team remote-status --project /path/to/worktree
+```
+
+Repeat `--remote` for different roles. Requested switches resolve the real source and exact original return session before local-team reload. OMP then runs deterministic native readiness before persisting the verified target and opening a `remote-setup` context coordinator; the coordinator no longer researches runtime installation. Missing/ambiguous source identities block rather than creating a blank replacement. `--from-agent HANDLE` can select a verified source for one role. The coordinator checkpoints the source and obtains actual target acceptance; `remote-commit --role ROLE --intent ID` verifies ledger and live/native identities, persists ownership and focuses the target. Unknown creation/delivery is not resent, and rejection retains the source. Closed OMP guests can reattach to the unchanged remote conversation through an audited same-session binding chain. No Codex fallback is provided.
+
+See [feature documentation](docs/features/remote-startup.md).
+
+## Automatic startup repair
+
+The user entry remains `orca-team`. `start` and `restart` failures now open one local
+Codex repair terminal using `~/.codex/skills/orca-team-repair/SKILL.md`. The private
+project `startup-repair.json` retains the original arguments and error; uncertain
+creation is never repeated. The original command still exits nonzero until verified
+recovery. Repair retries use `--no-repair` to prevent recursion. This does not replace
+business roles or change their models. `restart --group TITLE` selects that group;
+restart's update prehook selects only its requested runtime families. Pending remote
+handoffs preserve their groups while independent groups can recover; they no longer
+silently report a complete startup. Shell recovery reads the rendered screen so old
+TUI scrollback does not falsely block an empty prompt.
+
+### Remote OMP preparation failure
+
+A proven original coordinator abort before any checkpoint/context delivery can be settled through `orca-team remote-abort-preflight --role ROLE --intent EXACT_ID --report FILE`. The tightly scoped path preserves source ownership, exact report bytes and audit as `preflight_failed`; it never invents rejection. Zero revision, unused ledger and unchanged live native source remain mandatory. Actual/unknown deliveries remain protected. The menu displays historical reasons; explicit off permits the existing local lifecycle and Esc cancels startup. An explicit OMP retry now runs the implemented native readiness path without erasing history; a failed readiness check creates no setup and retains the source. See [native OMP delivery and verified boundaries](docs/features/remote-startup.md#native-omp-delivery-2026-10-14).
+
+## Portable remote sources and synchronization
+
+Orca synchronization includes the `orca-remote` skill, its handoff helper and
+`remote-master/` Python/TypeScript adapter sources. Runtime bindings, credentials,
+transcripts, caches and repair backups remain local. Resolve hosts, ports and
+worktrees from the destination machine's verified bindings; example paths are
+placeholders. No agents are started or restarted by exporting configuration.
+
+The merged package retains Claude Code launch/resume and transcript verification,
+and the common OMP compaction overlay. Machine-specific production deployment
+instructions and generated project compaction paths are excluded. The deployment
+role uses protected local configuration and requires current-task authorization.
+
+Validation: 341 Node tests, 37 synchronization tests, 78 remote-adapter Python
+tests and 7 handoff tests passed. macOS synchronization tests use a canonical
+`TMPDIR=/private/tmp` to preserve symlink rejection. Native connections and Bun
+relay integration are not exercised by this configuration push; the latter
+requires an explicit `COLLAB_TEST_BIND` tailnet interface.

@@ -47,7 +47,7 @@ export function validateTranscript(saved, project) {
       const end = text.indexOf('\n');
       if (!text.trim()) break;
       row = JSON.parse(end < 0 ? text : text.slice(0, end));
-      const prelude = saved.agent === 'omp' && record === 0 && row.type === 'title' && row.v === 1 && typeof row.title === 'string';
+      const prelude = saved.agent === 'omp' && record === 0 && row.type === 'title';
       const claudeMetadata = saved.agent === 'claude' && !(typeof row.cwd === 'string' && row.sessionId);
       if (!prelude && !claudeMetadata || end < 0) break;
       row = undefined;
