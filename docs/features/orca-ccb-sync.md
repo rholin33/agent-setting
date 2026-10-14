@@ -41,7 +41,7 @@ live close/resume are not verified. No live installation, commit or push made.
 
 Skill forms: `agent-setting-sync ccb`, `agent-setting-sync orca`, and
 either target followed by `push` or `force`. `force` and `push` cannot combine.
-No selector means no synchronization. Automatic SessionStart must not guess one.
+No selector means no synchronization. Agent startup never runs synchronization.
 
 ## Persistence And Migration
 

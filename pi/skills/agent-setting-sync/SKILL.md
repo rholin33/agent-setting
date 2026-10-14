@@ -82,7 +82,7 @@ credentials are not part of the Orca package.
    never launch a team merely to synchronize configuration. Preserve unrelated
    shortcuts and user shell profile content.
 5. Report target, applied files, backups and limitations. Explicitly report
-   "no commit or push". Automatic SessionStart without a target is a no-op.
+   "no commit or push".
 
 ## Explicit Push Only
 

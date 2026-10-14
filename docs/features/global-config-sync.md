@@ -2,7 +2,7 @@
 
 The current workflow is documented in [Selective CCB and Orca Sync](orca-ccb-sync.md).
 Both targets include portable Codex/Pi configuration. Exactly one of `ccb` and
-`orca` must be selected; automatic SessionStart without a target does nothing.
+`orca` must be selected; no SessionStart hook runs synchronization.
 Only explicit `push` permits export, staging, commit and push. The repository
 pre-commit hook validates whitespace without exporting or staging files.
 

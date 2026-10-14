@@ -108,7 +108,7 @@ Non-loader agents may inspect runtime state and run ephemeral test processes, bu
 ## CCB Configuration Sync
 
 - The portable CCB desired state is stored in `ccb/ccb.config` in this repository.
-- The `SessionStart` hook syncs that file to `~/.ccb/ccb.config` as a remote-authoritative configuration and backs up a different local copy before replacement.
+- `agent-setting-sync ccb` syncs that file to `~/.ccb/ccb.config` as a remote-authoritative configuration and backs up a different local copy before replacement.
 - Required Role packages are declared in `ccb/roles.json`; the hook installs missing packages without tools and retries unavailable packages on later sessions.
 - Syncing updates disk configuration only. It must not reload, restart, or otherwise mutate a mounted CCB runtime automatically.
 - Never sync `.ccb/agents/`, provider state, jobs, events, runtime bindings, or generated agent memory. CCB recreates those from `ccb.config` and installed Role packages.

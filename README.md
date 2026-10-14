@@ -14,8 +14,8 @@ Use one of these forms:
 
 A target is mandatory and mutually exclusive. `force` cannot combine with
 `push`. Without explicit `push`, no export, staging, commit or push occurs.
-The legacy `codex-sync` alias follows the same rules. Untargeted SessionStart
-does nothing, so starting an agent cannot accidentally select CCB or Orca.
+The legacy `codex-sync` alias follows the same rules. No SessionStart hook is
+registered: starting an agent never synchronizes or selects CCB or Orca.
 The pre-commit hook only checks staged whitespace; it never exports or stages.
 
 ## Install From A Checkout
@@ -94,7 +94,7 @@ exported only when the invoking project has a saved runtime config or an explici
 Text merges normalize CRLF/LF before a regular three-way merge. Conflicts retain
 the local file and save the remote candidate in the backup directory without
 advancing the baseline. Merged Python, JSON and skill documents are validated
-before installation. An untargeted SessionStart remains an intentional no-op.
+before installation.
 
 ## Verification
 

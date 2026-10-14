@@ -62,6 +62,6 @@ CCB 路由只适用于已验证的启动身份，必须同时满足：
 
 ## CCB 配置同步
 
-- 可移植目标配置位于配置源仓库的 `ccb/ccb.config`；`SessionStart` hook 以远端为准同步至 `~/.ccb/ccb.config`，替换不同本地副本前先备份。
+- 可移植目标配置位于配置源仓库的 `ccb/ccb.config`；`agent-setting-sync ccb` 以远端为准同步至 `~/.ccb/ccb.config`，替换不同本地副本前先备份。
 - 必需 Role 包由 `ccb/roles.json` 声明；hook 安装缺失包时不启用工具，暂不可用的包留待后续会话重试。
 - 同步仅更新磁盘配置，不自动重载、重启或修改已挂载运行时；不同步 `.ccb/agents/`、provider state、jobs、events、runtime bindings 或生成的 agent memory，这些由 CCB 重建。
