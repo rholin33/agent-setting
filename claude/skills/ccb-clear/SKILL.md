@@ -1,6 +1,6 @@
 ---
 name: ccb-clear
-description: Clear CCB managed agent conversation context with `ccb clear`. Use when the user writes `$ccb-clear`, `$ccb_clear`, or asks to clear/reset one or more CCB agent contexts without restarting or deleting project state.
+description: Clear CCB managed agent conversation context with `ccb clear`. Use when the user invokes /ccb-clear, writes ccb_clear, or asks to clear/reset one or more CCB agent contexts without restarting or deleting project state.
 metadata:
   short-description: Clear CCB agent context
 ---

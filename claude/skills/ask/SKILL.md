@@ -1,6 +1,6 @@
 ---
 name: ask
-description: Send a request to a CCB agent with `ask`.
+description: Send a request to a CCB agent with `ask`. Use when the user asks to delegate work to a CCB agent or role (for example coder1, reviewer, test), invokes /ask, or project instructions require routing work through CCB ask.
 metadata:
   short-description: Ask agent
 ---

@@ -1,15 +1,15 @@
 ---
 name: ccb-diagnose
-description: Diagnose a named CCB agent by combining authoritative runtime and job lineage with deep read-only pane inspection, apply bounded recovery when evidence supports it, verify the result, and request authorization before submitting a redacted GitHub issue. Use for `$ccb_diagnose agentname`, `$ccb-diagnose agentname`, or reports that a CCB agent is stuck, disconnected, not continuing, not replying, or showing provider errors.
+description: Diagnose a named CCB agent by combining authoritative runtime and job lineage with deep read-only pane inspection, apply bounded recovery when evidence supports it, verify the result, and request authorization before submitting a redacted GitHub issue. Use for `/ccb-diagnose agentname`, `ccb_diagnose agentname`, or reports that a CCB agent is stuck, disconnected, not continuing, not replying, or showing provider errors.
 metadata:
   short-description: Diagnose and recover a CCB agent
 ---
 
 # CCB Diagnose
 
-Use this as the single user-facing CCB maintenance workflow. The user-facing
-alias is `ccb_diagnose <agentname>`; the packaged skill name is `ccb-diagnose`
-to match the existing `ccb-clear` packaging convention.
+Use this as the single user-facing CCB maintenance workflow. In Claude Code
+invoke it as `/ccb-diagnose <agentname>`; `ccb_diagnose <agentname>` is the
+spoken alias.
 
 This skill is for the active work-environment CCB using the installed `ccb`
 release. For source validation, use `/home/bfly/yunwei/ccb_source/ccb_test`
@@ -55,7 +55,9 @@ pane residue are evidence only.
 When a current pane is available, pane inspection is mandatory for a named
 agent. Use the CCB-owned read-only pane evidence interface when available,
 preferably `ccb_pane_capture_text` or the equivalent CCB diagnostic tool. Do
-not mutate panes or send keys.
+not mutate panes or send keys. Claude Code has no such tool unless a CCB MCP
+server is configured (it would appear as `mcp__<server>__ccb_pane_capture_text`);
+otherwise use the tmux fallback below.
 
 If no structured pane tool is available, use a read-only tmux fallback only
 after `ccb ps` supplied and ownership checks confirmed the exact pane id and
@@ -68,7 +70,8 @@ command tmux -S "$TMUX_SOCKET_PATH" capture-pane -p -t "$PANE_ID" -S -120
 ```
 
 For a progress comparison, repeat only the bounded `capture-pane` read after a
-short interval. Do not list or capture unrelated sessions/panes. If the
+short interval. In Claude Code, take the second capture in a separate Bash call
+instead of chaining `sleep`. Do not list or capture unrelated sessions/panes. If the
 runtime does not expose a usable CCB-owned socket and pane id, report
 `pane_evidence_unavailable` instead of guessing a target.
 
