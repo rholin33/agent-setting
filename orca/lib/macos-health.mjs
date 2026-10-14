@@ -37,8 +37,26 @@ export async function inspectMac(terminal, provider, { inventory = daemonSession
   const match = r => r.sessions.filter(s => s.terminalHandle === terminal.handle && s.sessionId === terminal.ptyId && s.incarnationId === terminal.incarnationId && s.isAlive === true);
   const before = await inventory(terminal), first = match(before);
   if (first.length !== 1) throw new Error('macOS pane identity unavailable');
-  const a = macTree(await processes(), first[0].pid, provider);
-  const b = macTree(await processes(), first[0].pid, provider);
+  // OMP's Bun launcher keeps the executable name `bun`; prove its entrypoint
+  // before treating it as the provider, and repeat that proof on every scan.
+  const providerRows = async () => {
+    const rows = await processes();
+    if (provider !== 'omp') return rows;
+    const descendants = new Set([first[0].pid]);
+    for (let changed = true; changed;) {
+      changed = false;
+      for (const row of rows) if (descendants.has(row.parent) && !descendants.has(row.pid)) {
+        descendants.add(row.pid); changed = true;
+      }
+    }
+    return Promise.all(rows.map(async row => {
+      if (row.name !== 'bun' || !descendants.has(row.pid)) return row;
+      const { stdout } = await execute('/bin/ps', ['-ww', '-p', String(row.pid), '-o', 'args='], { encoding: 'utf8', timeout: 5000 });
+      return /^bun\s+(?:\/[^\s]+\/)?omp(?:\s|$)/.test(stdout.trim()) ? { ...row, name: 'omp' } : row;
+    }));
+  };
+  const a = macTree(await providerRows(), first[0].pid, provider);
+  const b = macTree(await providerRows(), first[0].pid, provider);
   const after = await inventory(terminal), last = match(after), current = await show();
   if (!a || a !== b || last.length !== 1 || first[0].pid !== last[0].pid || before.identity.launchNonce !== after.identity.launchNonce || current.incarnationId !== terminal.incarnationId || current.ptyId !== terminal.ptyId || !current.connected || current.orphaned) throw new Error('macOS process identity unverified');
   const tree = JSON.parse(b), providerPids = tree.filter(row => row[5] === provider).map(row => row[0]);
@@ -72,7 +90,7 @@ export async function inspectMac(terminal, provider, { inventory = daemonSession
       if (proof) { sessionPaths.push(proof.transcriptPath); sessionIds.push(proof.id); }
     }
   }
-  const check = macTree(await processes(), first[0].pid, provider);
+  const check = macTree(await providerRows(), first[0].pid, provider);
   if (check !== b) throw new Error('macOS process changed while reading conversation arguments');
   const providerProcess = tree.find(row => row[5] === provider);
   return { terminal: current, kind: providerPids.length ? 'agent' : 'shell', sessionIds, sessionPaths, reason: 'macos_native_verified',

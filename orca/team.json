@@ -2,21 +2,21 @@
   {
     "name": "master",
     "agent": "omp",
-    "model": "pay/gpt-6-astra",
-    "thinking": "xhigh",
+    "model": "pay/gpt-6.1-sol",
+    "thinking": "max",
     "role": "agentroles.ccb_self"
   },
   {
     "name": "loader",
     "agent": "omp",
-    "model": "pay/gpt-6-astra",
-    "thinking": "medium",
+    "model": "pay/gpt-6.1-sol",
+    "thinking": "high",
     "role": "agentroles.ccb_self"
   },
   {
     "name": "archi",
     "agent": "omp",
-    "model": "pay/gpt-6-astra",
+    "model": "pay/gpt-6.1-sol",
     "thinking": "xhigh",
     "role": "agentroles.archi"
   },
@@ -37,7 +37,7 @@
   {
     "name": "designer",
     "agent": "omp",
-    "model": "local/gemini-3.8-flash-high",
+    "model": "pay/gpt-6.1-sol",
     "thinking": null,
     "role": "agentroles.frontend_engineer"
   },
@@ -58,8 +58,8 @@
   {
     "name": "simple",
     "agent": "omp",
-    "model": "pay/gpt-6-astra",
-    "thinking": "medium",
+    "model": "pay/gpt-6.1-sol",
+    "thinking": "xhigh",
     "role": "agentroles.simple"
   },
   {
