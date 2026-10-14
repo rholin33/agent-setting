@@ -19,7 +19,7 @@ import { inspectHealth } from '../lib/health.mjs';
 import { ensureOrca } from '../lib/orca-boot.mjs';
 import { syncModels } from '../lib/model-sync.mjs';
 import { switchProviders, handoffPrompt } from '../lib/handoff.mjs';
-import { updateAgentsBeforeStart, checkAgentUpdates, clearUpdateCheck } from '../lib/agent-update.mjs';
+import { updateAgentsBeforeStart, autoUpdateAgents, clearUpdateCheck } from '../lib/agent-update.mjs';
 import { updateLifecycle } from '../lib/update-lifecycle.mjs';
 import { reloadRunning } from '../lib/reload.mjs';
 import { restoreGroupLayout } from '../lib/layout.mjs';
@@ -45,11 +45,12 @@ async function updatePrehook(home, names) {
     console.log(`Warning: update prehook skipped: ${error.message}; continuing startup`);
   }
 }
-// start/restart 只做只读版本检查，不停止任何角色；检查失败只警告。
-async function updateCheck(home, names) {
+// start/restart 自动安装无人在用的 CLI 更新，不停止任何角色；失败只警告。
+async function autoUpdate(home, names) {
   const catalog = readJson(path.join(home, 'team.json'));
-  try { await checkAgentUpdates({ home, agents: catalog.filter(role => !names || names.includes(role.name)).map(role => role.agent) }); }
-  catch (error) { console.log(`Warning: agent update check skipped: ${error.message}`); }
+  const agents = catalog.filter(role => !names || names.includes(role.name)).map(role => role.agent);
+  try { await withLock(path.join(home, 'agent-update.lock'), () => autoUpdateAgents({ home, agents })); }
+  catch (error) { console.log(`Warning: agent update skipped: ${error.message}`); }
 }
 try {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: { remote: { type: 'string', multiple: true }, environment: { type: 'string' }, 'from-agent': { type: 'string' }, intent: { type: 'string' }, report: { type: 'string' }, home: { type: 'string' }, project: { type: 'string' }, role: { type: 'string' }, group: { type: 'string' }, fresh: { type: 'string', multiple: true }, cached: { type: 'boolean' }, resume: { type: 'boolean' }, 'quick-commands': { type: 'boolean' }, 'shell-profile': { type: 'string' }, 'no-pick': { type: 'boolean' }, 'no-repair': { type: 'boolean' }, help: { type: 'boolean' } } });
@@ -66,7 +67,7 @@ try {
   if (values.intent !== undefined && !['remote-commit', 'remote-reject', 'remote-abort-preflight'].includes(action)) throw new Error('--intent is only supported for remote-commit/remote-reject');
   if (values.report !== undefined && action !== 'remote-abort-preflight') throw new Error('--report is only supported for remote-abort-preflight');
   if (values.help) {
-    console.log('orca-team [status|history [ROLE]|init|install|export-config|update] [--group TITLE] [--project PATH] [--home PATH] [--fresh ROLE] [--no-pick] [--remote codex:ROLE|omp:ROLE|off:ROLE] [--environment NAME] [--from-agent HANDLE]\nremote --remote codex:ROLE|omp:ROLE|off:ROLE requests a context handoff without restarting the local team. Picker r selects codex/omp/off; off hands back to the original local agent. Selections commit only after verified acknowledgement.\nremote-abort-preflight --role ROLE --intent ID --report FILE settles only proven pre-delivery OMP failures, preserving the execution report. remote-status shows confirmed owners, pending intents and preflight failures. remote-commit / remote-reject --role ROLE --intent ID settle only against the matching verified handoff ledger.\nPending or remotely owned groups are preserved; independent groups still recover. Incomplete start/restart automatically opens one Codex repair terminal.\nOtherwise start brings the selected project to its configured state. Running roles whose CLI, model, thinking and role prompt are unchanged are reused; changed roles restart with their original conversation. start/restart only check for agent updates (cached for 24h) and never stop roles for them; update stops roles using outdated CLIs, installs the updates and resumes their conversations. restart [ROLE|GROUP ...] or restart --group TITLE explicitly restarts roles; --fresh ROLE starts a stopped role with a new conversation and refuses continuity-bound roles.\nSelecting a different CLI in the picker stops the role, writes a handoff document from its previous conversation, and starts a new conversation that reads it first; remotely owned or pending roles refuse a CLI change.\n--no-pick skips the model picker. --no-repair disables recursive repair launch. install --quick-commands registers Orca grouped global shortcuts.');
+    console.log('orca-team [status|history [ROLE]|init|install|export-config|update] [--group TITLE] [--project PATH] [--home PATH] [--fresh ROLE] [--no-pick] [--remote codex:ROLE|omp:ROLE|off:ROLE] [--environment NAME] [--from-agent HANDLE]\nremote --remote codex:ROLE|omp:ROLE|off:ROLE requests a context handoff without restarting the local team. Picker r selects codex/omp/off; off hands back to the original local agent. Selections commit only after verified acknowledgement.\nremote-abort-preflight --role ROLE --intent ID --report FILE settles only proven pre-delivery OMP failures, preserving the execution report. remote-status shows confirmed owners, pending intents and preflight failures. remote-commit / remote-reject --role ROLE --intent ID settle only against the matching verified handoff ledger.\nPending or remotely owned groups are preserved; independent groups still recover. Incomplete start/restart automatically opens one Codex repair terminal.\nOtherwise start brings the selected project to its configured state. Running roles whose CLI, model, thinking and role prompt are unchanged are reused; changed roles restart with their original conversation. start/restart check agent versions at most once per 24h and install an update only when no process uses that CLI; they never stop roles for an update. update stops roles using outdated CLIs, installs the updates and resumes their conversations. restart [ROLE|GROUP ...] or restart --group TITLE explicitly restarts roles; --fresh ROLE starts a stopped role with a new conversation and refuses continuity-bound roles.\nSelecting a different CLI in the picker stops the role, writes a handoff document from its previous conversation, and starts a new conversation that reads it first; remotely owned or pending roles refuse a CLI change.\n--no-pick skips the model picker. --no-repair disables recursive repair launch. install --quick-commands registers Orca grouped global shortcuts.');
   } else {
     const home = path.resolve(values.home || process.env.ORCA_TEAM_HOME || path.join(os.homedir(), '.orca', 'roles', 'ccb-team'));
     const project = normalizeProject(fs.realpathSync(values.project || process.cwd()));
@@ -125,7 +126,7 @@ try {
       const targets = [...(values.role ? [values.role] : []), ...(values.group ? [values.group] : []), ...positionals.slice(1)];
       const restartNames = resolveRestartRoles(readJson(files.config), readJson(path.join(home, 'team.json')), targets);
       await stage('Orca connection', () => ensureOrca({ cli: orca }));
-      await stage('Agent update check', () => updateCheck(home, restartNames));
+      await stage('Agent update', () => autoUpdate(home, restartNames));
       await restoreGroupLayout({ project, config: readJson(files.config), state: readJson(files.state) });
       await restartTeam({ home, project, forceExit: true, targets, cli: orca, snapshot });
     } else if (action === 'start') {
@@ -224,7 +225,7 @@ try {
         const unresolved = protectedRoles.filter(name => continuity.roles[name]?.pending);
         if (unresolved.length) throw Object.assign(new Error(`Existing handoffs require reconciliation: ${unresolved.join(', ')}`), { code: 'REMOTE_HANDOFF_BLOCKED' });
       } else {
-        await stage('Agent update check', () => updateCheck(home, names));
+        await stage('Agent update', () => autoUpdate(home, names));
         const { skipped, current } = await stage('Configuration reload', () => reloadRunning({ home, project, names, cli: orca, snapshot,
           inspect: (handle, provider) => inspectHealth(orca, rpc, handle, provider) }));
         if (current.length) console.log(`Configuration unchanged; reusing: ${current.join(', ')}`);

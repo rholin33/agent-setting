@@ -157,11 +157,14 @@ resume uses `--resume <id>`. Exit uses `/exit`, interrupt uses Escape. Packaged
 Pi role skills are not loaded into Claude, and Claude Code updates itself, so
 update checks skip it. `ORCA_CLAUDE_COMMAND` overrides the executable.
 
-`orca-team start` and `restart` only run a read-only update check: at most once per
-24 hours (cached in `agent-update-check.json`, failures included) they compare
-installed OMP, Codex and Pi versions with the latest release and print
-`Updates available: …`; they never stop a role for an update. `orca-team update`
-performs the update: it scans running processes across projects and stops tracked blocking roles before
+`orca-team start` and `restart` check OMP, Codex and Pi versions at most once per
+24 hours (cached in `agent-update-check.json`, failures included). When a newer
+version exists and no process on this machine uses that CLI, they install it
+before launching roles, so a cold start always runs current CLIs. They never stop
+a role for an update: running processes lazily read hashed asset files from the
+install directory, so a CLI in use is postponed with a notice. Process detection
+reads full command lines because macOS truncates `comm` and runs OMP under `bun`.
+`orca-team update` updates immediately: it scans running processes across projects and stops tracked blocking roles before
 updates, then resumes their original conversations. Busy tasks are interrupted; verified local Windows and macOS provider processes can be forcibly terminated if graceful exit fails. External Codex and Pi processes are left running and do not preemptively block program or extension installation; actual installer errors are reported. Idle npm-installed providers query the
 registry and install only when their version differs from the latest version;
 idle Pi then runs `pi update --extensions` for its packages. A shared update lock keeps

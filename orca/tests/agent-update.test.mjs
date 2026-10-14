@@ -189,3 +189,57 @@ test('startup update check is read-only, cached for 24h, and caches failures', a
   clearUpdateCheck(home);
   assert.equal(fs.existsSync(path.join(home, 'agent-update-check.json')), false);
 });
+
+test('CLI usage detection reads full command lines (macOS comm is truncated) on macOS and Windows', async () => {
+  const { active, parseProcessRows } = await import('../lib/agent-update.mjs');
+  const mac = parseProcessRows([
+    'bun /Users/u/.nvm/versions/node/v25/bin/omp --model pay/x --session /Users/u/s.jsonl',
+    '/Users/u/.nvm/versions/node/v25/lib/node_modules/bun/bin/bun.exe /Users/u/.nvm/versions/node/v25/lib/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js __omp_worker_daemon_broker',
+    'node /Users/u/.nvm/versions/node/v25/bin/codex resume 01a0 --model m',
+    '/Users/u/.nvm/versions/node/v25/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex resume 01a0',
+    '/bin/zsh -l',
+  ].join('\n'));
+  assert.equal(mac[2].Name, 'node');
+  assert.deepEqual(['omp', 'codex', 'pi'].map(agent => active(mac, agent)), [true, true, false]);
+  assert.equal(active(mac.slice(1, 2), 'omp'), true);
+  assert.equal(active(mac.slice(2, 3), 'codex'), true);
+  const daemonOnly = parseProcessRows('/Users/u/.codex/packages/app-server-daemon/releases/0.162.1-aarch64-apple-darwin/bin/codex app-server daemon');
+  assert.equal(active(daemonOnly, 'codex'), false);
+  const pi = parseProcessRows('node /Users/u/.nvm/versions/node/v25/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js --session a');
+  assert.deepEqual(['omp', 'pi'].map(agent => active(pi, agent)), [false, true]);
+  const windows = [
+    { Name: 'omp.exe', CommandLine: 'C:\\Users\\u\\AppData\\Local\\omp\\omp.exe --session C:\\s.jsonl' },
+    { Name: 'codex.exe', CommandLine: 'C:\\Users\\u\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\vendor\\codex.exe resume x' },
+    { Name: 'node.exe', CommandLine: 'node.exe C:\\Users\\u\\AppData\\Roaming\\npm\\node_modules\\@earendil-works\\pi-coding-agent\\dist\\cli.js' },
+  ];
+  assert.deepEqual(['omp', 'codex', 'pi'].map(agent => active(windows, agent)), [true, true, true]);
+});
+
+test('startup auto-update installs only CLIs that no process uses and never stops roles', async t => {
+  const { autoUpdateAgents } = await import('../lib/agent-update.mjs');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-auto-update-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const calls = [];
+  const run = async (command, args) => {
+    calls.push(`${command} ${args.join(' ')}`);
+    if (command === 'omp') return { status: 0, stdout: args.includes('--check') ? 'Current version: 1.0.0\nNew version available: 1.0.1\n' : '' };
+    if (args[0] === 'list') return { status: 0, stdout: JSON.stringify({ dependencies: { '@openai/codex': { version: '0.1.0' } } }) };
+    if (args[0] === 'view') return { status: 0, stdout: '"0.2.0"' };
+    return { status: 0, stdout: '' };
+  };
+  const logs = [];
+  const busy = [{ Name: 'bun', CommandLine: 'bun /u/bin/omp --session s' }];
+  const first = await autoUpdateAgents({ home, agents: ['omp', 'codex'], run, processes: async () => busy, log: line => logs.push(line) });
+  assert.deepEqual(first.updated, ['codex']);
+  assert.deepEqual(first.deferred, ['omp']);
+  assert.ok(calls.includes('npm install --global @openai/codex@0.2.0'));
+  assert.ok(!calls.includes('omp update'));
+  assert.ok(logs.some(line => /Update postponed for omp: still in use/.test(line)));
+  const cache = JSON.parse(fs.readFileSync(path.join(home, 'agent-update-check.json'), 'utf8'));
+  assert.equal(cache.agents.codex.current, '0.2.0');
+  calls.length = 0;
+  const second = await autoUpdateAgents({ home, agents: ['omp', 'codex'], run, processes: async () => [], log: () => {} });
+  assert.deepEqual(second.updated, ['omp']);
+  assert.ok(calls.includes('omp update') && calls.includes('omp update --plugins'));
+  assert.ok(!calls.some(call => call.startsWith('npm view')));
+});
