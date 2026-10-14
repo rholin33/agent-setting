@@ -7,7 +7,8 @@ import { projectFiles, readJson } from './team.mjs';
 import { binding, validateTranscript } from './sessions.mjs';
 import { inspectHealth, provesSession } from './health.mjs';
 import { rpc } from './orca.mjs';
-import { readRemoteSwitches, beginRemoteSwitch, claimRemoteSetup, preflightFailureMessage, remotePreflightError, reattachOmpOwner } from './remote-switch.mjs';
+import { readRemoteSwitches, beginRemoteSwitch, claimRemoteSetup, rejectRemoteSwitch, preflightFailureMessage, remotePreflightError, reattachOmpOwner } from './remote-switch.mjs';
+import { runDirectHandoff as runDirectHandoffDefault, supportsDirectHandoff } from './remote-handoff.mjs';
 import { ensureOmp as ensureOmpAdapter, ompSelection, validateOmpEndpoint, verifyOmpBinding } from './omp-adapter.mjs';
 import { registerAuxiliary } from './auxiliary-cleanup.mjs';
 
@@ -76,7 +77,7 @@ async function liveEndpoint({ cli, project, handle, role, saved, expected, snaps
   return actual;
 }
 
-async function startRemoteRequestsAtLocal({ requests, home = path.join(os.homedir(), '.orca', 'roles', 'ccb-team'), project, environment, sourceHandle, cli, snapshot, ensureOmp = ensureOmpAdapter, verifyOmp = verifyOmpBinding, inspect = (handle, provider) => inspectHealth(cli, rpc, handle, provider), skill = path.join(os.homedir(), '.codex', 'skills', 'orca-remote', 'SKILL.md') }) {
+async function startRemoteRequestsAtLocal({ requests, home = path.join(os.homedir(), '.orca', 'roles', 'ccb-team'), project, environment, sourceHandle, cli, snapshot, ensureOmp = ensureOmpAdapter, verifyOmp = verifyOmpBinding, inspect = (handle, provider) => inspectHealth(cli, rpc, handle, provider), skill = path.join(os.homedir(), '.codex', 'skills', 'orca-remote', 'SKILL.md'), runDirectHandoff = runDirectHandoffDefault, log = console.log }) {
   if (!requests.length) return null;
   if (!fs.existsSync(skill)) throw new Error(`Remote skill not found: ${skill}`);
   if (environment !== undefined && (!environment.trim() || /[\r\n\0]/.test(environment))) throw new Error('Invalid remote environment');
@@ -89,10 +90,20 @@ async function startRemoteRequestsAtLocal({ requests, home = path.join(os.homedi
   const stateFile = projectFiles(home, project).state;
   const team = fs.existsSync(stateFile) ? readJson(stateFile) : { agents: {} };
   const inventory = await cli(['terminal', 'list', '--worktree', `path:${project}`]);
-  const plans = [];
+  const plans = [], resumed = [];
+  // 远端 OMP 原归属者的源端适配配置：切回或改投时从它读取远端新进展。
+  const sourceAdapter = role => registry.roles[role]?.runtime === 'omp' ? registry.roles[role].adapterConfig : undefined;
   for (const request of requests) {
     let previous = registry.roles[request.role];
-    if (previous?.pending) throw new Error(`${request.role}: unresolved remote switch already exists; reconcile instead of provisioning or resending`);
+    if (previous?.pending) {
+      // 已投递但未收到回执的确定性交接：只继续等待回执，绝不重发。
+      const intent = { ...previous.pending, role: request.role };
+      if (intent.status === 'setup_uncertain' && intent.runtime === request.runtime && supportsDirectHandoff(intent, registry)) {
+        resumed.push({ role: request.role, ...await runDirectHandoff({ home, project, role: request.role, intent, sourceAdapterConfig: sourceAdapter(request.role), cli, skill, verifyOmp, log }) });
+        continue;
+      }
+      throw new Error(`${request.role}: unresolved remote switch already exists; reconcile instead of provisioning or resending`);
+    }
     const nativeOwner = previous?.runtime === 'omp';
     if (nativeOwner) {
       if (!previous.adapterConfig) throw new Error(`${request.role}: native owner has no verified adapter binding`);
@@ -143,9 +154,26 @@ async function startRemoteRequestsAtLocal({ requests, home = path.join(os.homedi
       intents.push({ ...await beginRemoteSwitch({ home, project, role: plan.role, runtime: plan.runtime, source: plan.source, local: plan.local, environment, ...bound }), role: plan.role, ...bound });
     }
   }
-  if (!intents.length) return { reused: true };
-  for (const intent of intents) await claimRemoteSetup({ home, project, role: intent.role, intentId: intent.id });
-  const prompt = remoteManagementPrompt({ intents, home, project, skill });
+  if (!intents.length) return resumed.length ? { direct: resumed } : { reused: true };
+  // OMP 与切回本机直接由确定性流程完成；只有远端 Codex 仍需要 AI 协调者。
+  const direct = intents.filter(intent => supportsDirectHandoff(intent, registry));
+  const results = [...resumed];
+  for (const intent of direct) {
+    try {
+      results.push({ role: intent.role, ...await runDirectHandoff({ home, project, role: intent.role, intent, sourceAdapterConfig: sourceAdapter(intent.role), cli, skill, verifyOmp, log }) });
+    } catch (error) {
+      // 投递前失败：取消未领取的意图，源保持归属；领取后失败保留待确认状态，再次运行继续等待。
+      if (readRemoteSwitches({ home, project }).roles[intent.role]?.pending?.status === 'prepared') {
+        await rejectRemoteSwitch({ home, project, role: intent.role, intentId: intent.id, cli });
+        error.message += '; original owner retained, nothing was sent';
+      }
+      throw error;
+    }
+  }
+  const coordinated = intents.filter(intent => !direct.includes(intent));
+  if (!coordinated.length) return { direct: results };
+  for (const intent of coordinated) await claimRemoteSetup({ home, project, role: intent.role, intentId: intent.id });
+  const prompt = remoteManagementPrompt({ intents: coordinated, home, project, skill });
   const args = ['codex', '--no-daemon', '--cd', project, prompt];
   const command = process.platform === 'win32'
     ? 'powershell.exe -NoLogo -NoProfile -EncodedCommand ' + Buffer.from('& ' + args.map(value => quote(value, 'win32')).join(' '), 'utf16le').toString('base64')
@@ -154,7 +182,7 @@ async function startRemoteRequestsAtLocal({ requests, home = path.join(os.homedi
   const created = await cli(['terminal', 'create', '--worktree', `path:${project}`, '--title', 'remote-setup', '--command', command]);
   const handle = created?.terminal?.handle;
   if (!handle) throw new Error('Setup creation returned no terminal identity; inspect existing terminals before retrying.');
-  try { registerAuxiliary({ home, project, kind: 'remote-setup', terminal: created.terminal, intents }); }
+  try { registerAuxiliary({ home, project, kind: 'remote-setup', terminal: created.terminal, intents: coordinated }); }
   catch { console.warn(`Coordinator ${handle}: automatic cleanup registration failed; retain for explicit reconciliation.`); }
   try { await cli(['terminal', 'switch', '--terminal', handle]); }
   catch (error) { throw new Error(`Coordinator ${handle} was created but could not be focused; do not recreate it. ${error.message}`); }

@@ -48,3 +48,8 @@ export async function mapLimit(items, limit, task) {
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
   return results;
 }
+
+// Windows 的 Python 启动器通常是 python，POSIX 上是 python3；ORCA_PYTHON 可覆盖。
+export function pythonCommand(platform = process.platform, env = process.env) {
+  return env.ORCA_PYTHON || (platform === 'win32' ? 'python' : 'python3');
+}

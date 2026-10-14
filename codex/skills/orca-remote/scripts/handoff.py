@@ -1,13 +1,32 @@
 #!/usr/bin/env python3
 """Private, at-most-once context handoff ledger. Transport remains with Orca skill."""
 import argparse
-import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
 import tempfile
 import uuid
+
+try:
+    import fcntl
+except ImportError:  # Windows
+    fcntl = None
+    import msvcrt
+
+
+def lock_exclusive(handle):
+    """Blocking advisory lock shared with orca-team's remote registry; works on POSIX and Windows."""
+    if fcntl:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        return
+    handle.seek(0)
+    while True:
+        try:
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+            return
+        except OSError:
+            continue  # LK_LOCK gives up after ~10s; keep waiting like flock
 
 FIELDS = ('goal', 'constraints', 'completed', 'changed_files', 'decisions', 'verification', 'pending', 'inflight')
 
@@ -152,11 +171,12 @@ def main():
     if root.is_symlink():
         raise ValueError('State directory must not be a symlink')
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
-    if root.stat().st_mode & 0o077:
+    # Windows has no POSIX mode bits; the per-user profile ACL provides privacy there.
+    if os.name != 'nt' and root.stat().st_mode & 0o077:
         raise ValueError('State directory must be private (0700)')
-    with open(root / 'lock', 'a') as lock:
+    with open(root / 'lock', 'a+') as lock:
         os.chmod(root / 'lock', 0o600)
-        fcntl.flock(lock, fcntl.LOCK_EX)
+        lock_exclusive(lock)
         path = root / 'state.json'
         state = json.loads(path.read_text()) if path.exists() else {}
         payload = json.loads(Path(args.input).read_text()) if args.input else None

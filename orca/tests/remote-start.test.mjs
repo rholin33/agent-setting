@@ -7,7 +7,17 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { ensureOmp, ompSelection } from '../lib/omp-adapter.mjs';
 import { parseRemoteRequests, startRemoteRequests } from '../lib/remote-start.mjs';
-import { readRemoteSwitches } from '../lib/remote-switch.mjs';
+import { readRemoteSwitches, claimRemoteSetup } from '../lib/remote-switch.mjs';
+
+// 模拟确定性交接：像真实流程一样在投递前领取意图并记录调用；不投递、不结算。
+function directStub(calls = [], outcome) {
+  return async options => {
+    calls.push({ ...options, intent: { ...options.intent } });
+    if (options.intent.status === 'prepared') await claimRemoteSetup({ home: options.home, project: options.project, role: options.role, intentId: options.intent.id });
+    if (outcome) return outcome(options, calls.length);
+    return { decision: 'accepted', revision: options.intent.baseRevision + 1 };
+  };
+}
 import { createPickerState, pickerKey, pickPiModels } from '../lib/model-picker.mjs';
 import { projectFiles } from '../lib/team.mjs';
 
@@ -65,7 +75,7 @@ test('remote CLI rejects unsupported runtime, unknown role, duplicates and malfo
   assert.throws(() => parseRemoteRequests(['codex:coder1', 'omp:coder1'], ['coder1']), /Duplicate/);
 });
 
-test('ambiguous setup delivery keeps the source owner and is never resent', async t => {
+test('ambiguous direct delivery keeps the source owner and is never resent', async t => {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'remote-launch-')));
   t.after(() => fs.rmSync(home, { recursive: true, force: true }));
   const project = fs.realpathSync(home);
@@ -80,16 +90,22 @@ test('ambiguous setup delivery keeps the source owner and is never resent', asyn
     if (args[1] === 'create') { created++; throw new Error('ambiguous create'); }
     throw new Error(`Unexpected mutation: ${args[1]}`);
   };
+  const direct = [];
   const args = { home, requests, project, environment: 'claude', sourceHandle: 'term_source', cli,
-    ensureOmp: async () => { ensured++; return omp.endpoint; }, skill: new URL('../lib/remote-start.mjs', import.meta.url).pathname };
-  await assert.rejects(startRemoteRequests(args), /ambiguous create/);
+    ensureOmp: async () => { ensured++; return omp.endpoint; }, skill: new URL('../lib/remote-start.mjs', import.meta.url).pathname,
+    runDirectHandoff: directStub(direct, (_, call) => { throw new Error(call === 1 ? 'ambiguous delivery' : 'still waiting'); }) };
+  await assert.rejects(startRemoteRequests(args), /ambiguous delivery/);
   const first = readRemoteSwitches({ home, project }).roles.designer;
   assert.equal(first.owner.terminal, 'term_source');
   assert.equal(first.runtime, null);
   assert.equal(first.pending.status, 'setup_uncertain');
-  await assert.rejects(startRemoteRequests(args));
-  assert.equal(created, 1);
+  // 再次运行只继续等待回执：不重新接入、不新建意图、不打开协调终端。
+  await assert.rejects(startRemoteRequests(args), /still waiting/);
+  assert.equal(created, 0);
   assert.equal(ensured, 1);
+  assert.equal(direct.length, 2);
+  assert.equal(direct[1].intent.status, 'setup_uncertain');
+  assert.equal(direct[1].intent.id, first.pending.id);
   const retained = readRemoteSwitches({ home, project }).roles.designer;
   assert.equal(retained.pending.id, first.pending.id);
   assert.equal(retained.taskId, first.taskId);
@@ -159,14 +175,18 @@ for (const scenario of ['verified', 'focus-failed', 'wrong-live-path', 'changed-
     };
     const inspect = async () => ({ kind: 'agent', sessionPaths: [scenario === 'wrong-live-path' ? path.join(home, 'other.jsonl') : transcriptPath],
       terminal: { ...terminal, incarnationId: scenario === 'changed-process' ? 'new-epoch' : 'epoch' } });
-    const args = { home, project, requests: [{ runtime: 'omp', role: 'archi' }], cli, inspect, ensureOmp: omp.ensureOmp,
-      snapshot: async () => ({}), skill: new URL('../lib/remote-start.mjs', import.meta.url).pathname };
+    // 协调终端只剩远端 Codex 使用，焦点失败场景改用 codex；OMP 走确定性交接。
+    const direct = [];
+    const args = { home, project, requests: [{ runtime: scenario === 'focus-failed' ? 'codex' : 'omp', role: 'archi' }], cli, inspect, ensureOmp: omp.ensureOmp,
+      snapshot: async () => ({}), skill: new URL('../lib/remote-start.mjs', import.meta.url).pathname, runDirectHandoff: directStub(direct) };
     if (scenario === 'verified') {
       await startRemoteRequests(args);
       const entry = readRemoteSwitches({ home, project }).roles.archi;
       assert.equal(entry.pending.source.session, 'native-archi');
       assert.equal(entry.runtime, null);
-      assert.equal(created, 1);
+      assert.equal(created, 0);
+      assert.equal(direct.length, 1);
+      assert.equal(direct[0].intent.target.terminal, 'term_target');
     } else if (scenario === 'focus-failed') {
       await assert.rejects(startRemoteRequests(args));
       assert.equal(readRemoteSwitches({ home, project }).roles.archi.runtime, null);
@@ -210,19 +230,18 @@ function startupFixture(t) {
   return { args, omp, source, sourceTerminal, calls, saveEntry };
 }
 
-test('OMP readiness runs after source proof using saved selection and persists the fixed target before setup', async t => {
+test('OMP readiness runs after source proof using saved selection and persists the fixed target before handoff', async t => {
   const f = startupFixture(t);
   let ensured = 0;
-  await startRemoteRequests({ ...f.args, cli: async args => {
-    if (args[1] === 'create') {
-      const entry = readRemoteSwitches(f.args).roles.master;
-      assert.equal(entry.pending.status, 'setup_uncertain');
-      assert.equal(entry.pending.adapterConfig, f.omp.endpoint.adapterConfig);
-      assert.deepEqual(entry.owner, f.source);
-      assert.equal(entry.runtime, null);
-    }
-    return f.args.cli(args);
-  }, ensureOmp: async request => {
+  const direct = [];
+  await startRemoteRequests({ ...f.args, runDirectHandoff: directStub(direct, options => {
+    assert.equal(options.intent.adapterConfig, f.omp.endpoint.adapterConfig);
+    const entry = readRemoteSwitches(f.args).roles.master;
+    assert.equal(entry.pending.adapterConfig, f.omp.endpoint.adapterConfig);
+    assert.deepEqual(entry.owner, f.source);
+    assert.equal(entry.runtime, null);
+    return { decision: 'accepted', revision: 1 };
+  }), ensureOmp: async request => {
     ensured++;
     assert.deepEqual({ model: request.model, thinking: request.thinking }, f.omp.selection);
     assert(f.calls.some(args => args[1] === 'show' && args[3] === f.source.terminal));
@@ -237,7 +256,9 @@ test('OMP readiness runs after source proof using saved selection and persists t
   assert.equal(entry.pending.status, 'setup_uncertain');
   assert.deepEqual(entry.owner, f.source);
   assert.equal(entry.runtime, null);
-  assert.equal(f.calls.filter(args => args[1] === 'create').length, 1);
+  assert.equal(direct.length, 1);
+  assert.equal(direct[0].intent.status, 'prepared');
+  assert.equal(f.calls.filter(args => args[1] === 'create').length, 0);
 });
 
 for (const scenario of ['unready', 'wrong-role', 'wrong-runtime', 'remote-host', 'wrong-project', 'wrong-incarnation', 'wrong-session', 'wrong-binding', 'public-config']) {
@@ -269,7 +290,7 @@ test('OMP preflight failure history survives, and only actual readiness permits 
   const blocked = readRemoteSwitches(f.args).roles.master;
   assert.equal(blocked.pending, undefined);
   assert.deepEqual(blocked.lastSetupOutcome, failure);
-  await startRemoteRequests({ ...f.args, ensureOmp: async () => { ensured++; return f.omp.endpoint; } });
+  await startRemoteRequests({ ...f.args, runDirectHandoff: directStub(), ensureOmp: async () => { ensured++; return f.omp.endpoint; } });
   const ready = readRemoteSwitches(f.args).roles.master;
   assert.equal(ensured, 2);
   assert.equal(ready.pending.status, 'setup_uncertain');
@@ -422,7 +443,8 @@ for (const runtime of ['omp', null]) {
     fs.writeFileSync(adapterConfig, JSON.stringify(f.omp.bound));
     const { adapterConfig: _config, ...target } = f.omp.endpoint;
     let ensured = 0, verified = 0, inspected = 0;
-    const result = await startRemoteRequests({ ...f.args, sourceHandle: undefined, requests: [{ role: 'master', runtime }],
+    const direct = [];
+    const result = await startRemoteRequests({ ...f.args, sourceHandle: undefined, requests: [{ role: 'master', runtime }], runDirectHandoff: directStub(direct),
       ensureOmp: async request => {
         ensured++;
         assert.deepEqual({ model: request.model, thinking: request.thinking }, f.omp.selection);
@@ -454,11 +476,17 @@ for (const runtime of ['omp', null]) {
       assert.deepEqual(entry.pending.local, f.source);
       assert.equal(entry.pending.runtime, null);
       assert.equal(entry.pending.status, 'setup_uncertain');
-      assert.equal(f.calls.filter(args => args[1] === 'create').length, 1);
-      await assert.rejects(startRemoteRequests({ ...f.args, sourceHandle: undefined, requests: [{ role: 'master', runtime }],
-        ensureOmp: async () => { ensured++; return f.omp.endpoint; } }));
+      assert.equal(f.calls.filter(args => args[1] === 'create').length, 0);
+      // 切回本机时从远端 OMP 读取新进展。
+      assert.equal(direct[0].sourceAdapterConfig, adapterConfig);
+      // 再次运行只继续等待原投递的回执，不重新接入、不新建意图。
+      await startRemoteRequests({ ...f.args, sourceHandle: undefined, requests: [{ role: 'master', runtime }], runDirectHandoff: directStub(direct),
+        ensureOmp: async () => { ensured++; return f.omp.endpoint; } });
       assert.equal(ensured, 1);
-      assert.equal(f.calls.filter(args => args[1] === 'create').length, 1);
+      assert.equal(direct.length, 2);
+      assert.equal(direct[1].intent.id, entry.pending.id);
+      assert.equal(direct[1].intent.status, 'setup_uncertain');
+      assert.equal(f.calls.filter(args => args[1] === 'create').length, 0);
     }
   });
 }

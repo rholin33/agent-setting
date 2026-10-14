@@ -29,6 +29,11 @@ import { deploy, installQuickCommands, registerShellProfile } from '../lib/insta
 const source = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const startedAt = Date.now();
 let requestedAction;
+function describeRemoteResult(result) {
+  if (result?.reused) return 'Confirmed current owner reused and focused.';
+  if (result?.direct) return result.direct.map(item => `${item.role}: handoff ${item.decision} (revision ${item.revision})`).join('\n');
+  return `Handoff coordinator opened and focused: ${result.terminal.handle}. Follow progress there; source remains owner until verified remote-commit.`;
+}
 async function stage(label, action) {
   const before = Date.now();
   try { return await action(); }
@@ -114,7 +119,7 @@ try {
       if (!requests.length) throw new Error('remote requires --remote codex:ROLE, omp:ROLE or off:ROLE');
       await ensureOrca({ cli: orca });
       const result = await startRemoteRequests({ requests, home, project, environment: values.environment, sourceHandle: values['from-agent'], cli: orca, snapshot });
-      console.log(result?.reused ? 'Confirmed current owner reused and focused.' : `Handoff coordinator opened and focused: ${result.terminal.handle}. Follow progress there; source remains owner until verified remote-commit.`);
+      console.log(describeRemoteResult(result));
     } else if (action === 'update') {
       // 显式更新：停止使用待更新 CLI 的角色，更新后恢复原会话。
       await stage('Orca connection', () => ensureOrca({ cli: orca }));
@@ -207,7 +212,7 @@ try {
         // Never reload a source or its original local return conversation before handoff.
         if (remoteRequests.length) {
           const result = await startRemoteRequests({ requests: remoteRequests, home, project, environment: values.environment, sourceHandle: values['from-agent'], cli: orca, snapshot });
-          console.log(result?.reused ? 'Confirmed current owner reused and focused.' : `Handoff coordinator opened and focused: ${result.terminal.handle}. Follow progress there; source remains owner until verified remote-commit.`);
+          console.log(describeRemoteResult(result));
         } else console.log(`Continuity-bound roles preserved: ${protectedRoles.join(', ')}; inspect remote-status for pending handoffs.`);
         const protectedNames = new Set([...protectedRoles, ...remoteRequests.map(item => item.role)]);
         const independent = tabs.filter(tab => tab.agents.every(name => !protectedNames.has(name)) && tab.agents.some(name => names.includes(name)));

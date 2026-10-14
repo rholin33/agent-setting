@@ -93,3 +93,16 @@ Prepared targets are durable. Forward and return settlement verify the actual ad
 Live evidence: local OMP 18.10.3 and remote 18.10.2 master/archi produced real model responses through the private native path and read local package.json via MCP. Master edited useCountUp.ts, rejected an old SHA, and restored the exact original hash. A separate local native source and remote master completed actual accepted revisions 1 and 2 in an isolated registry, returning SOURCE-ALPHA-7391 and the remote-read package name projects to the original source session/incarnation. The accepted remote guest was closed and reopened mid-roundtrip without changing the host/session or original receipt bytes. Existing business-role ownership and the Codex chain were not changed.
 
 Verification: 74 Python adapter/security/transport tests, 102 focused menu/registry tests, and 7 live-socket relay tests passed. The documented Node adapter wrapper also successfully reused and verified the real native endpoint. Full team-suite, Windows and host-process crash recovery are not claimed. Operational details are in the installed orca-remote skill's references/operations.md, section 2.2.
+
+## Direct handoff without an AI coordinator (2026-10-15)
+
+Switches to a remote OMP owner and returns to the original local session (`off`) no longer open a `remote-setup` Codex coordinator. `lib/remote-handoff.mjs` runs the same protocol deterministically inside the `orca-team` process:
+
+1. Before any ledger write: verify the OMP adapter bindings, require the source and target to be idle (`terminal wait --for tui-idle` locally, `/snapshot` `busy=false` remotely) and the target input to be empty. A failure here cancels the prepared intent; the source keeps the task and nothing is sent.
+2. Mechanical checkpoint: user/assistant messages from the source's validated local transcript, or for a remote OMP source the assistant messages published by its control service `/messages` **after the forward delivery position**; the previous ledger goal is kept because the control service exposes no user messages. `changed_files` comes from `git status`. The summary stays within handoff.py's 24 KiB limit.
+3. `handoff.py prepare`, `claimRemoteSetup`, `handoff.py claim`, record the target's reply position in `<ledger>/<recordId>.delivery.json`, then send the `handoff.py show --message` text once.
+4. Poll the target's assistant messages after that position for exactly one `HANDOFF_ACCEPTED`/`HANDOFF_REJECTED` that also names the record ID or SHA256, and wait until the target is idle. Record it with `handoff.py accept`, then `commitRemoteSwitch`/`rejectRemoteSwitch` (the same verification as `remote-commit`) and focus the new owner.
+
+After delivery, a missing receipt (default timeout 10 minutes) keeps `delivery_uncertain`; running the same switch again only resumes waiting from the recorded position and never resends. Remote Codex targets/sources still use the coordinator, because their conversation lives on the remote host.
+
+`handoff.py` and the registry's ledger lock now use `msvcrt` on Windows instead of failing on the missing `fcntl`; the Python command is `python` on Windows (`ORCA_PYTHON` overrides). The remote OMP transport itself (`remote-master/*.py`) remains POSIX-only.

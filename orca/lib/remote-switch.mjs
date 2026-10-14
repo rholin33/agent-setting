@@ -3,7 +3,7 @@ import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { projectFiles, withLock } from './team.mjs';
-import { normalizeProject } from './platform.mjs';
+import { normalizeProject, pythonCommand } from './platform.mjs';
 import { sameWorktree, validateTranscript } from './sessions.mjs';
 import { inspectHealth, provesSession } from './health.mjs';
 import { rpc } from './orca.mjs';
@@ -283,8 +283,9 @@ async function withLedgerLock(entry, action) {
   assertRegular(entry.ledgerDirectory, true);
   const lock = path.join(entry.ledgerDirectory, 'lock');
   if (fs.existsSync(lock)) assertRegular(lock);
-  const child = spawn('python3', ['-c',
-    "import fcntl,sys; f=open(sys.argv[1],'a'); fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB); print('locked',flush=True); sys.stdin.read()", lock],
+  // 与 handoff.py 共用同一把建议锁：POSIX 用 flock，Windows 用 msvcrt。
+  const child = spawn(pythonCommand(), ['-c',
+    "import sys\ntry:\n import fcntl\nexcept ImportError:\n fcntl=None; import msvcrt\nf=open(sys.argv[1],'a+')\nif fcntl: fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB)\nelse: f.seek(0); msvcrt.locking(f.fileno(),msvcrt.LK_NBLCK,1)\nprint('locked',flush=True); sys.stdin.read()", lock],
     { stdio: ['pipe', 'pipe', 'pipe'] });
   let ready = false;
   try {

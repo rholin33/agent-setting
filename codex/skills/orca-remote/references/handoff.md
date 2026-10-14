@@ -138,6 +138,8 @@ orca-team remote-status --project /path/to/worktree
 
 ### 执行和提交
 
+远端 OMP 与切回本机（off）由 `orca-team` 进程内的确定性流程 `lib/remote-handoff.mjs` 直接完成，不再打开 `remote-setup` AI 协调者：机械检查点、prepare/claim、投递一次、读取真实助手回执、accept 与提交都在同一命令里完成；超时保留 delivery_uncertain，再次运行同一切换只继续等待、不重发。下列步骤仍适用于远端 Codex 的协调者。
+
 1. `start`/`remote` 先持久创建意图，再至多一次领取 setup 启动。只开启本机协调终端，不在此前更新或重启源。
 2. 管理 agent 按本手册从 intent.source 请求最新安全检查点，核验目标角色与权限。runtime 为 null 时目标必须等于 intent.local，保留其会话，不创建替身。
 3. 使用 intent.taskId 和 intent.ledgerDirectory 执行 `handoff.py prepare/claim`，仅发送一次，真实读取助手接受或拒绝，执行 `accept` 记录决定。
