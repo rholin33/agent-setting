@@ -33,28 +33,49 @@
   ],
   "roles": {
     "master": {
-      "model": "pay/gpt-6-astra",
-      "thinking": "xhigh"
+      "agent": "claude",
+      "model": "opus",
+      "thinking": "high"
     },
     "loader": {
-      "model": "pay/gpt-6-astra",
+      "agent": "codex",
+      "model": "gpt-6.1-sol",
       "thinking": "medium"
     },
     "archi": {
-      "model": "pay/gpt-6-astra",
-      "thinking": "xhigh"
+      "agent": "claude",
+      "model": "opus",
+      "thinking": "high"
     },
     "designer": {
+      "agent": "omp",
       "model": "local/gemini-3.8-flash-high",
       "thinking": null
     },
     "test": {
+      "agent": "omp",
       "model": "local/cline-pass/deepseek-v4.1-flash",
       "thinking": "high"
     },
     "simple": {
-      "model": "pay/gpt-6-astra",
+      "agent": "codex",
+      "model": "gpt-6.1-sol",
       "thinking": "medium"
+    },
+    "coder1": {
+      "agent": "codex",
+      "model": "gpt-6.1-sol",
+      "thinking": "medium"
+    },
+    "coder2": {
+      "agent": "codex",
+      "model": "gpt-6.1-sol",
+      "thinking": "medium"
+    },
+    "reviewer": {
+      "agent": "claude",
+      "model": "sonnet",
+      "thinking": "high"
     }
   }
 }

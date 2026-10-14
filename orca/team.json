@@ -1,23 +1,23 @@
 [
   {
     "name": "master",
-    "agent": "omp",
-    "model": "pay/gpt-6.1-sol",
-    "thinking": "max",
-    "role": "agentroles.ccb_self"
-  },
-  {
-    "name": "loader",
-    "agent": "omp",
-    "model": "pay/gpt-6.1-sol",
+    "agent": "claude",
+    "model": "opus",
     "thinking": "high",
     "role": "agentroles.ccb_self"
   },
   {
+    "name": "loader",
+    "agent": "codex",
+    "model": "gpt-6.1-sol",
+    "thinking": "medium",
+    "role": "agentroles.ccb_self"
+  },
+  {
     "name": "archi",
-    "agent": "omp",
-    "model": "pay/gpt-6.1-sol",
-    "thinking": "xhigh",
+    "agent": "claude",
+    "model": "opus",
+    "thinking": "high",
     "role": "agentroles.archi"
   },
   {
@@ -37,15 +37,15 @@
   {
     "name": "designer",
     "agent": "omp",
-    "model": "pay/gpt-6.1-sol",
+    "model": "local/gemini-3.8-flash-high",
     "thinking": null,
     "role": "agentroles.frontend_engineer"
   },
   {
     "name": "reviewer",
-    "agent": "codex",
-    "model": "gpt-6.1-sol",
-    "thinking": "medium",
+    "agent": "claude",
+    "model": "sonnet",
+    "thinking": "high",
     "role": "agentroles.code_reviewer"
   },
   {
@@ -57,9 +57,9 @@
   },
   {
     "name": "simple",
-    "agent": "omp",
-    "model": "pay/gpt-6.1-sol",
-    "thinking": "xhigh",
+    "agent": "codex",
+    "model": "gpt-6.1-sol",
+    "thinking": "medium",
     "role": "agentroles.simple"
   },
   {
