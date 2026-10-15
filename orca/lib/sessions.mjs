@@ -27,12 +27,11 @@ export function sameWorktree(worktree, project) {
   const norm = value => process.platform === 'win32' ? normalizeProject(value).toLowerCase() : normalizeProject(value);
   return norm(actual) === norm(project);
 }
-export function validateTranscript(saved, project) {
-  const session = saved.session;
-  if (!session?.id || !session.transcriptPath || !fs.existsSync(session.transcriptPath)) throw new Error('Original conversation unavailable; refusing fresh fallback');
-  const fd = fs.openSync(session.transcriptPath, 'r');
+// 读取会话归属记录：OMP 首行可能是 title 前缀；Claude 没有独立 header，开头是 last-prompt/mode 等元数据，
+// 第一条带 cwd 的记录才确定会话归属。返回 { id, cwd }；没有记录时返回 undefined，记录不是会话头时返回 null。
+export function readTranscriptHeader(transcriptPath, agent) {
+  const fd = fs.openSync(transcriptPath, 'r');
   const decoder = new StringDecoder('utf8');
-  // Claude transcript 没有独立 header：开头是 last-prompt/mode 等元数据，第一条带 cwd 的记录才确定会话归属。
   let row;
   try {
     const buffer = Buffer.alloc(4096);
@@ -47,16 +46,23 @@ export function validateTranscript(saved, project) {
       const end = text.indexOf('\n');
       if (!text.trim()) break;
       row = JSON.parse(end < 0 ? text : text.slice(0, end));
-      const prelude = saved.agent === 'omp' && record === 0 && row.type === 'title' && (row.v === undefined || row.v === 1);
-      const claudeMetadata = saved.agent === 'claude' && !(typeof row.cwd === 'string' && row.sessionId);
+      const prelude = agent === 'omp' && record === 0 && row.type === 'title' && (row.v === undefined || row.v === 1);
+      const claudeMetadata = agent === 'claude' && !(typeof row.cwd === 'string' && row.sessionId);
       if (!prelude && !claudeMetadata || end < 0) break;
       row = undefined;
       text = text.slice(end + 1);
     }
   } finally { fs.closeSync(fd); }
-  if (!row) throw new Error('Original conversation header unavailable');
-  const meta = ['pi', 'omp'].includes(saved.agent) && row.type === 'session' ? row : saved.agent === 'codex' && row.type === 'session_meta' ? row.payload
-    : saved.agent === 'claude' ? { id: row.sessionId, cwd: row.cwd } : null;
+  if (!row) return undefined;
+  const meta = ['pi', 'omp'].includes(agent) && row.type === 'session' ? row : agent === 'codex' && row.type === 'session_meta' ? row.payload
+    : agent === 'claude' ? { id: row.sessionId, cwd: row.cwd } : null;
+  return meta ? { id: meta.id, cwd: meta.cwd } : null;
+}
+export function validateTranscript(saved, project) {
+  const session = saved.session;
+  if (!session?.id || !session.transcriptPath || !fs.existsSync(session.transcriptPath)) throw new Error('Original conversation unavailable; refusing fresh fallback');
+  const meta = readTranscriptHeader(session.transcriptPath, saved.agent);
+  if (meta === undefined) throw new Error('Original conversation header unavailable');
   if (!meta || meta.id !== session.id || !sameWorktree(`local::${meta.cwd}`, project)) throw new Error('Original conversation identity/project mismatch');
   return session;
 }

@@ -12,6 +12,10 @@
 - 提交交接后，在发起项目创建本地终端入口，连接已存在的远端 PTY。普通启动和显式远端复用均聚焦此本地入口。
 - `Ctrl+]` 仅断开本地客户端。连接中断保留远端进程与历史；未知投递结果不会自动重发。
 
+## 远端主机上的项目归属
+
+远端角色终端统一建在远端主机的独立 Orca 项目中：`<远端用户目录>/Code/orca-remote/<调用方项目名>`。`lib/remote-project.mjs` 通过已配对的加密通道调用远端 `files.browseServerDir('~')` 取用户目录与路径风格（posix/win32），再用 `repo.create` 创建或复用该项目，因此远端是 macOS、Linux 或 Windows 都适用。同名项目已登记时直接复用；目录存在但非空且未登记时报错，不改用其他目录。OMP 适配器自动使用该路径；Claude/Codex 协调者通过 `orca-team remote-project` 取得。此前远端角色会被建到远端当前打开的项目里，混在对方项目的标签页中；已有的旧远端会话不自动迁移。
+
 ## 实现与状态
 
 `claude-binding.mjs` 核对配对 runtime、terminal、incarnation、原生 session 和工作区。需要原生探测时，`claude_probe.py` 还核对 daemon 身份、PTY、进程父子关系、实际 cwd 与会话记录中的模型。

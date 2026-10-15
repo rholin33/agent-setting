@@ -33,9 +33,9 @@
   ],
   "roles": {
     "master": {
-      "agent": "omp",
-      "model": "pay/gpt-6.1-sol",
-      "thinking": "xhigh"
+      "agent": "claude",
+      "model": "opus",
+      "thinking": "high"
     },
     "loader": {
       "agent": "codex",
@@ -43,9 +43,9 @@
       "thinking": "medium"
     },
     "archi": {
-      "agent": "omp",
-      "model": "pay/gpt-6.1-sol",
-      "thinking": "max"
+      "agent": "claude",
+      "model": "opus",
+      "thinking": "high"
     },
     "designer": {
       "agent": "omp",

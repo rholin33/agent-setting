@@ -99,7 +99,7 @@ OMP 流程：
 
 仅在参数、角色、主机、worktree 与权限均确定后，按手册的新增角色步骤执行。禁止直接复制 master 私有配置改标题。
 
-1. 记录启动前的绑定、终端和监听基线。为该 role + environment + worktree 分配独立本地 runtime、远端中性 control directory、native 会话和终端名称；不得覆盖既有目录、配置、token 或会话。
+1. 先运行 `orca-team remote-project --environment <name> --project <本机项目>` 取得远端独立项目路径 `<远端用户目录>/Code/orca-remote/<本机项目名>`；所有远端终端都建在该项目下，不借用远端已打开的其他项目。记录启动前的绑定、终端和监听基线。为该 role + environment + worktree 分配独立本地 runtime、远端中性 control directory、native 会话和终端名称；不得覆盖既有目录、配置、token 或会话。
 2. 选择经核对空闲的 MCP 端口、远端 native 端口和本机 tunnel 端口。配置 `native_port` 于两端对应配置、`tunnel_port` 于本机 native 配置，同时匹配 `url`、MCP `local_url`、`bind`、`peer`、`root`、`worktree` 等真实字段。默认 `18766/18767` 只适用于没有冲突的默认实例，不是所有角色共用端口。
 3. 使用两种相互独立的随机凭据：MCP bearer 和 native capability token；不同角色也必须独立。私有目录 `0700`、配置/凭据文件 `0600`。native token 明文仅保存在本机，远端 app-server 只接收 SHA256 摘要；MCP bearer 按手册仅提供给需要访问本机工具的远端受限配置。两者均不是模型账号凭据，不得输出或提交。
 4. 将解析出的真实既有角色 prompt 与本次远端边界组成 `role_prompt`；明确其角色名、本机工作区和工具范围。不得将其他角色的 developer instructions 或旧 native 会话移花接木。配置中的 `role` 必须是本次真实角色会话名称；代码中的历史环境变量名称不代表可以复用 master 身份。

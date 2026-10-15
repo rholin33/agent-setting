@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { readJson } from './team.mjs';
 import { restartRole, restartRoles } from './restart.mjs';
+import { omitsOnlyPairedRuntimes } from './platform.mjs';
 
 // Use the existing verified exit/resume path; never kill a process by name.
 // Each stop persists restartIntent, so a crash retains the original binding.
@@ -26,7 +27,7 @@ export function updateLifecycle({ home, cli, snapshot, log = console.log, restar
     async stop(agent) {
       const stopped = [];
       const inventory = await cli(['terminal', 'list']);
-      if (inventory.truncated || inventory.hostScope?.omittedHostIds?.length) throw new Error('Global pane inventory is incomplete');
+      if (inventory.truncated || (inventory.hostScope && !omitsOnlyPairedRuntimes(inventory.hostScope))) throw new Error('Global pane inventory is incomplete');
       try {
         const projectsDirectory = path.join(home, 'projects');
         const directories = fs.existsSync(projectsDirectory) ? fs.readdirSync(projectsDirectory) : [];

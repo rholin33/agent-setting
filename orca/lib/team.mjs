@@ -2,7 +2,7 @@ import { verifyMacAbsence } from './macos-health.mjs';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { normalizeProject, projectKey, nodeCommand, processStartTime, mapLimit, INSPECT_CONCURRENCY } from './platform.mjs';
+import { completeLocalInventory, normalizeProject, projectKey, nodeCommand, processStartTime, mapLimit, INSPECT_CONCURRENCY } from './platform.mjs';
 import { binding, sameWorktree, validateTranscript } from './sessions.mjs';
 import { inspectHealth, recoverInPane } from './health.mjs';
 import { rpc } from './orca.mjs';
@@ -216,9 +216,7 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pub
         assertConversationAbsent(snap, project, [{ name, saved }], inventory.terminals);
         if (!saved.session && !saved.pending && !foundBinding) {
           // 旧记录没有可恢复的会话；完整本地终端清单确认原窗格已不在时按首次启动处理。
-          if (inventory.truncated !== false || inventory.totalCount !== inventory.terminals.length ||
-              inventory.hostScope?.hostIds?.length !== 1 || inventory.hostScope.hostIds[0] !== 'local' ||
-              inventory.hostScope.omittedHostIds?.length !== 0) throw new Error(`${name}: incomplete terminal inventory; fresh launch refused`);
+          if (!completeLocalInventory(inventory)) throw new Error(`${name}: incomplete terminal inventory; fresh launch refused`);
           delete saved.tabId; delete saved.leafId;
           log(`${name}: old pane absent without a saved conversation; starting a new session`);
           continue;

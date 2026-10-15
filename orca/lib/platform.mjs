@@ -3,6 +3,17 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 
+// 本机项目的终端只会在本机执行主机上；Orca 列表省略已配对远端 runtime（runtime:<id>）不影响本机清单的完整性，
+// 省略其他主机（如 SSH 目标）则仍视为不完整。
+export function omitsOnlyPairedRuntimes(hostScope) {
+  return Array.isArray(hostScope?.omittedHostIds) && hostScope.omittedHostIds.every(id => typeof id === 'string' && id.startsWith('runtime:'));
+}
+
+export function completeLocalInventory(inventory) {
+  return Array.isArray(inventory?.terminals) && inventory.truncated === false && inventory.totalCount === inventory.terminals.length &&
+    inventory.hostScope?.hostIds?.length === 1 && inventory.hostScope.hostIds[0] === 'local' && omitsOnlyPairedRuntimes(inventory.hostScope);
+}
+
 export function dataDirectory(platform = process.platform, env = process.env, home = os.homedir()) {
   if (env.ORCA_TEAM_DATA_DIR) return env.ORCA_TEAM_DATA_DIR;
   if (platform === 'win32') return path.win32.join(env.APPDATA || path.win32.join(home, 'AppData', 'Roaming'), 'orca');

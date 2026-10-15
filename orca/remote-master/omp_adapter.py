@@ -70,7 +70,7 @@ def tailnet(value):
     return str(address)
 
 
-def discover(environment):
+def discover(environment, remote_worktree=None):
     rows = call('environment', 'list')['environments']
     matches = [r for r in rows if not environment or environment in (r['name'], r['id'])]
     if len(matches) != 1:
@@ -83,11 +83,10 @@ def discover(environment):
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.connect((peer, 9))
         local = tailnet(sock.getsockname()[0])
-    terminals = call('terminal', 'list', '--environment', selected['name'])['terminals']
-    roots = {r.get('worktreePath') for r in terminals if r.get('connected') and r.get('worktreePath')}
-    if len(roots) != 1:
-        raise RuntimeError('Remote execution worktree is ambiguous; configure one explicit environment')
-    return selected['name'], local, peer, roots.pop()
+    # 远端工作目录是调用方为本项目在远端建立的 orca-remote 项目（由 lib/remote-project.mjs 创建）。
+    if not remote_worktree:
+        raise RuntimeError('Remote orca-remote project is required; refusing to borrow another remote project')
+    return selected['name'], local, peer, remote_worktree
 
 
 def role_prompt(req):
@@ -338,7 +337,7 @@ def ensure(req):
                 state.setdefault('retired', []).append(state['terminals'].pop('guest'))
                 private(state_path, state)
         else:
-            environment, local, peer, remote_worktree = discover(req.get('environment'))
+            environment, local, peer, remote_worktree = discover(req.get('environment'), req.get('remote_worktree'))
             prompt, writes = role_prompt(req)
             # Stable private role port block; collisions fail instead of touching other services.
             base = 22000 + (int(ident[:4], 16) % 300) * 4

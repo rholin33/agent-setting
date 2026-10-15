@@ -250,7 +250,8 @@ def is_portable_path(relative_path: Path) -> bool:
         return False
     if parts[:2] == ("pi", "bin") and parts != ("pi", "bin", "pi"):
         return False
-    if name.endswith((".bak", ".backup")) or ".backup-" in name:
+    # 手工备份常带日期/用途后缀，如 team.mjs.bak.20261012-omp-recovery、x.backup-20261012T194854。
+    if re.search(r"\.(bak|backup)([.-]|$)", name):
         return False
     if parts[:2] == ("orca", "remote-master") and relative_path.suffix.lower() not in {".py", ".ts"}:
         return False

@@ -76,3 +76,30 @@ test('Pi proof rejects stale PID identity, another pane and mismatched transcrip
  fs.writeFileSync(transcriptPath,JSON.stringify({type:'session',id:'other',cwd:home})+'\n');
  assert.equal(readPiProof(42,'start',terminal),null);
 });
+
+import { nameOmpProcesses } from '../lib/macos-health.mjs';
+test('absence proof recognizes a live OMP under its bun launcher instead of refusing the tree', async t => {
+ const project=fs.mkdtempSync(path.join(os.tmpdir(),'orca-absence-omp-'));
+ t.after(()=>fs.rmSync(project,{recursive:true,force:true}));
+ const transcriptPath=path.join(project,'original.jsonl');
+ fs.writeFileSync(transcriptPath,JSON.stringify({type:'session',id:'original',cwd:project})+'\n');
+ const bun={...agent,name:'bun'};
+ const execute=async(_cmd,args)=>({stdout:args[2]==='2'?'bun /usr/local/bin/omp --session /x.jsonl':''});
+ assert.equal((await nameOmpProcesses([root,bun],1,execute))[1].name,'omp');
+ assert.equal((await nameOmpProcesses([root,{...bun,parent:9}],1,execute))[1].name,'bun');
+ const terminal={handle:'h',ptyId:`repo::${project}@@p`,incarnationId:'i',tabId:'tab',leafId:'leaf',connected:true,executionHostId:'local'};
+ const inspected=[];
+ const options={project,missing:[{name:'designer',saved:{agent:'omp',session:{id:'original',transcriptPath}}}],execute,snapshot:()=>({}),conversationUsers:async()=>{},
+  inventory:async()=>({identity:{launchNonce:'n'},sessions:[{sessionId:terminal.ptyId,terminalHandle:'h',incarnationId:'i',isAlive:true,pid:1}]}),
+  cli:async()=>({terminals:[terminal],totalCount:1,truncated:false,hostScope:{hostIds:['local'],omittedHostIds:['runtime:co']}}),
+  processes:async()=>[root,bun,{pid:process.pid}],
+  inspect:async(_t,provider)=>{inspected.push(provider);return{kind:'agent',sessionPaths:[transcriptPath]};}};
+ await assert.rejects(verifyMacAbsence(options),/running in another pane/);
+ assert.deepEqual(inspected,['omp']);
+ const foreign=path.join(project,'foreign.jsonl');
+ // 新版 OMP 首行是 title 前缀，第二行才是 session 头。
+ fs.writeFileSync(foreign,JSON.stringify({type:'title',v:1,title:''})+'\n'+JSON.stringify({type:'session',id:'host',cwd:'/elsewhere/omp-runtime'})+'\n');
+ assert.equal(await verifyMacAbsence({...options,inspect:async()=>({kind:'agent',sessionPaths:[foreign]})}),true);
+ fs.writeFileSync(foreign,JSON.stringify({type:'session',id:'host'})+'\n');
+ await assert.rejects(verifyMacAbsence({...options,inspect:async()=>({kind:'agent',sessionPaths:[foreign]})}),/unverified/);
+});

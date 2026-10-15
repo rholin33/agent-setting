@@ -4,7 +4,7 @@ import net from 'node:net';
 import { createHash, randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { dataDirectory } from './platform.mjs';
+import { completeLocalInventory, dataDirectory } from './platform.mjs';
 import { sameWorktree } from './sessions.mjs';
 import { snapshot as readSnapshot } from './orca.mjs';
 import { claudeSessionIds } from './claude.mjs';
@@ -21,9 +21,7 @@ export async function verifyWindowsAbsence({ project, missing, cli, platform = p
     const rows = await processes();
     const snap = await snapshot();
     if (!native.identity?.launchNonce || !Array.isArray(native.sessions) || !Array.isArray(rows) ||
-        !Array.isArray(desktop.terminals) || desktop.truncated !== false || desktop.totalCount !== desktop.terminals.length ||
-        desktop.hostScope?.hostIds?.length !== 1 || desktop.hostScope.hostIds[0] !== 'local' ||
-        !Array.isArray(desktop.hostScope.omittedHostIds) || desktop.hostScope.omittedHostIds.length) throw new Error('Incomplete local terminal inventory');
+        !completeLocalInventory(desktop)) throw new Error('Incomplete local terminal inventory');
     const active = native.sessions.filter(s => sameWorktree(s.sessionId.split('@@')[0], project) && s.isAlive !== false);
     for (const s of active) {
       const match = desktop.terminals.filter(t => t.handle === s.terminalHandle && t.ptyId === s.sessionId && t.incarnationId === s.incarnationId);

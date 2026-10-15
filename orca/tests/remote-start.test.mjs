@@ -347,6 +347,8 @@ test('saved OMP role selection wins; catalog selection is explicit, never first 
   assert.throws(() => ompSelection(f.args.home, 'master'), /no model fallback/);
 });
 
+const remoteProject = async () => ({ environment: 'paired-host', path: '/remote/home/Code/orca-remote/project' });
+
 test('adapter wrapper calls fixed Python CLI with private scoped request and no ambient remote host', async t => {
   const f = startupFixture(t);
   let requestPath;
@@ -358,11 +360,11 @@ test('adapter wrapper calls fixed Python CLI with private scoped request and no 
     assert.equal(path.dirname(requestPath), path.join(projectFiles(request.home, request.project).directory, 'runtime', request.role, 'omp'));
     assert.equal(fs.statSync(requestPath).mode & 0o777, 0o600);
     assert.equal(fs.statSync(path.dirname(requestPath)).mode & 0o777, 0o700);
-    assert.deepEqual(JSON.parse(fs.readFileSync(requestPath, 'utf8')), request);
+    assert.deepEqual(JSON.parse(fs.readFileSync(requestPath, 'utf8')), { ...request, remote_worktree: '/remote/home/Code/orca-remote/project' });
     assert.equal(options.env.ORCA_ENVIRONMENT, undefined);
     assert.equal(options.env.ORCA_PAIRING_CODE, undefined);
     return { stdout: JSON.stringify(f.omp.endpoint) };
-  });
+  }, remoteProject);
   assert.deepEqual(result, f.omp.endpoint);
   assert.equal(fs.existsSync(requestPath), false);
 });
@@ -407,7 +409,7 @@ for (const mode of ['failure', 'malformed']) {
       requestPath = args[3];
       if (mode === 'failure') throw new Error('sensitive subprocess output');
       return { stdout: 'not JSON' };
-    }), error => !error.message.includes('sensitive') && /original owner retained/.test(error.message));
+    }, remoteProject), error => !error.message.includes('sensitive') && /original owner retained/.test(error.message));
     assert.equal(fs.existsSync(requestPath), false);
   });
 }
@@ -419,7 +421,7 @@ test('typed readiness failures expose actionable reasons but never raw transport
       throw Object.assign(new Error('private-transport-token'), {
         stderr: `OMP adapter failed: RuntimeError: OMP_READINESS:${code}\nprivate-transport-token`,
       });
-    }), error => !error.message.includes('private-transport-token') &&
+    }, remoteProject), error => !error.message.includes('private-transport-token') &&
       (code === 'thinking_busy' ? error.message.includes('busy') : error.message.includes('Reconcile')));
   }
 });

@@ -7,6 +7,7 @@ import { daemonSessions } from './windows-health.mjs';
 import { snapshot as readSnapshot } from './orca.mjs';
 import { assertConversationAbsent } from './recovery-guards.mjs';
 import { claudeSessionIds } from './claude.mjs';
+import { completeLocalInventory } from './platform.mjs';
 
 export async function macProcesses() {
   const { stdout } = await promisify(execFile)('/bin/ps', ['-axo', 'pid=,ppid=,pgid=,tpgid=,tty=,lstart=,comm='], { encoding: 'utf8', timeout: 5000, env: { ...process.env, LC_ALL: 'C' } });
@@ -33,27 +34,30 @@ export function macTree(rows, pid, provider) {
   if (agents.length !== 1 && !idleShell) return null;
   return JSON.stringify(tree.map(r => [r.pid,r.parent,r.created,r.group,r.foreground,r.name]));
 }
+// OMP's Bun launcher keeps the executable name `bun`; prove its entrypoint
+// before treating a descendant of rootPid as the omp provider.
+export async function nameOmpProcesses(rows, rootPid, execute = promisify(execFile)) {
+  const descendants = new Set([rootPid]);
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const row of rows) if (descendants.has(row.parent) && !descendants.has(row.pid)) {
+      descendants.add(row.pid); changed = true;
+    }
+  }
+  return Promise.all(rows.map(async row => {
+    if (row.name !== 'bun' || !descendants.has(row.pid)) return row;
+    const { stdout } = await execute('/bin/ps', ['-ww', '-p', String(row.pid), '-o', 'args='], { encoding: 'utf8', timeout: 5000 });
+    return /^bun\s+(?:\/[^\s]+\/)?omp(?:\s|$)/.test(stdout.trim()) ? { ...row, name: 'omp' } : row;
+  }));
+}
 export async function inspectMac(terminal, provider, { inventory = daemonSessions, processes = macProcesses, show, execute = promisify(execFile) } = {}) {
   const match = r => r.sessions.filter(s => s.terminalHandle === terminal.handle && s.sessionId === terminal.ptyId && s.incarnationId === terminal.incarnationId && s.isAlive === true);
   const before = await inventory(terminal), first = match(before);
   if (first.length !== 1) throw new Error('macOS pane identity unavailable');
-  // OMP's Bun launcher keeps the executable name `bun`; prove its entrypoint
-  // before treating it as the provider, and repeat that proof on every scan.
+  // Repeat the OMP entrypoint proof on every scan.
   const providerRows = async () => {
     const rows = await processes();
-    if (provider !== 'omp') return rows;
-    const descendants = new Set([first[0].pid]);
-    for (let changed = true; changed;) {
-      changed = false;
-      for (const row of rows) if (descendants.has(row.parent) && !descendants.has(row.pid)) {
-        descendants.add(row.pid); changed = true;
-      }
-    }
-    return Promise.all(rows.map(async row => {
-      if (row.name !== 'bun' || !descendants.has(row.pid)) return row;
-      const { stdout } = await execute('/bin/ps', ['-ww', '-p', String(row.pid), '-o', 'args='], { encoding: 'utf8', timeout: 5000 });
-      return /^bun\s+(?:\/[^\s]+\/)?omp(?:\s|$)/.test(stdout.trim()) ? { ...row, name: 'omp' } : row;
-    }));
+    return provider === 'omp' ? nameOmpProcesses(rows, first[0].pid, execute) : rows;
   };
   const a = macTree(await providerRows(), first[0].pid, provider);
   const b = macTree(await providerRows(), first[0].pid, provider);
@@ -127,14 +131,14 @@ export async function macConversationUsers(missing) {
   }
 }
 
-export async function verifyMacAbsence({ project, missing, cli, inventory = daemonSessions, processes = macProcesses, inspect = inspectMac, conversationUsers = macConversationUsers, snapshot = readSnapshot }) {
-  const { sameWorktree, validateTranscript } = await import('./sessions.mjs');
+export async function verifyMacAbsence({ project, missing, cli, inventory = daemonSessions, processes = macProcesses, inspect = inspectMac, conversationUsers = macConversationUsers, snapshot = readSnapshot, execute = promisify(execFile) }) {
+  const { sameWorktree, validateTranscript, readTranscriptHeader } = await import('./sessions.mjs');
   for (const { saved } of missing) validateTranscript(saved, project);
   const proofs = [];
   for (let pass = 0; pass < 2; pass++) {
     const native = await inventory();
     const desktop = await cli(['terminal', 'list', '--worktree', `path:${project}`, '--include-visual-layouts']);
-    if (!native.identity?.launchNonce || !Array.isArray(native.sessions) || !Array.isArray(desktop.terminals) || desktop.truncated !== false || desktop.totalCount !== desktop.terminals.length || desktop.hostScope?.hostIds?.length !== 1 || desktop.hostScope.hostIds[0] !== 'local' || desktop.hostScope.omittedHostIds?.length !== 0) throw new Error('Incomplete local terminal inventory');
+    if (!native.identity?.launchNonce || !Array.isArray(native.sessions) || !completeLocalInventory(desktop)) throw new Error('Incomplete local terminal inventory');
     const active = native.sessions.filter(s => sameWorktree(s.sessionId?.split('@@')[0], project) && s.isAlive !== false);
     for (const session of active) {
       const matches = desktop.terminals.filter(row => row.handle === session.terminalHandle && row.ptyId === session.sessionId && row.incarnationId === session.incarnationId);
@@ -150,18 +154,21 @@ export async function verifyMacAbsence({ project, missing, cli, inventory = daem
     assertConversationAbsent(snap, project, missing, desktop.terminals);
     for (const session of active) {
       const terminal = desktop.terminals.find(row => row.handle === session.terminalHandle);
+      const named = await nameOmpProcesses(rows, session.pid, execute);
       const provider = ['codex', 'claude', 'omp', 'pi'].find(name => {
-        const candidate = macTree(rows, session.pid, name);
+        const candidate = macTree(named, session.pid, name);
         return candidate && JSON.parse(candidate).some(row => row[5] === name);
       }) || 'pi';
-      const tree = macTree(rows, session.pid, provider);
+      const tree = macTree(named, session.pid, provider);
       if (!tree) throw new Error('Unverifiable project process tree; absence refused');
       if (JSON.parse(tree).some(row => row[5] === 'omp')) {
         const live = await inspect(terminal, 'omp', { inventory, processes, show: async () => (await cli(['terminal', 'show', '--terminal', terminal.handle])).terminal });
         if (live.kind !== 'agent' || !live.sessionPaths?.length) throw new Error('Live OMP conversation is unbound; absence refused');
         for (const transcriptPath of live.sessionPaths) {
-          const header = JSON.parse(fs.readFileSync(transcriptPath, 'utf8').split('\n')[0]);
-          if (header.type !== 'session' || !header.id || !sameWorktree(`local::${header.cwd}`, project)) throw new Error('Live OMP transcript identity is unverified');
+          const header = readTranscriptHeader(transcriptPath, 'omp');
+          if (!header?.id || typeof header.cwd !== 'string') throw new Error('Live OMP transcript identity is unverified');
+          // 缺失角色的会话已由 validateTranscript 核对工作目录为本项目；其他目录的会话（例如远端调用方的 OMP host）不可能是它们。
+          if (!sameWorktree(`local::${header.cwd}`, project)) continue;
           if (missing.some(({ saved }) => saved.session.id === header.id || path.resolve(saved.session.transcriptPath) === path.resolve(transcriptPath))) throw new Error('Original conversation is running in another pane');
         }
       }

@@ -25,6 +25,12 @@ test('explicit process session proves identity before Orca hooks are persisted',
   assert.equal(await health.verifyWindowsAbsence(o), true);
 });
 
+test('absence accepts an omitted paired remote runtime but not other omitted hosts', async () => {
+  const o = options();
+  o.desktop.hostScope.omittedHostIds.push('runtime:6d307c6b');
+  assert.equal(await health.verifyWindowsAbsence(o), true);
+});
+
 for (const scenario of ['truncated', 'omitted host', 'remote', 'hidden pty', 'wsl', 'changed daemon', 'changed process', 'live session', 'live path', 'unreadable process', 'old pane', 'unbound agent', 'moved conversation']) {
   test(`absence refuses ${scenario}`, async () => {
     const o = options();

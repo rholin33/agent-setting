@@ -399,9 +399,10 @@ Orca 创建终端的官方形式如下，`LAUNCH_COMMAND` 只包含正确引用�
 env -u ORCA_ENVIRONMENT -u ORCA_PAIRING_CODE orca terminal create \
   --worktree "path:$WORKTREE" --title "$INSTANCE_TITLE" --command "$LAUNCH_COMMAND" --json
 
-# 远端 support terminal；REMOTE_WORKTREE 是远端实时发现的既有容器工作区。
+# 远端 support terminal；REMOTE_WORKTREE 是 `orca-team remote-project` 输出的远端独立项目路径
+# （<远端用户目录>/Code/orca-remote/<本机项目名>），不要用远端已打开的其他项目。
 env -u ORCA_ENVIRONMENT -u ORCA_PAIRING_CODE orca terminal create \
-  --environment "$ENV_NAME" --worktree "$REMOTE_WORKTREE" \
+  --environment "$ENV_NAME" --worktree "path:$REMOTE_WORKTREE" \
   --title "$REMOTE_INSTANCE_TITLE" --command "$REMOTE_LAUNCH_COMMAND" --json
 ```
 

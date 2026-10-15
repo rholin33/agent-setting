@@ -3,7 +3,8 @@ import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { connectRemoteTerminal, localClaudeTitle } from '../lib/claude-terminal-client.mjs';
 import { terminalDependencies } from '../lib/claude-terminal-dependencies.mjs';
-import { dataDirectory, normalizeProject } from '../lib/platform.mjs';
+import { normalizeProject } from '../lib/platform.mjs';
+import { pairedEnvironment } from '../lib/remote-runtime.mjs';
 
 const argv = process.argv.slice(2);
 const probe = argv.includes('--probe');
@@ -12,12 +13,8 @@ if (!argv.includes('--config') || !configFile) throw new Error('Usage: claude-re
 const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
 if (config.version !== 1 || config.endpoint?.runtime !== 'claude') throw new Error('Invalid Claude terminal binding');
 if (!probe && normalizeProject(process.cwd()).toLowerCase() !== normalizeProject(config.project).toLowerCase()) throw new Error('Local project directory does not match the remote binding');
-const registry = JSON.parse(fs.readFileSync(path.join(dataDirectory(), 'orca-environments.json'), 'utf8').replace(/^\uFEFF/, ''));
-const matches = registry.environments.filter(e => e.id === config.environment);
-if (matches.length !== 1 || matches[0].runtimeId !== config.runtimeId) throw new Error('Paired environment identity changed');
-const env = matches[0];
-const pairing = env.endpoints.find(e => e.id === env.preferredEndpointId) || env.endpoints[0];
-if (!pairing || pairing.kind !== 'websocket') throw new Error('No paired terminal endpoint');
+if (!config.environment) throw new Error('Invalid Claude terminal binding');
+const { env, pairing } = pairedEnvironment(config.environment, { runtimeId: config.runtimeId });
 const target = { runtimeId: config.runtimeId, terminal: config.endpoint.terminal, incarnation: config.endpoint.incarnation,
   worktree: config.registeredWorktree || config.remoteWorktree };
 const statusFile = path.join(path.dirname(configFile), 'local-terminal-status.json');

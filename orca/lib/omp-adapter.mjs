@@ -4,6 +4,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { projectFiles, readJson } from './team.mjs';
+import { orca } from './orca.mjs';
+import { ensureRemoteProject } from './remote-project.mjs';
 
 const execute = promisify(execFile);
 const fields = ['runtime', 'role', 'environment', 'terminal', 'incarnation', 'session'];
@@ -30,12 +32,15 @@ function privateDirectory(directory) {
   fs.chmodSync(directory, 0o700);
 }
 
-export async function ensureOmp({ home, project, role, model, thinking, environment }, run = execute) {
+// 远端 OMP host 终端放在远端主机为本项目建立的 orca-remote 项目下，不借用远端当前打开的项目。
+export async function ensureOmp({ home, project, role, model, thinking, environment }, run = execute,
+  remoteProject = () => ensureRemoteProject({ environment, project, cli: orca })) {
   const directory = path.join(projectFiles(home, project).directory, 'runtime', role, 'omp');
   if (!/^[a-z][a-z0-9_]*$/.test(role)) throw new Error('Invalid OMP role');
   privateDirectory(directory);
+  const remote = await remoteProject();
   const file = path.join(directory, `request-${randomUUID()}.json`);
-  const request = { home, project, role, model, thinking, ...(environment === undefined ? {} : { environment }) };
+  const request = { home, project, role, model, thinking, environment: remote.environment, remote_worktree: remote.path };
   const fd = fs.openSync(file, 'wx', 0o600);
   try { fs.writeFileSync(fd, JSON.stringify(request) + '\n'); }
   finally { fs.closeSync(fd); }

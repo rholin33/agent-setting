@@ -1,9 +1,9 @@
 [
   {
     "name": "master",
-    "agent": "omp",
-    "model": "pay/gpt-6.1-sol",
-    "thinking": "xhigh",
+    "agent": "claude",
+    "model": "opus",
+    "thinking": "high",
     "role": "agentroles.ccb_self"
   },
   {
@@ -15,9 +15,9 @@
   },
   {
     "name": "archi",
-    "agent": "omp",
-    "model": "pay/gpt-6.1-sol",
-    "thinking": "max",
+    "agent": "claude",
+    "model": "opus",
+    "thinking": "high",
     "role": "agentroles.archi"
   },
   {
@@ -50,9 +50,9 @@
   },
   {
     "name": "reviewer",
-    "agent": "omp",
-    "model": "pay/gpt-6.1-sol",
-    "thinking": "xhigh",
+    "agent": "claude",
+    "model": "sonnet",
+    "thinking": "high",
     "role": "agentroles.code_reviewer"
   },
   {

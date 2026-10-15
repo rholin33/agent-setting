@@ -21,6 +21,8 @@ class SyncScopeTests(unittest.TestCase):
                      'orca/remote-master/credentials.json',
                      'orca/lib/health.mjs.startup-repair.bak',
                      'orca/lib/windows-health.mjs.backup-20261012T194854',
+                     'orca/lib/team.mjs.bak.20261012-omp-recovery',
+                     'orca/lib/sessions.mjs.bak-20261005',
                      'orca/remote-master/local-config.json']:
             self.assertFalse(sync.is_portable_path(Path(name)), name)
         with patch.object(sync, 'TARGET', 'orca'):
