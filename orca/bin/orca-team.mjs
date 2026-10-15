@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { openRepair } from '../lib/startup-repair.mjs';
-import { parseRemoteRequests, startRemoteRequests } from '../lib/remote-start.mjs';
+import { ensureClaudeLocalTerminal } from '../lib/claude-local-terminal.mjs';
+import { parseRemoteRequests, startRemoteRequests, verifyRemoteEnvironment } from '../lib/remote-start.mjs';
 import { readRemoteSwitches, commitRemoteSwitch, rejectRemoteSwitch, abortRemotePreflight, preflightFailureMessage, remotePreflightError, resolvePreflightChoices } from '../lib/remote-switch.mjs';
 import { supportsNoDaemon } from '../lib/codex-capabilities.mjs';
 import fs from 'node:fs';
@@ -73,7 +74,7 @@ try {
   if (values.intent !== undefined && !['remote-commit', 'remote-reject', 'remote-abort-preflight'].includes(action)) throw new Error('--intent is only supported for remote-commit/remote-reject');
   if (values.report !== undefined && action !== 'remote-abort-preflight') throw new Error('--report is only supported for remote-abort-preflight');
   if (values.help) {
-    console.log('orca-team [status|history [ROLE]|init|install|export-config|update] [--group TITLE] [--project PATH] [--home PATH] [--fresh ROLE] [--no-pick] [--remote codex:ROLE|omp:ROLE|off:ROLE] [--environment NAME] [--from-agent HANDLE]\nremote --remote codex:ROLE|omp:ROLE|off:ROLE requests a context handoff without restarting the local team. Picker r selects codex/omp/off; off hands back to the original local agent. Selections commit only after verified acknowledgement.\nremote-abort-preflight --role ROLE --intent ID --report FILE settles only proven pre-delivery OMP failures, preserving the execution report. remote-status shows confirmed owners, pending intents and preflight failures. remote-commit / remote-reject --role ROLE --intent ID settle only against the matching verified handoff ledger.\nPending or remotely owned groups are preserved; independent groups still recover. Incomplete start/restart automatically opens one Codex repair terminal.\nOtherwise start brings the selected project to its configured state. Running roles whose CLI, model, thinking and role prompt are unchanged are reused; changed roles restart with their original conversation. start/restart check agent versions at most once per 24h and install an update only when no process uses that CLI; they never stop roles for an update. update stops roles using outdated CLIs, installs the updates and resumes their conversations. restart [ROLE|GROUP ...] or restart --group TITLE explicitly restarts roles; --fresh ROLE starts a stopped role with a new conversation and refuses continuity-bound roles.\nSelecting a different CLI in the picker stops the role, writes a handoff document from its previous conversation, and starts a new conversation that reads it first; remotely owned or pending roles refuse a CLI change.\n--no-pick skips the model picker. --no-repair disables recursive repair launch. install --quick-commands registers Orca grouped global shortcuts.');
+    console.log('orca-team [status|history [ROLE]|init|install|export-config|update] [--group TITLE] [--project PATH] [--home PATH] [--fresh ROLE] [--no-pick] [--remote codex:ROLE|omp:ROLE|claude:ROLE|off:ROLE] [--environment NAME] [--from-agent HANDLE]\nremote --remote codex:ROLE|omp:ROLE|claude:ROLE|off:ROLE requests a context handoff without restarting the local team. Picker r selects codex/omp/claude/off; off hands back to the original local agent. Selections commit only after verified acknowledgement.\nremote-abort-preflight --role ROLE --intent ID --report FILE settles only proven pre-delivery OMP/Claude failures, preserving the execution report. remote-status shows confirmed owners, pending intents and preflight failures. remote-commit / remote-reject --role ROLE --intent ID settle only against the matching verified handoff ledger.\nPending or remotely owned groups are preserved; independent groups still recover. Incomplete start/restart automatically opens one Codex repair terminal.\nOtherwise start brings the selected project to its configured state. Running roles whose CLI, model, thinking and role prompt are unchanged are reused; changed roles restart with their original conversation. start/restart check agent versions at most once per 24h and install an update only when no process uses that CLI; they never stop roles for an update. update stops roles using outdated CLIs, installs the updates and resumes their conversations. restart [ROLE|GROUP ...] or restart --group TITLE explicitly restarts roles; --fresh ROLE starts a stopped role with a new conversation and refuses continuity-bound roles.\nSelecting a different CLI in the picker stops the role, writes a handoff document from its previous conversation, and starts a new conversation that reads it first; remotely owned or pending roles refuse a CLI change.\n--no-pick skips the model picker. --no-repair disables recursive repair launch. install --quick-commands registers Orca grouped global shortcuts.');
   } else {
     const home = path.resolve(values.home || process.env.ORCA_TEAM_HOME || path.join(os.homedir(), '.orca', 'roles', 'ccb-team'));
     const project = normalizeProject(fs.realpathSync(values.project || process.cwd()));
@@ -106,8 +107,10 @@ try {
       await settle({ home, project, role: roleName, intentId: values.intent, cli: orca });
       const settled = readRemoteSwitches({ home, project }).roles[roleName];
       if (action === 'remote-commit') {
-        const focusArgs = ['terminal', 'switch', '--terminal', settled.owner.terminal];
-        if (settled.owner.environment !== 'local') focusArgs.push('--environment', settled.owner.environment);
+        const presentation = settled.runtime === 'claude'
+          ? await ensureClaudeLocalTerminal({ home, project, config: settled.claudeConfig, endpoint: settled.owner, cli: orca }) : null;
+        const focusArgs = ['terminal', 'switch', '--terminal', presentation?.handle || settled.owner.terminal];
+        if (!presentation && settled.owner.environment !== 'local') focusArgs.push('--environment', settled.owner.environment);
         await orca(focusArgs);
       }
       console.log(`${roleName}: ${action === 'remote-commit' ? 'handoff accepted; owner updated and focused' : 'handoff rejected; source retained'}`);
@@ -117,7 +120,7 @@ try {
       const names = readJson(configFile).tabs.flatMap(tab => tab.agents);
       const catalog = readJson(path.join(home, 'team.json'));
       const requests = parseRemoteRequests(values.remote, names.filter(name => catalog.some(role => role.name === name)));
-      if (!requests.length) throw new Error('remote requires --remote codex:ROLE, omp:ROLE or off:ROLE');
+      if (!requests.length) throw new Error('remote requires --remote codex:ROLE, omp:ROLE, claude:ROLE or off:ROLE');
       await ensureOrca({ cli: orca });
       const result = await startRemoteRequests({ requests, home, project, environment: values.environment, sourceHandle: values['from-agent'], cli: orca, snapshot });
       console.log(describeRemoteResult(result));
@@ -194,6 +197,11 @@ try {
       const remoteStates = Object.fromEntries(Object.entries(continuity.roles).map(([name, entry]) => [name, entry.runtime]));
       await stage('Model selection', () => syncModels({ home, names, pick: !values['no-pick'], remoteStates, remoteRequests: pickerRequests, confirmRemote, menuResult }));
       if (menuResult.status === 'cancelled') throw Object.assign(new Error('Startup cancelled; no roles restarted or remote requests sent.'), { code: 'STARTUP_CANCELLED' });
+      for (const request of pickerRequests) {
+        if (!remoteRequests.some(item => item.role === request.role)) remoteRequests.push(request);
+      }
+      // Validate remote prerequisites before stopping any local conversation.
+      await verifyRemoteEnvironment({ requests: remoteRequests, environment: values.environment, cli: orca });
       // 会话所用 CLI 与配置不同的角色先换 CLI（停止、写交接、清除旧绑定），再进入重载和恢复。
       const switches = fs.existsSync(files.state) ? pendingSwitches(readJson(files.state), readJson(path.join(home, 'team.json')), names) : [];
       if (switches.length) {
@@ -203,12 +211,9 @@ try {
         await stage('CLI switch', () => switchProviders({ switches, home, project, cli: orca, snapshot,
           inspect: (handle, provider) => inspectHealth(orca, rpc, handle, provider) }));
       }
-      for (const request of pickerRequests) {
-        if (!remoteRequests.some(item => item.role === request.role)) remoteRequests.push(request);
-      }
       for (const name of names) {
-        if (continuity.roles[name]?.runtime === 'omp' && !continuity.roles[name].pending && !remoteRequests.some(item => item.role === name)) {
-          remoteRequests.push({ role: name, runtime: 'omp' });
+        if (['omp', 'claude'].includes(continuity.roles[name]?.runtime) && !continuity.roles[name].pending && !remoteRequests.some(item => item.role === name)) {
+          remoteRequests.push({ role: name, runtime: continuity.roles[name].runtime });
         }
       }
       if (preflightFailure && interactivePicker) remoteRequests = resolvePreflightChoices(continuity, names, remoteRequests);

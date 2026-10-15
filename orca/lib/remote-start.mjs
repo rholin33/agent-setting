@@ -11,11 +11,12 @@ import { readRemoteSwitches, beginRemoteSwitch, claimRemoteSetup, rejectRemoteSw
 import { runDirectHandoff as runDirectHandoffDefault, supportsDirectHandoff } from './remote-handoff.mjs';
 import { ensureOmp as ensureOmpAdapter, ompSelection, validateOmpEndpoint, verifyOmpBinding } from './omp-adapter.mjs';
 import { registerAuxiliary } from './auxiliary-cleanup.mjs';
+import { ensureClaudeLocalTerminal } from './claude-local-terminal.mjs';
 
 export function parseRemoteRequests(values, names) {
   const requests = (values || []).map(value => {
-    const match = /^(codex|omp|off):([\w-]+)$/.exec(value);
-    if (!match) throw new Error('Expected --remote codex:ROLE, omp:ROLE or off:ROLE');
+    const match = /^(codex|omp|claude|off):([\w-]+)$/.exec(value);
+    if (!match) throw new Error('Expected --remote codex:ROLE, omp:ROLE, claude:ROLE or off:ROLE');
     if (!names.includes(match[2])) throw new Error(`Unknown remote role in selected scope: ${match[2]}`);
     return { runtime: match[1] === 'off' ? null : match[1], role: match[2] };
   });
@@ -39,7 +40,7 @@ export function remoteManagementPrompt({ intents, home, project, skill }) {
     ...intents.filter(intent => intent.runtime === 'omp').map(intent => `Before handoff delivery and again before recording an assistant receipt for ${intent.role}, run exactly: ${['python3', path.join(home, 'remote-master', 'omp_adapter.py'), 'verify', '--config', intent.adapterConfig].map(value => quote(value)).join(' ')} . Require the returned runtime, role, environment, terminal, incarnation, session and adapterConfig to match the supplied bound target exactly. On failure stop; do not substitute or recreate a destination.`),
     'For each intent obtain the latest checkpoint from its exact source, verify a safe pause and no outstanding writes, and retain its native history. If identity, native session, draft input, or idle state cannot be verified, stop and report the blocker. Do not interrupt a busy agent.',
     'Use the supplied taskId and ledgerDirectory with scripts/handoff.py. If that task already has a handoff, reconcile its latest revision before doing anything; claimed/uncertain delivery must never be resent. A completed handoff in this ledger is the sole authority for the current owner.',
-    'For Codex, create or reuse the requested destination using the skill. For OMP, reuse only the supplied verified target and adapterConfig; no destination research or creation. For off, reuse the exact original local endpoint; do not create a replacement conversation. Preserve permissions and load the canonical role prompt. Build the context handoff from the agent-driven source summary, never from startup configuration. OMP must use its own verified connection, never fall back to Codex.',
+    'For Codex or Claude, create or reuse the requested destination using the skill. For OMP, reuse only the supplied verified target and adapterConfig; no destination research or creation. For off, reuse the exact original local endpoint; do not create a replacement conversation. Preserve permissions and load the canonical role prompt. Build the context handoff from the agent-driven source summary, never from startup configuration. OMP must use its own verified connection, never fall back to Codex.',
     'Run prepare/claim, deliver once, and record only a verified assistant acceptance or rejection. Transport success or terminal echo is not acknowledgement. Do not focus the destination before acceptance.',
     ...intents.map(intent => `After verified acceptance run: ${[process.execPath, path.join(home, 'bin', 'orca-team.mjs'), 'remote-commit', '--home', home, '--project', project, '--role', intent.role, '--intent', intent.id].map(value => quote(value)).join(' ')} . For a verified rejection use remote-reject with the same arguments instead.`),
     'The commit command validates the ledger and live endpoints before changing the selected runtime and focusing the destination. On failure retain the source and report pending/unknown; never claim a successful switch or edit menu state manually.',
@@ -56,7 +57,7 @@ async function liveEndpoint({ cli, project, handle, role, saved, expected, snaps
     throw new Error(`${role}: source/return terminal is unavailable or belongs to another worktree`);
   }
   const runtime = terminal.agentIdentity;
-  if (!['codex', 'omp', 'pi'].includes(runtime)) throw new Error(`${role}: terminal is not a supported agent`);
+  if (!['codex', 'omp', 'pi', 'claude'].includes(runtime)) throw new Error(`${role}: terminal is not a supported agent`);
   const observed = terminal.providerSession?.id || terminal.agentSession?.id || terminal.session?.id || terminal.agentSessionId || terminal.sessionId;
   const reference = { ...saved, tabId: terminal.tabId, leafId: terminal.leafId, agent: runtime, session: expected ? { id: expected.session } : saved?.session };
   const savedSession = snapshot ? binding(await snapshot(), reference, project)?.id : null;
@@ -77,10 +78,24 @@ async function liveEndpoint({ cli, project, handle, role, saved, expected, snaps
   return actual;
 }
 
+export async function verifyRemoteEnvironment({ requests, environment, cli }) {
+  if (environment !== undefined && (!environment.trim() || /[\r\n\0]/.test(environment))) throw new Error('Invalid remote environment');
+  if (requests.some(request => request.runtime === 'claude')) {
+    const listed = await cli(['environment', 'list']);
+    const candidates = listed.environments || listed.result?.environments || [];
+    if (!candidates.length) throw new Error('Claude remote requires one verified Orca environment: no saved remote environment. Pair the remote Orca host with orca environment add --name NAME --pairing-code CODE before retrying.');
+    const matches = environment === undefined ? candidates : candidates.filter(item => item.id === environment || item.name === environment);
+    if (matches.length !== 1) throw new Error('Claude remote requires one verified Orca environment; select --environment explicitly or configure a remote environment first');
+    environment = matches[0].id || matches[0].name;
+    if (!environment || environment === 'local') throw new Error('Claude remote requires a remote environment, not local');
+  }
+  return environment;
+}
+
 async function startRemoteRequestsAtLocal({ requests, home = path.join(os.homedir(), '.orca', 'roles', 'ccb-team'), project, environment, sourceHandle, cli, snapshot, ensureOmp = ensureOmpAdapter, verifyOmp = verifyOmpBinding, inspect = (handle, provider) => inspectHealth(cli, rpc, handle, provider), skill = path.join(os.homedir(), '.codex', 'skills', 'orca-remote', 'SKILL.md'), runDirectHandoff = runDirectHandoffDefault, log = console.log }) {
   if (!requests.length) return null;
   if (!fs.existsSync(skill)) throw new Error(`Remote skill not found: ${skill}`);
-  if (environment !== undefined && (!environment.trim() || /[\r\n\0]/.test(environment))) throw new Error('Invalid remote environment');
+  environment = await verifyRemoteEnvironment({ requests, environment, cli });
   if (sourceHandle && requests.length !== 1) throw new Error('--from-agent requires exactly one role');
   project = normalizeProject(fs.realpathSync(project));
   home = fs.realpathSync(home);
@@ -95,6 +110,13 @@ async function startRemoteRequestsAtLocal({ requests, home = path.join(os.homedi
   const sourceAdapter = role => registry.roles[role]?.runtime === 'omp' ? registry.roles[role].adapterConfig : undefined;
   for (const request of requests) {
     let previous = registry.roles[request.role];
+    if (previous?.runtime === 'claude' && !previous.pending && request.runtime === 'claude') {
+      if (!previous.claudeConfig) throw new Error(`${request.role}: Claude owner has no verified scoped binding`);
+      if (environment && environment !== previous.owner.environment) throw new Error(`${request.role}: Claude environment differs from current owner`);
+      const presentation = await ensureClaudeLocalTerminal({ home, config: previous.claudeConfig, endpoint: previous.owner, project, cli });
+      plans.push({ ...request, source: previous.owner, local: previous.local, presentation, reuse: true });
+      continue;
+    }
     if (previous?.pending) {
       // 已投递但未收到回执的确定性交接：只继续等待回执，绝不重发。
       const intent = { ...previous.pending, role: request.role };
@@ -146,8 +168,8 @@ async function startRemoteRequestsAtLocal({ requests, home = path.join(os.homedi
   const intents = [];
   for (const plan of plans) {
     if (plan.reuse) {
-      const args = ['terminal', 'switch', '--terminal', plan.source.terminal];
-      if (plan.source.environment !== 'local') args.push('--environment', plan.source.environment);
+      const args = ['terminal', 'switch', '--terminal', plan.presentation?.handle || plan.source.terminal];
+      if (!plan.presentation && plan.source.environment !== 'local') args.push('--environment', plan.source.environment);
       await cli(args);
     } else {
       const bound = plan.runtime === 'omp' ? { target: plan.target, adapterConfig: plan.adapterConfig } : {};

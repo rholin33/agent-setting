@@ -1,9 +1,9 @@
 [
   {
     "name": "master",
-    "agent": "claude",
-    "model": "opus",
-    "thinking": "high",
+    "agent": "omp",
+    "model": "pay/gpt-6.1-sol",
+    "thinking": "xhigh",
     "role": "agentroles.ccb_self"
   },
   {
@@ -15,9 +15,9 @@
   },
   {
     "name": "archi",
-    "agent": "claude",
-    "model": "opus",
-    "thinking": "high",
+    "agent": "omp",
+    "model": "pay/gpt-6.1-sol",
+    "thinking": "max",
     "role": "agentroles.archi"
   },
   {
@@ -42,10 +42,17 @@
     "role": "agentroles.frontend_engineer"
   },
   {
+    "name": "designer2",
+    "agent": "omp",
+    "model": "local/gemini-3.8-flash-high",
+    "thinking": null,
+    "role": "agentroles.frontend_engineer"
+  },
+  {
     "name": "reviewer",
-    "agent": "claude",
-    "model": "sonnet",
-    "thinking": "high",
+    "agent": "omp",
+    "model": "pay/gpt-6.1-sol",
+    "thinking": "xhigh",
     "role": "agentroles.code_reviewer"
   },
   {

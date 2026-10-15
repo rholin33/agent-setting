@@ -6,6 +6,7 @@ import tempfile
 import threading
 import unittest
 import urllib.error
+from unittest.mock import patch
 
 from bridge import BridgeServer, Workspace, request
 
@@ -83,6 +84,78 @@ class Boundaries(unittest.TestCase):
             self.ws.tool('send_role', {'handle': 'agent', 'text': '\x03'})
         with self.assertRaises(ValueError):
             self.ws.tool('run_shell', {'command': 'whoami'})
+
+    def test_untracked_read_does_not_grant_source_writes(self):
+        reader = Workspace(dict(self.cfg, read_untracked=True, document_roots=['todo_list']))
+        self.assertIn('untracked.md', reader.tool('list_files', {})['files'])
+        with self.assertRaises(ValueError):
+            reader.tool('write_file', {'path': 'source.ts', 'content': 'no', 'expected_sha256': 'absent'})
+        (self.root / 'todo_list').mkdir()
+        reader.tool('write_document', {'path': 'todo_list/master.md', 'content': 'coordination', 'expected_sha256': 'absent'})
+        self.assertEqual(reader.tool('read_file', {'path': 'todo_list/master.md'})['content'], '1: coordination')
+        with self.assertRaises(ValueError):
+            reader.tool('read_file', {'path': '.env'})
+
+    def test_role_inventory_normalizes_paths_and_excludes_other_workspaces(self):
+        with patch.object(self.ws, 'orca', return_value={'truncated': False, 'terminals': [
+            {'handle': 'same', 'worktreePath': str(self.root) + '/.'},
+            {'handle': 'foreign', 'worktreePath': str(self.root.parent)},
+            {'handle': 'missing'}]}):
+            self.assertEqual([r['handle'] for r in self.ws.roles()], ['same'])
+
+    def test_read_only_denies_mutations_before_dispatch(self):
+        subprocess.run(['git', '-C', str(self.root), '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'fixture'], check=True)
+        reader = Workspace(dict(self.cfg, read_only=True, code_write_enabled=True))
+        with patch.object(reader, 'orca') as orca:
+            for name in ('write_document', 'write_file', 'edit_file', 'send_role', 'run_shell'):
+                with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'read.only'):
+                    reader.tool(name, {'path': 'docs/task.md', 'content': 'changed',
+                        'expected_sha256': hashlib.sha256(b'original').hexdigest(),
+                        'old_text': 'original', 'new_text': 'changed', 'handle': 'agent', 'text': 'do work'})
+            orca.assert_not_called()
+        self.assertEqual((self.root / 'docs/task.md').read_text(), 'original')
+        info = reader.tool('workspace_info', {})
+        self.assertEqual(info['write_scope'], 'Read-only; no writes or task dispatch')
+        self.assertEqual(reader.tool('read_file', {'path': 'docs/task.md'})['content'], '1: original')
+        self.assertIn('docs/task.md', reader.tool('list_files', {})['files'])
+        reader.roles = lambda: [{'handle': 'agent', 'agentIdentity': 'omp', 'worktreePath': str(self.root)}]
+        self.assertEqual(reader.tool('list_roles', {})[0]['handle'], 'agent')
+        with patch.object(reader, 'orca', return_value={'text': 'read evidence'}) as orca:
+            self.assertEqual(reader.tool('read_role', {'handle': 'agent'}), {'text': 'read evidence'})
+            orca.assert_called_once_with(['terminal', 'read', '--terminal', 'agent'])
+
+    def test_read_only_http_hides_and_rejects_mutations(self):
+        for read_only in (True, False, None):
+            with self.subTest(read_only=read_only):
+                cfg = dict(self.cfg, code_write_enabled=True)
+                if read_only is not None:
+                    cfg['read_only'] = read_only
+                server = BridgeServer(cfg, 'local', self.root / 'private.json')
+                thread = threading.Thread(target=server.serve_forever, daemon=True)
+                thread.start()
+                url = 'http://127.0.0.1:' + str(server.server_port) + '/mcp'
+                def rpc(method, params=None):
+                    return request(url, cfg['token'], {'jsonrpc': '2.0', 'id': 1,
+                        'method': method, 'params': params or {}})['result']
+                try:
+                    names = {tool['name'] for tool in rpc('tools/list')['tools']}
+                    readers = {'workspace_info', 'list_files', 'read_file', 'list_roles', 'read_role'}
+                    mutations = {'write_document', 'write_file', 'edit_file', 'send_role'}
+                    self.assertEqual(names, readers if read_only else readers | mutations)
+                    if read_only:
+                        with patch.object(server.workspace, 'orca') as orca:
+                            for name in mutations:
+                                result = rpc('tools/call', {'name': name, 'arguments': {}})
+                                self.assertTrue(result['isError'])
+                                self.assertIn('read-only', result['content'][0]['text'])
+                            orca.assert_not_called()
+                        result = rpc('tools/call', {'name': 'read_file', 'arguments': {'path': 'docs/task.md'}})
+                        self.assertNotIn('isError', result)
+                        self.assertEqual((self.root / 'docs/task.md').read_text(), 'original')
+                finally:
+                    server.shutdown()
+                    server.server_close()
+                    thread.join()
 
     def test_live_http_auth_and_mcp_read_boundary(self):
         server = BridgeServer(self.cfg, 'local', self.root / 'private.json')

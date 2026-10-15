@@ -106,3 +106,16 @@ Switches to a remote OMP owner and returns to the original local session (`off`)
 After delivery, a missing receipt (default timeout 10 minutes) keeps `delivery_uncertain`; running the same switch again only resumes waiting from the recorded position and never resends. Remote Codex targets/sources still use the coordinator, because their conversation lives on the remote host.
 
 `handoff.py` and the registry's ledger lock now use `msvcrt` on Windows instead of failing on the missing `fcntl`; the Python command is `python` on Windows (`ORCA_PYTHON` overrides). The remote OMP transport itself (`remote-master/*.py`) remains POSIX-only.
+
+
+## Claude terminal entry in the local project (2026-10-15)
+
+Remote Claude execution and local Orca workspace membership are separate. Previously reuse and remote-commit focused the remote host's registered workspace, so the current Windows project's sidebar had no remote role entry.
+
+After native session verification, lib/claude-local-terminal.mjs creates or reuses one local terminal in the invoking project. bin/claude-remote-terminal.mjs attaches to the exact existing remote PTY using Orca's paired, encrypted terminal stream. Native screen, input and viewport changes are forwarded; this never starts another Claude session or replays uncertain input. Native activity symbols are preserved with a local role label, so Orca shows the remote Claude entry in the current project's agent tree. Ctrl+] detaches only the local client. A lost connection retains the remote session and reports disconnection.
+
+local-terminal.json and local-terminal-status.json record presentation identity separately from the handoff owner. Reuse requires the same project, local incarnation, live process/heartbeat, paired runtime and exact remote endpoint. Creation intent is persisted before the command; an uncertain result is not retried. A missing pane can be recreated only after a successful scoped inventory and a fresh native remote-session proof. An existing disconnected client requires diagnosis; startup never sends a launcher into an unidentified live pane.
+
+Both explicit remote reuse and normal start for a confirmed Claude owner now focus the local entry. remote-commit also mounts the local entry after accepted ownership is verified. Original local source conversations remain paused and their history is retained. Remote native sessions remain registered on the remote host; only their interactive entry is mounted locally. No app bundle or Orca database edits, repository copies or model credentials are involved.
+
+Live acceptance: master and archi appeared under industrial-drawing-translator / main / Local Windows. Both retained their exact remote terminal incarnations and native sessions, with actual claude-opus-5-5 confirmed through process/PTY/transcript checks. Explicit remote reuse and ordinary scoped start succeeded. Transport/mount checks passed; see [Claude remote behavior](remote-claude.md) and the [publication checks](../changes/2026-10-15-remote-claude-and-parallel-designers.md) for current results. Full local orchestration inbox/dispatch migration is still outside this terminal mount repair.

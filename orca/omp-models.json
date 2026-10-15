@@ -33,9 +33,9 @@
   ],
   "roles": {
     "master": {
-      "agent": "claude",
-      "model": "opus",
-      "thinking": "high"
+      "agent": "omp",
+      "model": "pay/gpt-6.1-sol",
+      "thinking": "xhigh"
     },
     "loader": {
       "agent": "codex",
@@ -43,9 +43,9 @@
       "thinking": "medium"
     },
     "archi": {
-      "agent": "claude",
-      "model": "opus",
-      "thinking": "high"
+      "agent": "omp",
+      "model": "pay/gpt-6.1-sol",
+      "thinking": "max"
     },
     "designer": {
       "agent": "omp",
@@ -76,6 +76,11 @@
       "agent": "claude",
       "model": "sonnet",
       "thinking": "high"
+    },
+    "designer2": {
+      "agent": "omp",
+      "model": "local/gemini-3.8-flash-high",
+      "thinking": null
     }
   }
 }

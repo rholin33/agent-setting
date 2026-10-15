@@ -10,6 +10,7 @@ import { rpc } from './orca.mjs';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { verifyOmpBinding } from './omp-adapter.mjs';
+import { verifyClaudeBinding } from './claude-binding.mjs';
 
 const identityFields = ['runtime', 'role', 'environment', 'terminal', 'incarnation', 'session'];
 const summaryFields = ['goal', 'constraints', 'completed', 'changed_files', 'decisions', 'verification', 'pending', 'inflight'];
@@ -23,7 +24,7 @@ function roleName(role) {
 function identity(value, role) {
   roleName(role);
   if (!value || identityFields.some(key => typeof value[key] !== 'string' || !value[key].trim() || /[\r\n\0]/.test(value[key])) ||
-      !['codex', 'omp', 'pi'].includes(value.runtime) || value.role !== role) throw new Error('Invalid remote endpoint identity');
+      !['codex', 'omp', 'pi', 'claude'].includes(value.runtime) || value.role !== role) throw new Error('Invalid remote endpoint identity');
   return Object.fromEntries(identityFields.map(key => [key, value[key]]));
 }
 function equalIdentity(left, right, role) {
@@ -72,7 +73,7 @@ function readRegistry(files) {
   if (state.version !== 1 || !state.roles || typeof state.roles !== 'object' || Array.isArray(state.roles)) throw new Error('Invalid remote switch registry');
   for (const [role, entry] of Object.entries(state.roles)) {
     roleName(role);
-    if (!entry || ![null, 'codex', 'omp'].includes(entry.runtime) || typeof entry.taskId !== 'string' ||
+    if (!entry || ![null, 'codex', 'omp', 'claude'].includes(entry.runtime) || typeof entry.taskId !== 'string' ||
         entry.ledgerDirectory !== path.join(files.ledgers, role)) throw new Error('Remote switch scope mismatch');
     identity(entry.owner, role); identity(entry.local, role);
     if (entry.pending && (entry.pending.taskId !== entry.taskId || entry.pending.ledgerDirectory !== entry.ledgerDirectory ||
@@ -147,9 +148,9 @@ export async function reattachOmpOwner({ home, project, role, endpoint, config, 
   });
 }
 
-export async function beginRemoteSwitch({ home, project, role, runtime, source, local, environment, target, adapterConfig }) {
+export async function beginRemoteSwitch({ home, project, role, runtime, source, local, environment, target, adapterConfig, claudeConfig }) {
   roleName(role);
-  if (![null, 'codex', 'omp'].includes(runtime)) throw new Error('Invalid remote runtime');
+  if (![null, 'codex', 'omp', 'claude'].includes(runtime)) throw new Error('Invalid remote runtime');
   source = identity(source, role); local = identity(local, role);
   if (local.environment !== 'local') throw new Error('Original local endpoint must be local');
   if (environment !== undefined && environment !== null && (typeof environment !== 'string' || !environment.trim() || /[\r\n\0]/.test(environment))) throw new Error('Invalid model environment');
@@ -179,6 +180,7 @@ export async function beginRemoteSwitch({ home, project, role, runtime, source, 
       ledgerDirectory: files.ledgerDirectory, baseRevision: previous?.revision || 0, baseRecordId: previous?.id || null, status: 'prepared' };
     if (target) intent.target = target;
     if (adapterConfig) intent.adapterConfig = adapterConfig;
+    if (claudeConfig) intent.claudeConfig = claudeConfig;
     state.roles[role] = { ...entry, pending: intent };
     savePrivate(files.registry, state);
     return intent;
@@ -253,8 +255,10 @@ async function settle(options, decision) {
       if (entry.pending.status !== 'setup_uncertain') throw new Error('Remote setup was not claimed');
       const record = verifiedRecord(entry, role, project, decision);
       if (typeof cli !== 'function') throw new Error('Terminal verification CLI is required');
-      await verifyTerminal(cli, record.source, project);
-      await verifyTerminal(cli, record.target, project);
+      if (entry.runtime === 'claude' && entry.claudeConfig) await verifyClaudeBinding({ config: entry.claudeConfig, endpoint: record.source, project, cli });
+      else await verifyTerminal(cli, record.source, project);
+      if (entry.pending.runtime === 'claude' && entry.pending.claudeConfig) await verifyClaudeBinding({ config: entry.pending.claudeConfig, endpoint: record.target, project, cli });
+      else await verifyTerminal(cli, record.target, project);
       const checkNative = options.verifyOmp || verifyOmpBinding;
       if (entry.runtime === 'omp' && entry.adapterConfig) {
         await checkNative({ home: options.home, project, role, config: entry.adapterConfig, endpoint: record.source });
@@ -266,6 +270,7 @@ async function settle(options, decision) {
       if (!isDeepStrictEqual(record, ledgerRecord(entry))) throw new Error('Handoff ledger changed during verification');
       if (decision === 'accepted') { entry.owner = identity(record.target, role); entry.runtime = entry.pending.runtime; }
       if (decision === 'accepted' && entry.pending.adapterConfig) entry.adapterConfig = entry.pending.adapterConfig;
+      if (decision === 'accepted' && entry.pending.claudeConfig) entry.claudeConfig = entry.pending.claudeConfig;
       const outcome = { id: entry.pending.id, status: decision, at: new Date().toISOString() };
       entry.lastSetupOutcome = outcome;
       entry.setupOutcomes = [...(entry.setupOutcomes || []), outcome];
@@ -350,7 +355,7 @@ export async function abortRemotePreflight(options) {
   const supplied = matches[0];
   return locked(options, async (files, state) => {
     const entry = pending(state, role, intentId), intent = entry.pending;
-    if (intent.status !== 'setup_uncertain' || intent.runtime !== 'omp' || entry.runtime !== null ||
+    if (intent.status !== 'setup_uncertain' || !['omp', 'claude'].includes(intent.runtime) || entry.runtime !== null ||
         intent.baseRevision !== 0 || intent.baseRecordId !== null || supplied.task_id !== entry.taskId ||
         (supplied.supplied_source?.role !== undefined && supplied.supplied_source.role !== role) ||
         !equalIdentity({ ...supplied.supplied_source, role }, intent.source, role) ||

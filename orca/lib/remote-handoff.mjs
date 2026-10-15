@@ -31,7 +31,7 @@ const bytes = value => Buffer.byteLength(JSON.stringify(value));
 // 确定性交接只覆盖能读到真实助手回复的端点：本机会话记录与远端 OMP 控制服务。
 // 远端 Codex 的对话在远端主机上，仍交给 AI 协调者。
 export function supportsDirectHandoff(intent, registry) {
-  return (intent.runtime === null || intent.runtime === 'omp') && registry.roles[intent.role]?.runtime !== 'codex';
+  return (intent.runtime === null || intent.runtime === 'omp') && !['codex', 'claude'].includes(registry.roles[intent.role]?.runtime);
 }
 
 function controlRequest(adapterConfig, route, body) {

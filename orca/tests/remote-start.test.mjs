@@ -48,6 +48,8 @@ test('remote cycle works independently of locked Codex model and supports off', 
   state = pickerKey(state, 'remote-next').state;
   assert.equal(state.rows[0].remote, 'omp');
   state = pickerKey(state, 'remote-next').state;
+  assert.equal(state.rows[0].remote, 'claude');
+  state = pickerKey(state, 'remote-next').state;
   assert.equal(state.rows[0].remote, null);
 });
 
@@ -69,7 +71,7 @@ test('remote CLI rejects unsupported runtime, unknown role, duplicates and malfo
     { runtime: 'codex', role: 'coder1' }, { runtime: 'omp', role: 'designer' },
   ]);
   assert.deepEqual(parseRemoteRequests(['off:coder1'], ['coder1']), [{ runtime: null, role: 'coder1' }]);
-  for (const value of ['claude:coder1', 'omp:nope', 'codex', 'codex:coder1;pwd']) {
+  for (const value of ['gemini:coder1', 'omp:nope', 'codex', 'codex:coder1;pwd']) {
     assert.throws(() => parseRemoteRequests([value], ['coder1']));
   }
   assert.throws(() => parseRemoteRequests(['codex:coder1', 'omp:coder1'], ['coder1']), /Duplicate/);

@@ -1,6 +1,6 @@
 # Portable Orca Team
 
-The shared package preserves 199 original role resource files and nine adapted prompts. Orca, Pi/OMP, Codex or Claude Code, their models and credentials must already be configured. Node.js 22 or later runs the portable manager. No provider settings or credentials are installed.
+The shared package preserves 199 original role resource files and eleven adapted prompts. Orca, Pi/OMP, Codex or Claude Code, their models and credentials must already be configured. Node.js 22 or later runs the portable manager. No provider settings or credentials are installed.
 
 ## Scoped remote master test console (2026-10-14)
 
@@ -374,3 +374,9 @@ relay integration are not exercised by this configuration push; the latter
 requires an explicit `COLLAB_TEST_BIND` tailnet interface.
 
 Multiple Orca terminal hosts may stay alive after an Orca upgrade (the old host keeps pre-upgrade terminals). Pane-specific inspection selects the unique owning host; global inventories used by absence proofs merge every live host under a combined identity, and fail closed when a registered live host cannot be read. Project locks also treat a live PID whose process started after the lock was created as a reused PID and recover the stale lock.
+
+## Parallel frontend seats
+
+The designer group now contains `designer` and `designer2`, with separate conversations in equal split panes. `orca-team start --group designer` opens or reuses both. The second seat inherits the existing frontend role and model selection. Master assigns independent files/modules to both seats, keeps shared-file edits under one owner, and checks both reports before acceptance. Existing project layouts remain explicit; the active industrial-drawing-translator layout has been updated. See [parallel designers](docs/features/parallel-designers.md).
+
+See [2026-10-15 remote Claude and parallel designer changes](docs/changes/2026-10-15-remote-claude-and-parallel-designers.md) for the fixes, portable configuration, verification and machine-local setup requirements.

@@ -300,6 +300,18 @@ function abortFixture(f, intent) {
     inspect: async () => ({ kind: 'agent', sessionPaths: [transcriptPath], terminal: f.terminals.get(f.local.terminal) }) } };
 }
 
+test('Claude pre-delivery settlement retains the exact original owner and execution report', async t => {
+  const f = nativeFixture(t);
+  const intent = await beginRemoteSwitch({ ...f.request, runtime: 'claude' });
+  await claimRemoteSetup(f.settle(intent));
+  const a = abortFixture(f, intent);
+  const outcome = await abortRemotePreflight(a.options);
+  assert.equal(outcome.intent.runtime, 'claude');
+  assert.equal(f.state().roles.master.pending, undefined);
+  assert.deepEqual(f.state().roles.master.owner, f.local);
+  assert.equal(f.state().roles.master.runtime, null);
+});
+
 test('preflight history retains its source and report while explicit OMP retries readiness only', async t => {
   const f = nativeFixture(t), intent = await beginRemoteSwitch(f.request);
   await claimRemoteSetup(f.settle(intent));

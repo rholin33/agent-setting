@@ -28,6 +28,8 @@ TOOLS = [
     ("read_role", "Read a proven agent terminal in this LOCAL worktree. No other workspace access.", {"handle": {"type": "string"}}),
     ("send_role", "Send an explicitly user-authorized task to an existing agent in this LOCAL worktree. Never use for shells or assumed handles.", {"handle": {"type": "string"}, "text": {"type": "string"}}),
 ]
+READ_ONLY_TOOLS = frozenset(("workspace_info", "list_files", "read_file", "list_roles", "read_role"))
+
 CODE_TOOLS = [
     ("write_file", "Create or replace a non-sensitive, non-ignored LOCAL project text file. expected_sha256 is required; use absent only for a new file. Does not delete files or create directories.", {"path": {"type": "string"}, "content": {"type": "string"}, "expected_sha256": {"type": "string"}}),
     ("edit_file", "Replace exactly one literal old_text occurrence in a LOCAL source file, preserving all other bytes. Requires the SHA256 from read_file; stale hashes are rejected.", {"path": {"type": "string"}, "old_text": {"type": "string"}, "new_text": {"type": "string"}, "expected_sha256": {"type": "string"}}),
@@ -84,7 +86,7 @@ class Workspace:
 
     def tracked(self):
         args = ["ls-files", "-z", "--cached"]
-        if self.config.get("code_write_enabled"):
+        if self.config.get("code_write_enabled") or self.config.get("read_untracked"):
             args += ["--others", "--exclude-standard"]
         names = self.git(*args).decode().split("\0")
         allowed = []
@@ -101,7 +103,7 @@ class Workspace:
     def orca(self, args):
         env = {k: v for k, v in os.environ.items() if k not in ("ORCA_PAIRING_CODE", "ORCA_ENVIRONMENT")}
         proc = subprocess.run([self.config["orca"], *args, "--json"], cwd=self.root, env=env,
-                              capture_output=True, text=True, timeout=40)
+                              capture_output=True, text=True, encoding="utf-8", timeout=40)
         result = json.loads(proc.stdout)
         if not result.get("ok"):
             raise ValueError("Local Orca operation failed; inspect locally")
@@ -111,15 +113,20 @@ class Workspace:
         data = self.orca(["terminal", "list", "--worktree", "path:" + str(self.root)])
         if data.get("truncated") is not False:
             raise ValueError("Incomplete terminal inventory")
-        return [t for t in data["terminals"] if t.get("worktreePath") == str(self.root)]
+        return [t for t in data["terminals"] if t.get("worktreePath") and
+                Path(t["worktreePath"]).resolve() == self.root]
 
     def tool(self, name, a):
+        if self.config.get("read_only") and name not in READ_ONLY_TOOLS:
+            raise ValueError("This bridge is read-only; writes and task dispatch are forbidden")
         if name == "workspace_info":
             code = bool(self.config.get("code_write_enabled"))
             return {"root": str(self.root), "branch": self.git("branch", "--show-current").decode().strip(),
                     "head": self.git("rev-parse", "HEAD").decode().strip(), "role": self.config.get("role", "master-remote"),
                     "execution": "Remote model; these tools operate only on the local worktree",
-                    "write_scope": "Non-sensitive, non-ignored project source/text files; hash-checked writes" if code else "Markdown coordination documents under docs/ and .codex/", "arbitrary_shell": False}
+                    "write_scope": "Read-only; no writes or task dispatch" if self.config.get("read_only") else
+                    ("Non-sensitive, non-ignored project source/text files; hash-checked writes" if code else
+                     "Markdown coordination documents under " + ", ".join(self.config.get("document_roots", ["docs", ".codex"]))), "arbitrary_shell": False}
         if name == "list_files":
             prefix = a.get("prefix", "")
             if not isinstance(prefix, str):
@@ -146,7 +153,8 @@ class Workspace:
                 raise ValueError("Source editing is not authorized on this bridge")
             path = self.permitted(a["path"])
             rel = Path(a["path"])
-            if not code_tool and (rel.parts[0] not in ("docs", ".codex") or path.suffix != ".md"):
+            document_roots = set(self.config.get("document_roots", ["docs", ".codex"])) & {"docs", ".codex", "todo_list", "undo_list"}
+            if not code_tool and (rel.parts[0] not in document_roots or path.suffix != ".md"):
                 raise ValueError("Only Markdown coordination documents may be written")
             if code_tool:
                 if rel.parts[0] in (".github", ".gitlab", ".husky") or path.name in (".npmrc", ".yarnrc", ".netrc", "AGENTS.md", "CLAUDE.md"):
@@ -180,7 +188,7 @@ class Workspace:
                     if b"\0" in raw:
                         raise ValueError("Binary files are not writable")
                 self.permitted(a["path"])
-                flags = os.O_WRONLY | os.O_NOFOLLOW
+                flags = os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
                 if raw is None:
                     flags |= os.O_CREAT | os.O_EXCL
                 fd = os.open(path, flags, 0o644)
@@ -339,6 +347,8 @@ class Handler(BaseHTTPRequestHandler):
                 result = {}
             elif method == "tools/list":
                 definitions = TOOLS + (CODE_TOOLS if self.server.config.get("code_write_enabled") else [])
+                if self.server.config.get("read_only"):
+                    definitions = [item for item in definitions if item[0] in READ_ONLY_TOOLS]
                 result = {"tools": [{"name": n, "description": d, "inputSchema": {"type": "object", "properties": p, "additionalProperties": False}} for n, d, p in definitions]}
             elif method == "tools/call":
                 params = body["params"]

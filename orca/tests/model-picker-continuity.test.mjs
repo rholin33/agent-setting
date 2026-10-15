@@ -35,19 +35,21 @@ function fixture(t, agent, mixed = false) {
 
 test('picker initializes each row from remote ownership and retains its baseline while cycling', () => {
   const state = createPickerState({
-    roles: ['remoteCodex', 'remoteOmp', 'local', 'unset'].map(name => ({ name, model: 'provider/current' })),
+    roles: ['remoteCodex', 'remoteOmp', 'remoteClaude', 'local', 'unset'].map(name => ({ name, model: 'provider/current' })),
     presets,
-    initialRemote: { remoteCodex: 'codex', remoteOmp: 'omp', local: null },
+    initialRemote: { remoteCodex: 'codex', remoteOmp: 'omp', remoteClaude: 'claude', local: null },
   });
   assert.deepEqual(state.rows.map(row => [row.remote, row.initialRemote]), [
-    ['codex', 'codex'], ['omp', 'omp'], [null, null], [null, null],
+    ['codex', 'codex'], ['omp', 'omp'], ['claude', 'claude'], [null, null], [null, null],
   ]);
-  const changed = pickerKey(pickerKey(state, 'remote-next').state, 'remote-next').state;
+  let changed = state;
+  for (let step = 0; step < 3; step++) changed = pickerKey(changed, 'remote-next').state;
   assert.equal(changed.rows[0].remote, null);
   assert.equal(changed.rows[0].initialRemote, 'codex');
   assert.equal(state.rows[0].remote, 'codex');
   assert.match(renderPicker(state), /remoteCodex[^\n]+remote: codex/);
   assert.match(renderPicker(state), /remoteOmp[^\n]+remote: omp/);
+  assert.match(renderPicker(state), /remoteClaude[^\n]+remote: claude/);
   assert.match(renderPicker(state), /off: hand context back to the original local agent/);
   assert.match(renderPicker(state), /changes await confirmation, not an extra instance/);
 });
@@ -61,8 +63,8 @@ test('confirmed picker results return every role CLI selection and omit unchange
   for (const [keys, expected] of [
     ['\r', { master: current('omp'), worker: current('codex') }],
     ['\u001b[C\r', { master: { agent: 'omp', model: 'provider/next', thinking: 'high' }, worker: current('codex') }],
-    ['rrr\r', { master: current('omp'), worker: current('codex') }],
-    ['\u001b[Brr\r', { master: current('omp'), worker: { ...current('codex'), remote: null } }],
+    ['rrrr\r', { master: current('omp'), worker: current('codex') }],
+    ['\u001b[Brrr\r', { master: current('omp'), worker: { ...current('codex'), remote: null } }],
     ['r\u001b', null],
   ]) {
     const io = terminal();
@@ -76,9 +78,11 @@ for (const agent of ['pi', 'omp', 'codex']) {
   for (const scenario of [
     { name: 'unchanged', runtime: 'codex', keys: '\r', requests: [] },
     { name: 'model only', runtime: 'omp', keys: '\u001b[C\r', requests: [], nextModel: true },
-    { name: 'cycled back to initial ownership', runtime: 'codex', keys: 'rrr\r', requests: [] },
-    { name: 'return from Codex', runtime: 'codex', keys: 'rr\r', requests: [{ runtime: null, role: 'worker' }] },
-    { name: 'return from OMP', runtime: 'omp', keys: 'r\r', requests: [{ runtime: null, role: 'worker' }] },
+    { name: 'cycled back to initial ownership', runtime: 'codex', keys: 'rrrr\r', requests: [] },
+    { name: 'return from Codex', runtime: 'codex', keys: 'rrr\r', requests: [{ runtime: null, role: 'worker' }] },
+    { name: 'return from OMP', runtime: 'omp', keys: 'rr\r', requests: [{ runtime: null, role: 'worker' }] },
+    { name: 'return from Claude', runtime: 'claude', keys: 'r\r', requests: [{ runtime: null, role: 'worker' }] },
+    { name: 'select remote Claude', runtime: 'omp', keys: 'r\r', requests: [{ runtime: 'claude', role: 'worker' }] },
     { name: 'switch remote runtime', runtime: 'codex', keys: 'r\r', requests: [{ runtime: 'omp', role: 'worker' }] },
     { name: 'start remote', runtime: null, keys: 'r\r', requests: [{ runtime: 'codex', role: 'worker' }] },
     { name: 'cancel', runtime: 'omp', keys: '\u001b[Cr\u001b', requests: [], cancelled: true },
@@ -115,7 +119,7 @@ test('syncModels mixed menu collects a Codex remote return without persisting re
   const io = terminal();
   const remoteRequests = [];
   const result = syncModels({ ...setup, ...io, remoteStates: { worker: 'omp', master: 'codex' }, remoteRequests, log() {} });
-  io.stdin.emit('data', '\u001b[Br\r');
+  io.stdin.emit('data', '\u001b[Brr\r');
   await result;
   assert.deepEqual(remoteRequests, [{ runtime: null, role: 'worker' }]);
   // 选择结果带上 agent，但不写入 remote 归属。

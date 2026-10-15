@@ -68,7 +68,7 @@ test('init retains per-project overrides and refuses concurrent locks', async t 
   assert.equal(fs.existsSync(files.lock), false);
   assert.ok(fs.readdirSync(files.directory).some(name => name.startsWith('start.node.lock.stale-')));
 });
-test('fresh launch creates seven tabs/ten roles and rerun has no mutations', async t => {
+test('fresh launch creates seven tabs/eleven roles and rerun has no mutations', async t => {
   const { home, project } = fixture(t);
   const terminals = [], tabs = []; let creations = 0;
   const cli = async args => {
@@ -115,9 +115,9 @@ test('fresh launch creates seven tabs/ten roles and rerun has no mutations', asy
   await runTeam({ ...options, group: 'master' }); assert.equal(creations, 2);
   delete withUnrelatedPending.agents.archi;
   saveJson(stateFile, withUnrelatedPending);
-  await runTeam(options); assert.equal(creations, 10); assert.equal(tabs.length, 7);
+  await runTeam(options); assert.equal(creations, 11); assert.equal(tabs.length, 7);
   assert.deepEqual(pinned.at(-1), ['master', 'coder', 'reviewer', 'archi', 'simple', 'designer', 'deploy']);
-  await runTeam(options); assert.equal(creations, 10);
+  await runTeam(options); assert.equal(creations, 11);
   const stateBeforeStatus = fs.readFileSync(stateFile, 'utf8');
   const pinCount = pinned.length;
   await runTeam({ ...options, action: 'status', group: 'master' });
@@ -131,10 +131,10 @@ test('fresh launch creates seven tabs/ten roles and rerun has no mutations', asy
   const warnings = [];
   await runTeam({ ...options, log: line => warnings.push(line), pin: async () => { throw new Error('pin not applied'); } });
   assert.ok(warnings.some(line => /Warning:.*pin not applied/.test(line)));
-  assert.equal(creations, 10);
+  assert.equal(creations, 11);
   terminals.pop();
   await assert.rejects(runTeam(options), /No confirmed close record/);
-  assert.equal(creations, 10);
+  assert.equal(creations, 11);
 });
 test('exact resume checks ID, project, file and original Codex home', t => {
   const { temp, project } = fixture(t);
@@ -202,7 +202,7 @@ test('installation retains runtime state and quick commands preserve unrelated e
   };
   await installQuickCommands(home, rpc); await installQuickCommands(home, rpc);
   assert.equal(commands.length, 8); assert.equal(commands[0].command, 'hello');
-  assert.deepEqual(commands.slice(1).map(row => row.label).sort(), ['CCB / master + loader', 'CCB / archi', 'CCB / coder1 + coder2', 'CCB / designer', 'CCB / reviewer + test', 'CCB / simple', 'CCB / deploy'].sort());
+  assert.deepEqual(commands.slice(1).map(row => row.label).sort(), ['CCB / master + loader', 'CCB / archi', 'CCB / coder1 + coder2', 'CCB / designer + designer2', 'CCB / reviewer + test', 'CCB / simple', 'CCB / deploy'].sort());
   for (const row of commands.slice(1)) {
     const text = process.platform === 'win32' ? Buffer.from(row.command.split(' ').at(-1), 'base64').toString('utf16le') : row.command;
     assert.match(text, /'--group'/);
@@ -429,9 +429,9 @@ test('split receipt timeout reconciles seven groups without duplicate launches',
   await runTeam({ ...options, group: 'master' }); assert.equal(creations, 2);
   delete withUnrelatedPending.agents.archi;
   saveJson(stateFile, withUnrelatedPending);
-  await runTeam(options); assert.equal(creations, 10); assert.equal(tabs.length, 7);
+  await runTeam(options); assert.equal(creations, 11); assert.equal(tabs.length, 7);
   assert.deepEqual(pinned.at(-1), ['master', 'coder', 'reviewer', 'archi', 'simple', 'designer', 'deploy']);
-  await runTeam(options); assert.equal(creations, 10);
+  await runTeam(options); assert.equal(creations, 11);
   const stateBeforeStatus = fs.readFileSync(stateFile, 'utf8');
   const pinCount = pinned.length;
   await runTeam({ ...options, action: 'status', group: 'master' });
@@ -445,10 +445,10 @@ test('split receipt timeout reconciles seven groups without duplicate launches',
   const warnings = [];
   await runTeam({ ...options, log: line => warnings.push(line), pin: async () => { throw new Error('pin not applied'); } });
   assert.ok(warnings.some(line => /Warning:.*pin not applied/.test(line)));
-  assert.equal(creations, 10);
+  assert.equal(creations, 11);
   terminals.pop();
   await assert.rejects(runTeam(options), /No confirmed close record/);
-  assert.equal(creations, 10);
+  assert.equal(creations, 11);
 });
 
 test('Codex no-daemon is opt-in for supported CLI versions', t => {

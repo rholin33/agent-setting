@@ -35,7 +35,7 @@ export function pickerKey(state, key) {
     return { state: { ...state, cursor } };
   }
   if (key === 'remote-next') {
-    const runtimes = [null, 'codex', 'omp'];
+    const runtimes = [null, 'codex', 'omp', 'claude'];
     const next = { ...rows[state.cursor], remote: runtimes[(runtimes.indexOf(rows[state.cursor].remote) + 1) % runtimes.length] };
     return { state: { ...state, rows: rows.map((item, i) => i === state.cursor ? next : item) } };
   }
@@ -67,7 +67,7 @@ export function renderPicker(state) {
   const lines = [
     '',
     '  orca-team roles: agent models from provider presets; Codex uses local config',
-    '  Up/Down: role   Left/Right or Tab: CLI/model   , / .: thinking   r: remote off/codex/omp   Enter: confirm   Esc: cancel',
+    '  Up/Down: role   Left/Right or Tab: CLI/model   , / .: thinking   r: remote off/codex/omp/claude   Enter: confirm   Esc: cancel',
     '  remote off: hand context back to the original local agent; changes await confirmation, not an extra instance',
     '',
   ];
