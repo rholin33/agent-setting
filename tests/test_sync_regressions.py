@@ -107,8 +107,8 @@ class SyncRegressionTests(unittest.TestCase):
                 destination = root / 'export'
                 exporter.export_configuration(destination)
                 self.assertFalse((destination / 'orca/project-configs').exists())
-                layout = project / '.orca/team.json'
-                layout.parent.mkdir()
+                layout = sync.get_orca_project_directory() / 'team.json'
+                layout.parent.mkdir(parents=True)
                 layout.write_text('{"workspace": "private", "tabs": []}', encoding='utf-8')
                 exporter.export_configuration(destination)
                 exported = destination / 'orca/project-configs/fixture/config.json'

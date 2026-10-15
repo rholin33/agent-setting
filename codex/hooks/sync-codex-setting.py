@@ -107,6 +107,14 @@ def get_project_root() -> Path:
     return Path.cwd().resolve()
 
 
+def get_orca_project_directory() -> Path:
+    """团队目录中当前项目的私有目录；哈希与 orca/lib/platform.mjs 的 projectKey 一致。"""
+    normalized = get_project_root().resolve().as_posix()
+    if os.name == "nt":
+        normalized = normalized.lower()
+    return ORCA_HOME / "projects" / hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+
+
 def get_project_key() -> str:
     project_root = get_project_root()
     explicit = os.environ.get("AGENT_SETTING_PROJECT_KEY")
@@ -322,7 +330,8 @@ def get_local_managed_path(relative_path: Path) -> Path:
         if TARGET != "orca":
             raise ValueError("Orca path outside selected target")
         if relative_path.parts[1] == "project-configs":
-            return get_project_root() / ".orca/team.json"
+            # 项目布局保存在全局团队目录，不写入项目工作区。
+            return get_orca_project_directory() / "team.json"
         return ORCA_HOME.joinpath(*relative_path.parts[1:])
     if TARGET == "orca" and (relative_path.parts[0] == "ccb" or relative_path.parts[:2] == ("pi", "projects")):
         raise ValueError("CCB path outside selected target")

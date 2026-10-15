@@ -21,7 +21,29 @@ export function saveJson(file, value) {
 export function projectFiles(home, project) {
   const directory = path.join(home, 'projects', projectKey(project));
   // Legacy PowerShell keeps a zero-byte start.lock after releasing its OS lock.
-  return { directory, config: path.join(directory, 'config.json'), state: path.join(directory, 'state.json'), lock: path.join(directory, 'start.node.lock') };
+  // layout 是该项目的全局布局覆盖（由配置同步维护），config 是由它或默认 layout.json 生成的运行配置。
+  return { directory, config: path.join(directory, 'config.json'), layout: path.join(directory, 'team.json'), state: path.join(directory, 'state.json'), lock: path.join(directory, 'start.node.lock') };
+}
+// 项目布局只保存在全局团队目录。旧版放在项目工作区的 .orca/team.json 只在全局布局缺失时迁移一次；
+// 两者内容不同则拒绝启动，避免悄悄选用其中之一。
+export function projectLayout(home, project) {
+  const files = projectFiles(home, project);
+  const legacy = path.join(project, '.orca', 'team.json');
+  if (fs.existsSync(legacy)) {
+    if (!fs.existsSync(files.layout)) {
+      fs.mkdirSync(files.directory, { recursive: true });
+      fs.copyFileSync(legacy, files.layout, fs.constants.COPYFILE_EXCL);
+    } else if (JSON.stringify(readJson(legacy)) !== JSON.stringify(readJson(files.layout))) {
+      throw new Error(`Project layout ${legacy} differs from the global layout ${files.layout}; remove the project copy after merging it`);
+    }
+  }
+  return fs.existsSync(files.layout) ? files.layout : null;
+}
+// 当前生效的布局来源：项目全局布局 → 已生成的运行配置 → 默认 layout.json。
+export function layoutSource(home, project) {
+  const file = [projectLayout(home, project), projectFiles(home, project).config, path.join(home, 'layout.json')].find(item => item && fs.existsSync(item));
+  if (!file) throw new Error('No project or default layout configuration found');
+  return file;
 }
 // 新会话（尤其冷启动的 Claude/Codex）写出首条会话记录可能需要数十秒；每次间隔 500ms。
 const NEW_CONVERSATION_ATTEMPTS = 60;
@@ -60,8 +82,8 @@ export function initialize(home, project) {
   return withLock(files.lock, () => {
     if (fs.existsSync(files.config)) {
       if (!fs.existsSync(files.state)) throw new Error('Project config exists without state; manual recovery required');
-      const override = path.join(project, '.orca', 'team.json');
-      if (fs.existsSync(override)) {
+      const override = projectLayout(home, project);
+      if (override) {
         const config = readJson(override);
         validateConfig(config, readJson(path.join(home, 'team.json')));
         config.workspace = project;
@@ -73,8 +95,7 @@ export function initialize(home, project) {
       }
       return files;
     }
-    const override = path.join(project, '.orca', 'team.json');
-    const config = readJson(fs.existsSync(override) ? override : path.join(home, 'layout.json'));
+    const config = readJson(projectLayout(home, project) ?? path.join(home, 'layout.json'));
     validateConfig(config, readJson(path.join(home, 'team.json')));
     config.workspace = project;
     if (!fs.existsSync(files.state)) saveJson(files.state, { workspace: project, agents: {} });

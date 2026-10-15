@@ -30,8 +30,12 @@
     {
       "title": "designer",
       "agents": [
-        "designer"
-      ]
+        "designer",
+        "designer2"
+      ],
+      "direction": "vertical",
+      "ratio": 0.5,
+      "displayTitle": "designer · designer2"
     },
     {
       "title": "reviewer",

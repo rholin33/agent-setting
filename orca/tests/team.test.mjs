@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { dataDirectory, normalizeProject, projectKey, nodeCommand } from '../lib/platform.mjs';
 import { validateTranscript, launchArguments, binding } from '../lib/sessions.mjs';
-import { initialize, runTeam as realRunTeam, readJson, saveJson, projectFiles, withLock } from '../lib/team.mjs';
+import { initialize, runTeam as realRunTeam, readJson, saveJson, projectFiles, withLock, layoutSource } from '../lib/team.mjs';
 import { deploy, installQuickCommands, registerShellProfile } from '../lib/install.mjs';
 
 // Team lifecycle fixtures mock CLI inventory; layout RPC has its own behavioral suite.
@@ -22,6 +22,12 @@ const runTeam = options => realRunTeam({ restoreLayout: async ({ config, state }
 }, ...options });
 
 const source = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+// 各 CLI 的会话首条记录格式不同；夹具按角色当前 CLI 生成。
+function transcriptHeader(agent, id, cwd) {
+  if (['pi', 'omp'].includes(agent)) return { type: 'session', id, cwd };
+  if (agent === 'claude') return { type: 'user', sessionId: id, cwd };
+  return { type: 'session_meta', payload: { id, cwd } };
+}
 function fixture(t) {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-team-'));
   t.after(() => fs.rmSync(temp, { recursive: true, force: true }));
@@ -46,14 +52,31 @@ test('Windows/macOS/Linux storage, quoting, project keys', () => {
   const command = nodeCommand(['a b', "x'y", '$(secret)'], 'win32', 'C:\\node.exe');
   assert.equal(Buffer.from(command.split(' ').at(-1), 'base64').toString('utf16le'), "& 'C:\\node.exe' 'a b' 'x''y' '$(secret)'");
 });
+test('a legacy workspace .orca/team.json migrates once to the global layout; a differing copy is refused', async t => {
+  const { home, project } = fixture(t);
+  const files = projectFiles(home, project), legacy = path.join(project, '.orca', 'team.json');
+  fs.mkdirSync(path.dirname(legacy));
+  saveJson(legacy, { tabs: [{ title: 'legacy', agents: ['simple'] }] });
+  await initialize(home, project);
+  assert.deepEqual(readJson(files.layout), readJson(legacy));
+  assert.equal(readJson(files.config).tabs[0].title, 'legacy');
+  assert.equal(layoutSource(home, project), files.layout);
+  fs.rmSync(legacy);
+  saveJson(files.layout, { tabs: [{ title: 'global', agents: ['simple'] }] });
+  await initialize(home, project);
+  assert.equal(readJson(files.config).tabs[0].title, 'global');
+  saveJson(legacy, { tabs: [{ title: 'stale', agents: ['simple'] }] });
+  await assert.rejects(initialize(home, project), /differs from the global layout/);
+});
 test('init retains per-project overrides and refuses concurrent locks', async t => {
   const { home, project } = fixture(t);
-  fs.mkdirSync(path.join(project, '.orca'));
-  saveJson(path.join(project, '.orca', 'team.json'), { tabs: [{ title: 'custom', agents: ['simple'] }] });
-  const files = await initialize(home, project);
+  const files = projectFiles(home, project);
+  fs.mkdirSync(files.directory, { recursive: true });
+  saveJson(files.layout, { tabs: [{ title: 'custom', agents: ['simple'] }] });
+  await initialize(home, project);
   assert.equal(readJson(files.config).tabs[0].title, 'custom');
   const priorState = fs.readFileSync(files.state, 'utf8');
-  saveJson(path.join(project, '.orca', 'team.json'), { tabs: [{ title: 'synced', agents: ['simple'] }] });
+  saveJson(files.layout, { tabs: [{ title: 'synced', agents: ['simple'] }] });
   await initialize(home, project);
   assert.equal(readJson(files.config).tabs[0].title, 'synced');
   assert.equal(fs.readFileSync(files.state, 'utf8'), priorState);
@@ -82,7 +105,7 @@ test('fresh launch creates seven tabs/eleven roles and rerun has no mutations', 
       const launching = Object.values(pendingState.agents).find(a => a.pending && !a.tabId);
       const transcriptPath = launching.launchIntent.transcriptPath || path.join(home, `codex-${creations}.jsonl`);
       fs.mkdirSync(path.dirname(transcriptPath), { recursive: true });
-      fs.writeFileSync(transcriptPath, JSON.stringify(['pi','omp'].includes(launching.agent) ? { type: 'session', id: `s${creations}`, cwd: project } : { type: 'session_meta', payload: { id: `s${creations}`, cwd: project } }) + '\n');
+      fs.writeFileSync(transcriptPath, JSON.stringify(transcriptHeader(launching.agent, `s${creations}`, project)) + '\n');
       launching.session = { id: `s${creations}`, transcriptPath };
       const primary = verb === 'split' ? terminals.find(row => row.handle === val('--terminal')) : null;
       const row = { handle: `term_${creations}`, tabId: primary?.tabId || `tab_${creations}`, leafId: `leaf_${creations}`, worktreePath: project, connected: true, orphaned: false };
@@ -347,6 +370,8 @@ test('PowerShell profiles on macOS and Linux receive PowerShell syntax', t => {
 
 test('unconfirmed new pane retains pending and retry never duplicates its launch', async t => {
   const { home, project } = fixture(t);
+  // 该用例验证预分配会话路径的 OMP 启动，不依赖仓库目录里 archi 当前选择的 CLI。
+  saveJson(path.join(home, 'team.json'), readJson(path.join(home, 'team.json')).map(role => role.name === 'archi' ? { ...role, agent: 'omp', model: 'pay/fixture', thinking: 'high' } : role));
   const files = await initialize(home, project);
   saveJson(files.config, { workspace: project, tabs: [{ title: 'archi', agents: ['archi'] }] });
   let created = 0;
@@ -395,7 +420,7 @@ test('split receipt timeout reconciles seven groups without duplicate launches',
       const launching = Object.values(pendingState.agents).find(a => a.pending && !a.tabId);
       const transcriptPath = launching.launchIntent.transcriptPath || path.join(home, `codex-${creations}.jsonl`);
       fs.mkdirSync(path.dirname(transcriptPath), { recursive: true });
-      fs.writeFileSync(transcriptPath, JSON.stringify(['pi','omp'].includes(launching.agent) ? { type: 'session', id: `s${creations}`, cwd: project } : { type: 'session_meta', payload: { id: `s${creations}`, cwd: project } }) + '\n');
+      fs.writeFileSync(transcriptPath, JSON.stringify(transcriptHeader(launching.agent, `s${creations}`, project)) + '\n');
       launching.session = { id: `s${creations}`, transcriptPath };
       const primary = verb === 'split' ? terminals.find(row => row.handle === val('--terminal')) : null;
       const row = { handle: `term_${creations}`, tabId: primary?.tabId || `tab_${creations}`, leafId: `leaf_${creations}`, worktreePath: project, connected: true, orphaned: false };

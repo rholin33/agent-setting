@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import importlib.util
 import json
 import subprocess
@@ -87,13 +86,8 @@ def export_configuration(destination: Path) -> int:
             pending.append((target, content))
     if sync.TARGET == 'orca':
         entry = REPO_ROOT / 'orca/bin/orca-team.mjs'
-        project = sync.get_project_root().resolve()
-        normalized = project.as_posix()
-        if sync.os.name == 'nt':
-            normalized = normalized.lower()
-        project_hash = hashlib.sha256(normalized.encode('utf-8')).hexdigest()[:16]
-        runtime_config = sync.ORCA_HOME / 'projects' / project_hash / 'config.json'
-        has_project_config = runtime_config.is_file() or (project / '.orca/team.json').is_file()
+        directory = sync.get_orca_project_directory()
+        has_project_config = (directory / 'config.json').is_file() or (directory / 'team.json').is_file()
         if entry.is_file() and has_project_config:
             result = subprocess.run(['node', str(entry), 'export-config', '--home', str(sync.ORCA_HOME),
                                      '--project', str(sync.get_project_root())],

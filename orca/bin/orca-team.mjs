@@ -13,7 +13,7 @@ import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { normalizeProject, quote } from '../lib/platform.mjs';
 import { orca, snapshot, rpc } from '../lib/orca.mjs';
-import { initialize, runTeam, readJson, saveJson, projectFiles, withLock } from '../lib/team.mjs';
+import { initialize, runTeam, readJson, saveJson, projectFiles, withLock, layoutSource } from '../lib/team.mjs';
 import { launchArguments } from '../lib/sessions.mjs';
 import { claudeTranscriptPath } from '../lib/claude.mjs';
 import { codexLaunchMarker } from '../lib/launch-state.mjs';
@@ -86,10 +86,7 @@ try {
       console.log(JSON.stringify(entries, null, 2));
       console.log('PowerShell: dot-source powershell entry from your profile. macOS/Linux: add shellDirectory to PATH. Existing shell profiles are not rewritten.');
     } else if (action === 'export-config') {
-      const candidates = [projectFiles(home, project).config, path.join(project, '.orca', 'team.json'), path.join(home, 'layout.json')];
-      const file = candidates.find(candidate => fs.existsSync(candidate));
-      if (!file) throw new Error('No project or default layout configuration found');
-      const config = readJson(file);
+      const config = readJson(layoutSource(home, project));
       delete config.workspace;
       console.log(JSON.stringify(config, null, 2));
     } else if (action === 'init') {
@@ -118,9 +115,7 @@ try {
       }
       console.log(`${roleName}: ${action === 'remote-commit' ? 'handoff accepted; owner updated and focused' : 'handoff rejected; source retained'}`);
     } else if (action === 'remote') {
-      const configFile = [path.join(project, '.orca', 'team.json'), projectFiles(home, project).config, path.join(home, 'layout.json')].find(file => fs.existsSync(file));
-      if (!configFile) throw new Error('No project or default layout configuration found');
-      const names = readJson(configFile).tabs.flatMap(tab => tab.agents);
+      const names = readJson(layoutSource(home, project)).tabs.flatMap(tab => tab.agents);
       const catalog = readJson(path.join(home, 'team.json'));
       const requests = parseRemoteRequests(values.remote, names.filter(name => catalog.some(role => role.name === name)));
       if (!requests.length) throw new Error('remote requires --remote codex:ROLE, omp:ROLE, claude:ROLE or off:ROLE');
@@ -160,10 +155,7 @@ try {
           }
         }
       }
-      const candidates = [path.join(project, '.orca', 'team.json'), files.config, path.join(home, 'layout.json')];
-      const file = candidates.find(candidate => fs.existsSync(candidate));
-      if (!file) throw new Error('No project or default layout configuration found');
-      const tabs = readJson(file).tabs;
+      const tabs = readJson(layoutSource(home, project)).tabs;
       let names;
       if (values.group !== undefined) {
         const tab = tabs.find(item => item.title === values.group);
