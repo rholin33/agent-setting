@@ -18,8 +18,14 @@ export async function reconcileRoleTabs({ snapshot, project, config, state, inve
     }
     const proof = state.retiredTabs?.[tab.id];
     if (proof && sameWorktree(`local::${proof.project}`, project) && Object.keys(proof.sessions || {}).length &&
-        Object.entries(proof.sessions).every(([name, id]) => state.agents[name]?.session?.id === id)) {
-      // A replacement may now run this conversation; the proof was recorded before it launched.
+        Object.entries(proof.sessions).every(([name, id]) => {
+          const saved = state.agents[name];
+          return saved?.session?.id === id || saved?.tabId && saved.tabId !== tab.id &&
+            inventory.terminals.filter(row => row.tabId === saved.tabId && row.leafId === saved.leafId &&
+              row.connected && !row.orphaned && sameWorktree(`local::${row.worktreePath}`, project)).length === 1;
+        })) {
+      // Retirement belongs to the absent tab. A later CLI handoff in its live
+      // replacement must not invalidate that proof; session checks still run.
       continue;
     }
     const group = config.tabs.find(group => (group.displayTitle || group.title) === (tab.customTitle || tab.title || '').trim());

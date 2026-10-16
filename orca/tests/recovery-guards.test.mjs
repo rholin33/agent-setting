@@ -43,6 +43,21 @@ test('retained durable tab prevents creating a replacement even without a live P
   assert.doesNotThrow(() => assertUniqueRoleTabs(snapshot([]), project, config, { terminals: [] }));
 });
 
+test('retirement proof survives a later CLI handoff in the established replacement pane', async () => {
+  const state = { agents: { designer: { tabId: 'new', leafId: 'leaf', handoff: { sessionId: 'second-conversation' } } },
+    retiredTabs: { old: { project, sessions: { designer: 'first-conversation' } } } };
+  const row = { tabId: 'new', leafId: 'leaf', connected: true, worktreePath: project };
+  const options = { snapshot: snapshot([tab, { ...tab, id: 'new' }]), project, config, state,
+    inventory: { terminals: [row] }, published: async () => ({ tabs: [{ parentTabId: 'new' }] }),
+    verifyAbsent: async () => { throw Error('retired pane must not be recreated'); } };
+  const result = await reconcileRoleTabs(options);
+  assert.doesNotThrow(() => assertUniqueRoleTabs(result, project, config, options.inventory));
+  for (const changed of [{ connected: false }, { orphaned: true }, { leafId: 'other' }, { worktreePath: '/foreign' }]) {
+    await assert.rejects(reconcileRoleTabs({ ...options, inventory: { terminals: [{ ...row, ...changed }] } }), /conversation/);
+  }
+  await assert.rejects(reconcileRoleTabs({ ...options, published: async () => ({ tabs: [{ parentTabId: 'old' }] }) }), /original pane/);
+});
+
 test('duplicate durable tabs block recovery before either pane receives input', () => {
   assert.throws(() => assertUniqueRoleTabs(snapshot([tab, { ...tab, id: 'new' }]), project, config,
     { terminals: [{ tabId: 'old' }, { tabId: 'new' }] }), /Duplicate durable tabs/);

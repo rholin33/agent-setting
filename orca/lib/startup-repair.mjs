@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { projectFiles, withLock, saveJson, readJson } from './team.mjs';
-import { quote } from './platform.mjs';
+import { quote, agentCommand } from './platform.mjs';
 import { registerAuxiliary } from './auxiliary-cleanup.mjs';
 
 // Persist before create: an ambiguous transport must never open a second repair agent.
@@ -26,7 +26,8 @@ export async function openRepair({ home, project, args, error, cli, skill = path
     const record = { version: 1, status: 'starting', home, project, args, error: error || null, createdAt: new Date().toISOString() };
     saveJson(file, record); fs.chmodSync(file, 0o600);
     const prompt = `Load the orca-team-repair skill at ${JSON.stringify(skill)}. Repair request: ${JSON.stringify(file)}. This is startup recovery only. Read the durable request and inspect current state before any mutation. Preserve exact native histories. Retry the original command with --no-repair after fixing the verified cause. Record completed or blocked in this request file with evidence; do not perform business tasks.`;
-    const command = (process.platform === 'win32' ? '' : 'command ') + ['codex', prompt].map(value => quote(value)).join(' ');
+    const launch = agentCommand('codex', [prompt]);
+    const command = (process.platform === 'win32' ? '& ' : 'command ') + [launch.executable, ...launch.args].map(value => quote(value)).join(' ');
     try {
       const result = await cli(['terminal', 'create', '--worktree', `path:${project}`, '--title', 'orca-team-repair', '--command', command]);
       if (!result.terminal?.handle) throw new Error('Repair terminal creation unconfirmed');

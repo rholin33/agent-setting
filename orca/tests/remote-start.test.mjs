@@ -4,6 +4,8 @@ import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { normalizeProject } from '../lib/platform.mjs';
 import { createHash } from 'node:crypto';
 import { ensureOmp, ompSelection } from '../lib/omp-adapter.mjs';
 import { parseRemoteRequests, startRemoteRequests } from '../lib/remote-start.mjs';
@@ -20,6 +22,8 @@ function directStub(calls = [], outcome) {
 }
 import { createPickerState, pickerKey, pickPiModels } from '../lib/model-picker.mjs';
 import { projectFiles } from '../lib/team.mjs';
+
+const posixOnly = { skip: process.platform === 'win32' ? 'Native OMP adapter requires POSIX private file modes; exercised on Linux' : false };
 
 const roles = [{ name: 'coder1', agent: 'codex', model: 'local' }, { name: 'designer', agent: 'omp', model: 'design' }];
 const presets = [{ model: 'design' }];
@@ -77,10 +81,10 @@ test('remote CLI rejects unsupported runtime, unknown role, duplicates and malfo
   assert.throws(() => parseRemoteRequests(['codex:coder1', 'omp:coder1'], ['coder1']), /Duplicate/);
 });
 
-test('ambiguous direct delivery keeps the source owner and is never resent', async t => {
+test('ambiguous direct delivery keeps the source owner and is never resent', posixOnly, async t => {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'remote-launch-')));
   t.after(() => fs.rmSync(home, { recursive: true, force: true }));
-  const project = fs.realpathSync(home);
+  const project = normalizeProject(fs.realpathSync(home));
   const requests = [{ runtime: 'omp', role: 'designer' }];
   const omp = ompFixture(home, project, 'designer', 'claude');
   let ensured = 0;
@@ -94,7 +98,7 @@ test('ambiguous direct delivery keeps the source owner and is never resent', asy
   };
   const direct = [];
   const args = { home, requests, project, environment: 'claude', sourceHandle: 'term_source', cli,
-    ensureOmp: async () => { ensured++; return omp.endpoint; }, skill: new URL('../lib/remote-start.mjs', import.meta.url).pathname,
+    ensureOmp: async () => { ensured++; return omp.endpoint; }, skill: fileURLToPath(new URL('../lib/remote-start.mjs', import.meta.url)),
     runDirectHandoff: directStub(direct, (_, call) => { throw new Error(call === 1 ? 'ambiguous delivery' : 'still waiting'); }) };
   await assert.rejects(startRemoteRequests(args), /ambiguous delivery/);
   const first = readRemoteSwitches({ home, project }).roles.designer;
@@ -117,7 +121,7 @@ test('missing or unproven business source never opens a setup or updates ownersh
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'remote-source-')));
   t.after(() => fs.rmSync(home, { recursive: true, force: true }));
   const project = fs.realpathSync(home);
-  const base = { home, project, requests: [{ runtime: 'codex', role: 'master' }], skill: new URL('../lib/remote-start.mjs', import.meta.url).pathname };
+  const base = { home, project, requests: [{ runtime: 'codex', role: 'master' }], skill: fileURLToPath(new URL('../lib/remote-start.mjs', import.meta.url)) };
   let created = 0;
   const cli = async args => {
     if (args[1] === 'list') return { terminals: [] };
@@ -148,10 +152,10 @@ test('Codex-only group still opens remote picker without rewriting role configur
 });
 
 for (const scenario of ['verified', 'focus-failed', 'wrong-live-path', 'changed-process', 'wrong-header']) {
-  test(`OMP source without renderer metadata: ${scenario}`, async t => {
+  test(`OMP source without renderer metadata: ${scenario}`, scenario === 'verified' ? posixOnly : {}, async t => {
     const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'remote-native-session-')));
     t.after(() => fs.rmSync(home, { recursive: true, force: true }));
-    const project = home;
+    const project = normalizeProject(home);
     const omp = ompFixture(home, project, 'archi');
     const transcriptPath = path.join(home, 'conversation.jsonl');
     fs.writeFileSync(transcriptPath, JSON.stringify({ type: 'title', text: 'fixture' }) + '\n' +
@@ -180,7 +184,7 @@ for (const scenario of ['verified', 'focus-failed', 'wrong-live-path', 'changed-
     // 协调终端只剩远端 Codex 使用，焦点失败场景改用 codex；OMP 走确定性交接。
     const direct = [];
     const args = { home, project, requests: [{ runtime: scenario === 'focus-failed' ? 'codex' : 'omp', role: 'archi' }], cli, inspect, ensureOmp: omp.ensureOmp,
-      snapshot: async () => ({}), skill: new URL('../lib/remote-start.mjs', import.meta.url).pathname, runDirectHandoff: directStub(direct) };
+      snapshot: async () => ({}), skill: fileURLToPath(new URL('../lib/remote-start.mjs', import.meta.url)), runDirectHandoff: directStub(direct) };
     if (scenario === 'verified') {
       await startRemoteRequests(args);
       const entry = readRemoteSwitches({ home, project }).roles.archi;
@@ -205,7 +209,7 @@ for (const scenario of ['verified', 'focus-failed', 'wrong-live-path', 'changed-
 function startupFixture(t) {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'omp-menu-')));
   t.after(() => fs.rmSync(home, { recursive: true, force: true }));
-  const project = home, role = 'master';
+  const project = normalizeProject(home), role = 'master';
   const omp = ompFixture(home, project, role);
   const source = { runtime: 'codex', role, environment: 'local', terminal: 'term_source', incarnation: 'inc-source', session: 'native-source' };
   const sourceTerminal = { handle: source.terminal, connected: true, writable: true, incarnationId: source.incarnation,
@@ -220,7 +224,7 @@ function startupFixture(t) {
     throw new Error('Unexpected runtime action');
   };
   const args = { home, project, requests: [{ runtime: 'omp', role }], sourceHandle: source.terminal, cli,
-    ensureOmp: omp.ensureOmp, skill: new URL('../lib/remote-start.mjs', import.meta.url).pathname };
+    ensureOmp: omp.ensureOmp, skill: fileURLToPath(new URL('../lib/remote-start.mjs', import.meta.url)) };
   const registryPath = path.join(projectFiles(home, project).directory, 'remote-switches.json');
   function saveEntry(extra = {}) {
     fs.mkdirSync(path.dirname(registryPath), { recursive: true });
@@ -232,7 +236,7 @@ function startupFixture(t) {
   return { args, omp, source, sourceTerminal, calls, saveEntry };
 }
 
-test('OMP readiness runs after source proof using saved selection and persists the fixed target before handoff', async t => {
+test('OMP readiness runs after source proof using saved selection and persists the fixed target before handoff', posixOnly, async t => {
   const f = startupFixture(t);
   let ensured = 0;
   const direct = [];
@@ -283,7 +287,7 @@ for (const scenario of ['unready', 'wrong-role', 'wrong-runtime', 'remote-host',
   });
 }
 
-test('OMP preflight failure history survives, and only actual readiness permits new begin', async t => {
+test('OMP preflight failure history survives, and only actual readiness permits new begin', posixOnly, async t => {
   const f = startupFixture(t);
   const failure = { status: 'preflight_failed', intent: { runtime: 'omp' }, reasons: ['previous transport unavailable'] };
   f.saveEntry({ lastSetupOutcome: failure });
@@ -299,7 +303,7 @@ test('OMP preflight failure history survives, and only actual readiness permits 
   assert.deepEqual(ready.lastSetupOutcome, failure);
 });
 
-test('matching OMP owner proves its adapter before reuse without starting another setup', async t => {
+test('matching OMP owner proves its adapter before reuse without starting another setup', posixOnly, async t => {
   const f = startupFixture(t);
   const { adapterConfig, ...owner } = f.omp.endpoint;
   f.saveEntry({ runtime: 'omp', owner, adapterConfig });
@@ -349,7 +353,7 @@ test('saved OMP role selection wins; catalog selection is explicit, never first 
 
 const remoteProject = async () => ({ environment: 'paired-host', path: '/remote/home/Code/orca-remote/project' });
 
-test('adapter wrapper calls fixed Python CLI with private scoped request and no ambient remote host', async t => {
+test('adapter wrapper calls fixed Python CLI with private scoped request and no ambient remote host', posixOnly, async t => {
   const f = startupFixture(t);
   let requestPath;
   const request = { home: f.args.home, project: f.args.project, role: 'master', ...f.omp.selection, environment: 'paired-host' };
@@ -427,7 +431,7 @@ test('typed readiness failures expose actionable reasons but never raw transport
 });
 
 for (const runtime of ['omp', null]) {
-  test(`native owner reconnects before ${runtime ?? 'off'} without using the original local transcript as remote proof`, async t => {
+  test(`native owner reconnects before ${runtime ?? 'off'} without using the original local transcript as remote proof`, posixOnly, async t => {
     const f = startupFixture(t);
     const { adapterConfig, ...owner } = f.omp.endpoint;
     const initial = f.saveEntry({ runtime: 'omp', owner, adapterConfig });
@@ -496,7 +500,7 @@ for (const runtime of ['omp', null]) {
 }
 
 for (const runtime of ['omp', null]) {
-  test(`failed native owner proof prevents ${runtime ?? 'off'} focus or setup`, async t => {
+  test(`failed native owner proof prevents ${runtime ?? 'off'} focus or setup`, posixOnly, async t => {
     const f = startupFixture(t);
     const { adapterConfig, ...owner } = f.omp.endpoint;
     f.saveEntry({ runtime: 'omp', owner, adapterConfig });

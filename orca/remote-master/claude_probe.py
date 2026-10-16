@@ -2,10 +2,22 @@
 import base64
 import json
 import pathlib
+import shlex
 import socket
 import subprocess
 import sys
 import uuid
+
+def matches_claude_process(command, session):
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        return False
+    if not words or pathlib.PurePosixPath(words[0]).name != 'claude':
+        return False
+    ids = [words[i + 1] for i, arg in enumerate(words[:-1]) if arg in ('--session-id', '--resume')]
+    models = [words[i + 1] for i, arg in enumerate(words[:-1]) if arg == '--model']
+    return ids == [session] and models == ['opus']
 
 request = json.loads(base64.b64decode(sys.argv[1]))
 directory = pathlib.Path.home() / 'Library/Application Support/orca/daemon'
@@ -44,7 +56,7 @@ while True:
     if expanded == descendants:
         break
     descendants = expanded
-agents = [(pid, row) for pid, row in rows.items() if pid in descendants and '--session-id ' + request['session'] in row[2] and '--model opus' in row[2] and 'claude ' in row[2]]
+agents = [(pid, row) for pid, row in rows.items() if pid in descendants and matches_claude_process(row[2], request['session'])]
 assert len(agents) == 1, 'Exact native Claude process unavailable'
 pid, row = agents[0]
 cwd = subprocess.check_output(['lsof', '-a', '-p', str(pid), '-d', 'cwd', '-Fn'], text=True).split('\nn', 1)[1].strip()

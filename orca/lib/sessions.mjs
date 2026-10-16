@@ -91,7 +91,13 @@ export function launchArguments(role, prompt, session, project, home, { codexNoD
  } else args.push('--skill',skills);
  }
     }
-    if (role.agent === 'omp') args.push('--config', path.join(home, 'omp-context.json'));
+    if (role.agent === 'omp') {
+      args.push('--config', path.join(home, 'omp-context.json'));
+      if (home && /^[a-z][a-z0-9_]*$/.test(role.name || '')) {
+        args.push('--extension', path.join(home, 'lib', 'omp-role-title.mjs'));
+        env.ORCA_TEAM_ROLE = role.name;
+      }
+    }
     if (role.thinking) args.push('--thinking', role.thinking);
   } else if (role.agent === 'codex') {
     // Each pane needs its own server: a shared daemon sends every pane's
@@ -108,6 +114,8 @@ export function launchArguments(role, prompt, session, project, home, { codexNoD
     // Codex 没有追加系统提示参数，角色提示即首条消息；切换 CLI 的交接说明附在其后。
     if (!session) args.push(fs.readFileSync(prompt, 'utf8') + (initialNote ? `\n\n${initialNote}` : ''));
   } else if (role.agent === 'claude') {
+    // Do not inherit a global bypass mode for a newly configured team role.
+    args.push('--permission-mode', 'default');
     // 角色提示每次启动都追加（Claude 不在会话里持久化 system prompt），resume 时同样需要。
     if (session) args.push('--resume', session.id);
     args.push('--append-system-prompt-file', prompt);

@@ -9,6 +9,7 @@ import { rpc } from './orca.mjs';
 import { prepareLaunch, captureSession, appliedModelOf } from './launch-state.mjs';
 import { restoreGroupLayout } from './layout.mjs';
 import { pinGroupTabs } from './tabs.mjs';
+import { revealRoleTitles } from './role-titles.mjs';
 import { verifyWindowsAbsence } from './windows-health.mjs';
 import { assertUniqueRoleTabs, assertConversationAbsent, reconcileRoleTabs } from './recovery-guards.mjs';
 
@@ -152,7 +153,7 @@ export async function focusDesktop(handle) {
   if (process.platform === 'darwin') execFileSync('/usr/bin/open', ['-a', 'Orca']);
   return rpc('terminal.focus', { terminal: handle, navigation: 'host' });
 }
-export async function runTeam({ home, project, action, group, cli, snapshot, published = worktree => rpc('session.tabs.list', { worktree }), pin = pinGroupTabs, restoreLayout = restoreGroupLayout, focus = focusDesktop, verifyAbsent = process.platform === 'darwin' ? verifyMacAbsence : verifyWindowsAbsence, inspect = (handle, provider) => inspectHealth(cli, rpc, handle, provider), sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), log = console.log }) {
+export async function runTeam({ home, project, action, group, preserveRoles = [], cli, snapshot, published = worktree => rpc('session.tabs.list', { worktree }), pin = pinGroupTabs, restoreLayout = restoreGroupLayout, titles = revealRoleTitles, focus = focusDesktop, verifyAbsent = process.platform === 'darwin' ? verifyMacAbsence : verifyWindowsAbsence, inspect = (handle, provider) => inspectHealth(cli, rpc, handle, provider), sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), log = console.log }) {
   project = normalizeProject(project);
   const files = projectFiles(home, project);
   if (action === 'start') await initialize(home, project);
@@ -167,7 +168,10 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pub
       if (tabs.length !== 1) throw new Error(`Unknown group: ${group}`);
       config = { ...config, tabs };
     }
-    const names = validateConfig(config, catalog);
+    const preserved = new Set(preserveRoles);
+    const names = validateConfig(config, catalog).filter(name => !preserved.has(name));
+    const mixed = config.tabs.filter(tab => tab.agents.some(name => preserved.has(name)));
+    const movable = { ...config, tabs: config.tabs.filter(tab => !mixed.includes(tab)) };
     const list = () => cli(['terminal', 'list', '--worktree', `path:${project}`, '--include-visual-layouts']);
     let inventory;
     try { inventory = await list(); } catch (error) {
@@ -177,9 +181,18 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pub
     const resolved = {}, resume = {}, health = {}, issues = [], missing = [];
     let snap = await snapshot();
     if (action === 'start') {
-      snap = await reconcileRoleTabs({ snapshot: snap, project, config, state, inventory,
+      // A local sibling can recover in place while the remote source is retained.
+      // Missing panes in a protected group require reconciliation, never a split
+      // or replacement tab that could disturb its original return conversation.
+      for (const name of mixed.flatMap(tab => tab.agents).filter(name => !preserved.has(name))) {
+        const saved = state.agents[name];
+        const rows = inventory.terminals.filter(row => saved && row.tabId === saved.tabId && row.leafId === saved.leafId &&
+          sameWorktree(`local::${row.worktreePath}`, project) && row.connected && !row.orphaned);
+        if (rows.length !== 1) throw new Error(`${name}: existing pane in protected group unavailable; reconcile before retrying`);
+      }
+      snap = await reconcileRoleTabs({ snapshot: snap, project, config: movable, state, inventory,
         published: () => published(`path:${project}`), verifyAbsent: args => verifyAbsent({ ...args, cli }) });
-      assertUniqueRoleTabs(snap, project, config, inventory);
+      assertUniqueRoleTabs(snap, project, movable, inventory);
       // Persist the absence proof before creating any replacement pane.
       saveJson(files.state, state);
     }
@@ -264,6 +277,7 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pub
     }
     if (action === 'start') saveJson(files.state, state);
     for (const tab of config.tabs) for (const name of tab.agents) {
+      if (preserved.has(name)) continue;
       if (resolved[name]) {
         const status = health[name];
         if (status.kind === 'agent') {
@@ -392,13 +406,14 @@ export async function runTeam({ home, project, action, group, cli, snapshot, pub
       if (saved.pending) issues.push(`${name}: launch unconfirmed; pending retained, no automatic resend`);
     }
     if (action === 'start') {
-      await restoreLayout({ project, config, state });
+      if (movable.tabs.length) await restoreLayout({ project, config: movable, state });
       assertLayout(await list(), config, state); saveJson(files.state, state);
       if (issues.length) throw new Error(issues.join('\n'));
-      if (group !== undefined) await cli(['terminal', 'switch', '--terminal', resolved[config.tabs[0].agents[0]].handle]);
+      await titles({ project, config, state, inventory: await list(), cli });
+      if (group !== undefined && names.length) await cli(['terminal', 'switch', '--terminal', resolved[names[0]].handle]);
       const pinTabs = config.pinTabs ?? readJson(path.join(home, 'layout.json')).pinTabs ?? false;
-      if (pinTabs) {
-        try { await pin({ project, config, state }); }
+      if (pinTabs && movable.tabs.length) {
+        try { await pin({ project, config: movable, state }); }
         catch (error) { log(`Warning: optional tab pinning failed: ${error.message}`); }
       }
       log('Verified configured desktop layout; new launches report conversation readiness separately');

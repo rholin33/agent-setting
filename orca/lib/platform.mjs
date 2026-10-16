@@ -38,6 +38,16 @@ export function nodeCommand(args, platform = process.platform, executable = proc
   return platform === 'win32' ? 'powershell.exe -NoLogo -NoProfile -EncodedCommand ' + Buffer.from('& ' + command, 'utf16le').toString('base64') : command;
 }
 
+// Windows PowerShell 5 strips embedded double quotes when passing arguments to
+// native executables (including npm CLI shims). Orca's Windows agent terminals
+// use PowerShell 7; require its lossless native argument mode for role prompts.
+export function agentCommand(executable, args, platform = process.platform) {
+  if (platform !== 'win32') return { executable, args };
+  const script = "if ($PSVersionTable.PSVersion -lt [version]'7.3') { throw 'Agent launch requires PowerShell 7.3 or newer' }; " +
+    "$PSNativeCommandArgumentPassing = 'Standard'; & " + [executable, ...args].map(value => quote(value, 'win32')).join(' ');
+  return { executable: 'pwsh.exe', args: ['-NoLogo', '-NoProfile', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')] };
+}
+
 // 进程启动时间（毫秒）；查询失败或进程不存在时返回 null，由调用方按"无法证明"处理。
 export function processStartTime(pid, platform = process.platform, run = execFileSync) {
   try {

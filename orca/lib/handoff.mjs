@@ -195,3 +195,13 @@ export function pendingSwitches(state, catalog, names) {
     return saved && role && (saved.session || saved.launchIntent) && saved.agent !== role.agent ? [{ name, from: saved.agent, to: role.agent }] : [];
   });
 }
+
+// Remote handoffs own both their source and original return conversation. A model
+// catalog update must not migrate either local CLI before the handoff is settled.
+export function startupSwitches(state, catalog, names, continuity, requests) {
+  const protectedNames = new Set(requests.map(item => item.role));
+  for (const name of names) {
+    if (continuity.roles[name]?.runtime || continuity.roles[name]?.pending) protectedNames.add(name);
+  }
+  return pendingSwitches(state, catalog, names.filter(name => !protectedNames.has(name)));
+}

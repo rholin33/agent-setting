@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { openRepair } from '../lib/startup-repair.mjs';
+import { recoverProtectedStart } from '../lib/protected-start.mjs';
 import { ensureClaudeLocalTerminal } from '../lib/claude-local-terminal.mjs';
 import { parseRemoteRequests, startRemoteRequests, verifyRemoteEnvironment } from '../lib/remote-start.mjs';
 import { ensureRemoteProject } from '../lib/remote-project.mjs';
@@ -11,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
-import { normalizeProject, quote } from '../lib/platform.mjs';
+import { normalizeProject, quote, agentCommand } from '../lib/platform.mjs';
 import { orca, snapshot, rpc } from '../lib/orca.mjs';
 import { initialize, runTeam, readJson, saveJson, projectFiles, withLock, layoutSource } from '../lib/team.mjs';
 import { launchArguments } from '../lib/sessions.mjs';
@@ -21,7 +22,7 @@ import { restartTeam, resolveRestartRoles } from '../lib/restart.mjs';
 import { inspectHealth } from '../lib/health.mjs';
 import { ensureOrca } from '../lib/orca-boot.mjs';
 import { syncModels } from '../lib/model-sync.mjs';
-import { switchProviders, pendingSwitches, handoffPrompt } from '../lib/handoff.mjs';
+import { switchProviders, pendingSwitches, startupSwitches, handoffPrompt } from '../lib/handoff.mjs';
 import { updateAgentsBeforeStart, autoUpdateAgents, clearUpdateCheck } from '../lib/agent-update.mjs';
 import { updateLifecycle } from '../lib/update-lifecycle.mjs';
 import { reloadRunning } from '../lib/reload.mjs';
@@ -197,12 +198,10 @@ try {
       }
       // Validate remote prerequisites before stopping any local conversation.
       await verifyRemoteEnvironment({ requests: remoteRequests, environment: values.environment, cli: orca });
-      // 会话所用 CLI 与配置不同的角色先换 CLI（停止、写交接、清除旧绑定），再进入重载和恢复。
-      const switches = fs.existsSync(files.state) ? pendingSwitches(readJson(files.state), readJson(path.join(home, 'team.json')), names) : [];
+      // Only independent local conversations migrate CLI. Remote sources and
+      // original return sessions remain bound to their existing native history.
+      const switches = fs.existsSync(files.state) ? startupSwitches(readJson(files.state), readJson(path.join(home, 'team.json')), names, continuity, remoteRequests) : [];
       if (switches.length) {
-        // 远端接管或交接待确认的角色由 continuity 账本负责，不能同时切换本地 CLI。
-        const bound = switches.filter(({ name }) => continuity.roles[name]?.pending || continuity.roles[name]?.runtime).map(({ name }) => name);
-        if (bound.length) throw new Error(`Cannot switch CLI for continuity-bound roles: ${bound.join(', ')}; settle remote handoffs first`);
         await stage('CLI switch', () => switchProviders({ switches, home, project, cli: orca, snapshot,
           inspect: (handle, provider) => inspectHealth(orca, rpc, handle, provider) }));
       }
@@ -215,23 +214,18 @@ try {
       const protectedRoles = names.filter(name => continuity.roles[name]?.pending || continuity.roles[name]?.runtime);
       if (remoteRequests.length || protectedRoles.length) {
         // Never reload a source or its original local return conversation before handoff.
-        if (remoteRequests.length) {
-          const result = await startRemoteRequests({ requests: remoteRequests, home, project, environment: values.environment, sourceHandle: values['from-agent'], cli: orca, snapshot });
-          console.log(describeRemoteResult(result));
-        } else console.log(`Continuity-bound roles preserved: ${protectedRoles.join(', ')}; inspect remote-status for pending handoffs.`);
         const protectedNames = new Set([...protectedRoles, ...remoteRequests.map(item => item.role)]);
-        const independent = tabs.filter(tab => tab.agents.every(name => !protectedNames.has(name)) && tab.agents.some(name => names.includes(name)));
-        const failures = [];
-        for (const tab of independent) {
-          try {
-            const result = await reloadRunning({ home, project, names: tab.agents, cli: orca, snapshot,
-              inspect: (handle, provider) => inspectHealth(orca, rpc, handle, provider) });
-            await runTeam({ home, project, action, group: tab.title, cli: orca, snapshot });
-            failures.push(...result.skipped.map(item => `${item.name}: ${item.reason}`));
-          } catch (error) { failures.push(`${tab.title}: ${error.message}`); }
-        }
-        console.log(`Protected handoffs retained; recovered independent groups: ${independent.map(tab => tab.title).join(', ') || 'none'}.`);
-        if (failures.length) throw new Error(`Independent group recovery incomplete: ${failures.join('; ')}`);
+        await recoverProtectedStart({ tabs, names, protectedNames,
+          remote: async () => {
+            if (remoteRequests.length) {
+              const result = await startRemoteRequests({ requests: remoteRequests, home, project, environment: values.environment, sourceHandle: values['from-agent'], cli: orca, snapshot });
+              console.log(describeRemoteResult(result));
+            } else console.log(`Continuity-bound roles preserved: ${protectedRoles.join(', ')}; inspect remote-status for pending handoffs.`);
+          },
+          reload: localNames => reloadRunning({ home, project, names: localNames, cli: orca, snapshot,
+            inspect: (handle, provider) => inspectHealth(orca, rpc, handle, provider) }),
+          run: (group, preserveRoles) => runTeam({ home, project, action, group, preserveRoles, cli: orca, snapshot }),
+        });
         const unresolved = protectedRoles.filter(name => continuity.roles[name]?.pending);
         if (unresolved.length) throw Object.assign(new Error(`Existing handoffs require reconciliation: ${unresolved.join(', ')}`), { code: 'REMOTE_HANDOFF_BLOCKED' });
       } else {
@@ -262,7 +256,7 @@ try {
       // 新 Codex 会话没有可见的会话 ID，首条消息附带启动标记供 start 认领会话记录。
       if (role.agent === 'codex' && !saved?.session && !current?.launchIntent?.id) throw new Error('Codex launch intent is missing; rerun start to prepare it');
       const codexNote = role.agent === 'codex' && !saved?.session ? [handoff && initialMessage, codexLaunchMarker(current.launchIntent.id)].filter(Boolean).join('\n\n') : null;
-      const launch = launchArguments({ ...launchRole, role: role.role }, prompt, saved?.session, project, home,
+      const launch = launchArguments({ ...launchRole, name: role.name, role: role.role }, prompt, saved?.session, project, home,
         { codexNoDaemon: role.agent === 'codex' && supportsNoDaemon(), initialNote: codexNote });
       if (role.agent === 'codex' && role.piProvider) {
         const provider = readJson(path.join(os.homedir(), '.pi', 'agent', 'models.json')).providers?.[role.piProvider];
@@ -307,11 +301,7 @@ try {
           ['agent', 'hooks', 'prepare-codex'], { env: { ...process.env, ...launch.env }, windowsHide: true, encoding: 'utf8' });
         if (preparation.error || preparation.status !== 0) throw new Error('Orca Codex hook preparation failed');
       }
-      let executable = launch.executable, args = launch.args;
-      if (process.platform === 'win32') {
-        const script = '& ' + [executable, ...args].map(value => quote(value, 'win32')).join(' ');
-        executable = 'powershell.exe'; args = ['-NoLogo', '-NoProfile', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')];
-      }
+      const { executable, args } = agentCommand(launch.executable, launch.args);
       const result = spawnSync(executable, args, { cwd: project, env: { ...process.env, ...launch.env }, stdio: 'inherit' });
       if (result.error) throw result.error;
       process.exitCode = result.status ?? 1;

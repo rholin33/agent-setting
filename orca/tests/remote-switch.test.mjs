@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
 import { projectFiles } from '../lib/team.mjs';
 import { beginRemoteSwitch, claimRemoteSetup, commitRemoteSwitch, rejectRemoteSwitch, readRemoteSwitches, reattachOmpOwner } from '../lib/remote-switch.mjs';
@@ -328,7 +329,7 @@ test('preflight history retains its source and report while explicit OMP retries
   let ensured = 0;
   const unavailable = new Error('native readiness unavailable');
   const options = { ...f.options, sourceHandle: f.local.terminal, cli: f.cli,
-    skill: new URL('../lib/remote-start.mjs', import.meta.url).pathname,
+    skill: fileURLToPath(new URL('../lib/remote-start.mjs', import.meta.url)),
     ensureOmp: async () => { ensured++; throw unavailable; } };
   const requests = [{ role: f.role, runtime: 'omp' }];
   assert.deepEqual(resolvePreflightChoices(before, [f.role], requests), requests);

@@ -8,6 +8,8 @@ import { pairedEnvironment } from '../lib/remote-runtime.mjs';
 
 const argv = process.argv.slice(2);
 const probe = argv.includes('--probe');
+const connectionId = argv.includes('--connection-id') ? argv[argv.indexOf('--connection-id') + 1] : undefined;
+if (connectionId !== undefined && !/^[0-9a-f-]{36}$/.test(connectionId)) throw new Error('Invalid local connection identity');
 const configFile = argv[argv.indexOf('--config') + 1];
 if (!argv.includes('--config') || !configFile) throw new Error('Usage: claude-remote-terminal --config binding.json [--probe]');
 const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
@@ -27,7 +29,7 @@ const publishTitle = value => {
 };
 const record = (state, reason) => {
   if (probe) return;
-  const value = { version: 1, state, ...(reason ? { reason } : {}), pid: process.pid, localPane: process.env.ORCA_PANE_KEY,
+  const value = { version: 1, state, ...(reason ? { reason } : {}), ...(connectionId ? { connectionId } : {}), pid: process.pid, localPane: process.env.ORCA_PANE_KEY,
     project: config.project, role: config.role, remote: config.endpoint, runtimeId: config.runtimeId, updatedAt: new Date().toISOString() };
   const temp = `${statusFile}.${process.pid}.tmp`;
   fs.writeFileSync(temp, JSON.stringify(value, null, 2), { mode: 0o600 }); fs.renameSync(temp, statusFile);

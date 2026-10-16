@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { readConversation, renderHandoff, prepareHandoff, switchProviders, pendingSwitches, handoffPrompt } from '../lib/handoff.mjs';
+import { readConversation, renderHandoff, prepareHandoff, switchProviders, pendingSwitches, startupSwitches, handoffPrompt } from '../lib/handoff.mjs';
 import { launchArguments } from '../lib/sessions.mjs';
 import { projectFiles, readJson, saveJson } from '../lib/team.mjs';
 import { normalizeProject } from '../lib/platform.mjs';
@@ -156,6 +156,24 @@ test('pendingSwitches compares the saved conversation CLI with the catalog for e
   assert.deepEqual(pendingSwitches(state, catalog, ['master', 'loader', 'coder1', 'fresh']),
     [{ name: 'master', from: 'omp', to: 'claude' }, { name: 'loader', from: 'omp', to: 'codex' }]);
   assert.deepEqual(pendingSwitches(state, catalog, ['coder1']), []);
+});
+
+test('ordinary startup preserves remote owners, pending sources and requested return sessions while switching independent local roles', () => {
+  const names = ['master', 'archi', 'returning', 'outgoing', 'reviewer'];
+  const state = { agents: Object.fromEntries(names.map(name => [name, { agent: 'omp', session: { id: name + '-original' } }])) };
+  const before = structuredClone(state);
+  const catalog = names.map(name => ({ name, agent: 'claude' }));
+  const continuity = { roles: { master: { runtime: 'claude' }, archi: { pending: { id: 'unsettled' } }, returning: { runtime: 'claude' } } };
+  const requests = [{ role: 'returning', runtime: null }, { role: 'outgoing', runtime: 'claude' }];
+  assert.deepEqual(startupSwitches(state, catalog, names, continuity, requests), [{ name: 'reviewer', from: 'omp', to: 'claude' }]);
+  assert.deepEqual(state, before);
+  assert.equal(pendingSwitches(state, catalog, names).length, 5, 'explicit restart still detects every CLI mismatch');
+});
+
+test('settled local roles still use normal CLI migration after remote return', () => {
+  const state = { agents: { master: { agent: 'omp', session: { id: 'original' } } } };
+  assert.deepEqual(startupSwitches(state, [{ name: 'master', agent: 'claude' }], ['master'], { roles: { master: { runtime: null } } }, []),
+    [{ name: 'master', from: 'omp', to: 'claude' }]);
 });
 
 test('codex fresh launch appends the handoff note to the role prompt', t => {
