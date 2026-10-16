@@ -54,7 +54,7 @@
     },
     "test": {
       "agent": "omp",
-      "model": "local/cline-pass/deepseek-v4.1-flash",
+      "model": "pay/gpt-6.1-sol",
       "thinking": "high"
     },
     "simple": {
@@ -81,6 +81,11 @@
       "agent": "omp",
       "model": "local/gemini-3.8-flash-high",
       "thinking": null
+    },
+    "copywriter": {
+      "agent": "omp",
+      "model": "local/cline-pass/deepseek-v4.1-flash",
+      "thinking": "high"
     }
   }
 }
