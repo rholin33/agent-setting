@@ -30,6 +30,21 @@
 
 远端通过已验证的受限 MCP 访问本地项目，不把本机路径伪装成远端路径。`read_only` 同时隐藏并拒绝写入、任务派发；`read_untracked` 只增加非敏感、未忽略文件的读取。Markdown 写入根目录从 docs、.codex、todo_list、undo_list 白名单中显式选择。角色清单限定当前项目，Windows 路径和 UTF-8 输出已兼容。无产品 API 或数据库结构变更。
 
+### Claude 侧缓存代理
+
+`remote-master/mcp_cache_proxy.py` 运行在 Claude 所在主机，以 stdio 方式替代直连 HTTP 的 `worktree` 服务，工具名不变，原有 `--allowedTools mcp__worktree__*` 继续适用：
+
+- `read_role` 只返回相对上次读取的新增行，`full=true` 取整屏；终端行压缩补齐空白。
+- `wait_role` 在代理内轮询，目标先变化后稳定（`until=idle`）或新输出出现标记（`until=marker`）时返回，轮询过程不进入模型上下文。
+- 读取游标保存在该角色 Claude 的持久化工作目录 `<角色目录>/.orca-mcp-cache/role-cursors.json`（例如 `~/.orca/claude-runtime/<项目>/<角色>/`），权限 0600，Claude 会话恢复或重启后沿用。不要为此预建 `<远端用户目录>/Code/orca-remote/<项目>`：该目录非空且未登记时 `repo.create` 会报错。
+- 其余工具原样转发，权限边界仍由 `bridge.py` 执行。
+
+```json
+{"mcpServers": {"worktree": {"type": "stdio", "command": "python3",
+  "args": ["<ccb-team>/remote-master/mcp_cache_proxy.py", "--upstream", "<原 HTTP mcp.json>",
+           "--state-dir", "<角色目录>/.orca-mcp-cache"]}}}
+```
+
 ## 验证状态
 
 现场验收确认两个角色仍使用原远端 terminal/incarnation/session，实际模型为 `claude-opus-5-5`；普通启动及显式复用能回到本地项目入口。原本本地源会话保持暂停和历史。
