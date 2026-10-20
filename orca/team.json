@@ -1,36 +1,36 @@
 [
   {
     "name": "master",
-    "agent": "claude",
-    "model": "opus",
-    "thinking": "high",
+    "agent": "omp",
+    "model": "pay/gpt-6-astra",
+    "thinking": "xhigh",
     "role": "agentroles.ccb_self"
   },
   {
     "name": "loader",
-    "agent": "codex",
-    "model": "gpt-6.1-sol",
+    "agent": "omp",
+    "model": "pay/gpt-6.1-sol",
     "thinking": "medium",
     "role": "agentroles.ccb_self"
   },
   {
     "name": "archi",
-    "agent": "claude",
-    "model": "opus",
-    "thinking": "high",
+    "agent": "omp",
+    "model": "pay/gpt-6-astra",
+    "thinking": "xhigh",
     "role": "agentroles.archi"
   },
   {
     "name": "coder1",
     "agent": "codex",
-    "model": "gpt-6.1-sol",
+    "model": "gpt-6-astra",
     "thinking": "medium",
     "role": "agentroles.coder"
   },
   {
     "name": "coder2",
     "agent": "codex",
-    "model": "gpt-6.1-sol",
+    "model": "gpt-6-astra",
     "thinking": "medium",
     "role": "agentroles.coder"
   },
@@ -50,23 +50,23 @@
   },
   {
     "name": "reviewer",
-    "agent": "claude",
-    "model": "sonnet",
-    "thinking": "high",
+    "agent": "omp",
+    "model": "pay/gpt-6-astra",
+    "thinking": "xhigh",
     "role": "agentroles.code_reviewer"
   },
   {
     "name": "test",
     "agent": "omp",
     "model": "pay/gpt-6.1-sol",
-    "thinking": "high",
+    "thinking": "xhigh",
     "role": "agentroles.code_reviewer"
   },
   {
     "name": "simple",
-    "agent": "codex",
-    "model": "gpt-6.1-sol",
-    "thinking": "medium",
+    "agent": "omp",
+    "model": "pay/gpt-6.1-sol",
+    "thinking": "xhigh",
     "role": "agentroles.simple"
   },
   {

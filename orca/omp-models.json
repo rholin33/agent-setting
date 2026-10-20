@@ -1,19 +1,9 @@
 {
   "presets": [
     {
-      "model": "pay/gpt-6-astra",
-      "thinking": "xhigh",
-      "label": "pay/gpt-6-astra"
-    },
-    {
       "model": "local/cline-pass/deepseek-v4.1-flash",
       "thinking": "high",
       "label": "local/cline-pass/deepseek-v4.1-flash"
-    },
-    {
-      "model": "pay/gpt-6-astra",
-      "thinking": "xhigh",
-      "label": "pay/gpt-6-astra"
     },
     {
       "model": "local/gemini-3.8-flash-high",
@@ -21,31 +11,103 @@
       "label": "local/gemini-3.8-flash-high"
     },
     {
-      "model": "local/cline-pass/deepseek-v4.1-flash",
-      "thinking": "high",
-      "label": "local/cline-pass/deepseek-v4.1-flash"
+      "model": "pay/gpt-6-astra",
+      "thinking": "xhigh",
+      "label": "pay/gpt-6-astra"
     },
     {
       "model": "pay/gpt-6.1-sol",
       "thinking": "xhigh",
       "label": "pay/gpt-6.1-sol"
+    },
+    {
+      "agent": "omp",
+      "model": "local/cline-pass/deepseek-v4.1-flash",
+      "thinking": "xhigh",
+      "label": "local/cline-pass/deepseek-v4.1-flash"
+    },
+    {
+      "agent": "omp",
+      "model": "local/cline-pass/mimo-v2.6-flash",
+      "thinking": "xhigh",
+      "label": "local/cline-pass/mimo-v2.6-flash"
+    },
+    {
+      "agent": "omp",
+      "model": "local/gemini-3.8-flash-high",
+      "thinking": "xhigh",
+      "label": "local/gemini-3.8-flash-high"
+    },
+    {
+      "agent": "omp",
+      "model": "pay/gpt-6-astra",
+      "thinking": "xhigh",
+      "label": "pay/gpt-6-astra"
+    },
+    {
+      "agent": "omp",
+      "model": "pay/gpt-6.1-sol",
+      "thinking": "xhigh",
+      "label": "pay/gpt-6.1-sol"
+    },
+    {
+      "agent": "omp",
+      "model": "pay/gpt-image-2",
+      "thinking": "xhigh",
+      "label": "pay/gpt-image-2"
+    },
+    {
+      "agent": "pi",
+      "model": "local/cline-pass/deepseek-v4.1-flash",
+      "thinking": "xhigh",
+      "label": "local/cline-pass/deepseek-v4.1-flash"
+    },
+    {
+      "agent": "pi",
+      "model": "local/cline-pass/mimo-v2.6-flash",
+      "thinking": "xhigh",
+      "label": "local/cline-pass/mimo-v2.6-flash"
+    },
+    {
+      "agent": "pi",
+      "model": "local/gemini-3.8-flash-high",
+      "thinking": "xhigh",
+      "label": "local/gemini-3.8-flash-high"
+    },
+    {
+      "agent": "pi",
+      "model": "pay/gpt-6-astra",
+      "thinking": "xhigh",
+      "label": "pay/gpt-6-astra"
+    },
+    {
+      "agent": "pi",
+      "model": "pay/gpt-6.1-sol",
+      "thinking": "xhigh",
+      "label": "pay/gpt-6.1-sol"
+    },
+    {
+      "agent": "pi",
+      "model": "pay/gpt-image-2",
+      "thinking": "xhigh",
+      "label": "pay/gpt-image-2"
     }
   ],
   "roles": {
     "master": {
-      "agent": "claude",
-      "model": "opus",
-      "thinking": "high"
+      "agent": "omp",
+      "model": "pay/gpt-6-astra",
+      "thinking": "xhigh"
     },
     "loader": {
-      "agent": "codex",
-      "model": "gpt-6.1-sol",
+      "agent": "omp",
+      "model": "pay/gpt-6.1-sol",
       "thinking": "medium"
     },
     "archi": {
-      "agent": "claude",
-      "model": "opus",
-      "thinking": "high"
+      "agent": "omp",
+      "model": "pay/gpt-6-astra",
+      "thinking": "xhigh"
     },
     "designer": {
       "agent": "omp",
@@ -55,27 +117,27 @@
     "test": {
       "agent": "omp",
       "model": "pay/gpt-6.1-sol",
-      "thinking": "high"
+      "thinking": "xhigh"
     },
     "simple": {
-      "agent": "codex",
-      "model": "gpt-6.1-sol",
-      "thinking": "medium"
+      "agent": "omp",
+      "model": "pay/gpt-6.1-sol",
+      "thinking": "xhigh"
     },
     "coder1": {
       "agent": "codex",
-      "model": "gpt-6.1-sol",
+      "model": "gpt-6-astra",
       "thinking": "medium"
     },
     "coder2": {
       "agent": "codex",
-      "model": "gpt-6.1-sol",
+      "model": "gpt-6-astra",
       "thinking": "medium"
     },
     "reviewer": {
-      "agent": "claude",
-      "model": "sonnet",
-      "thinking": "high"
+      "agent": "omp",
+      "model": "pay/gpt-6-astra",
+      "thinking": "xhigh"
     },
     "designer2": {
       "agent": "omp",

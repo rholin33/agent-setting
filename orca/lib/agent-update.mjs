@@ -28,7 +28,7 @@ const PI_COMMAND = /(?:^|[\\/\s])node(?:\.exe)?\s+\S*[\\/]bin[\\/]pi(?:\s|$)|pi-
 export function active(rows, agent) {
   return rows.some(row => {
     const name = row.Name || '', command = row.CommandLine || '';
-    if (agent === 'omp') return /^omp(?:\.exe)?$/i.test(name) || OMP_COMMAND.test(command);
+    if (agent === 'omp') return /(?:^|[\\/])omp(?:\.exe)?$/i.test(name) || OMP_COMMAND.test(command);
     if (agent === 'codex') return !/app-server-daemon[\\/]releases/i.test(command) && (/^codex(?:\.exe)?$/i.test(name) || CODEX_COMMAND.test(command));
     return !/@oh-my-pi[\\/]/i.test(command) && PI_COMMAND.test(command);
   });
@@ -54,7 +54,8 @@ export async function runUpdateCommand(command, args) {
   } catch (error) { return { status: error.code || 1, stderr: error.stderr || error.message }; }
 }
 
-export async function updateAgentsBeforeStart({ agents, processes = processInventory, run = runUpdateCommand, log = console.log, lifecycle }) {
+export async function updateAgentsBeforeStart({ agents, processes = processInventory, run = runUpdateCommand, log = console.log, lifecycle, syncConfigs }) {
+  if (syncConfigs) await syncConfigs();
   const result = { updated: [], deferred: [], warnings: [] };
   const names = [...new Set(agents)].filter(name => packages[name] || name === 'omp');
   const warn = message => { result.warnings.push(message); log(`Warning: ${message}; continuing startup`); };
@@ -73,15 +74,18 @@ export async function updateAgentsBeforeStart({ agents, processes = processInven
     if (!lifecycle && active(inventory, name)) { defer(name); continue; }
     try {
       if (name === 'omp') {
- if (lifecycle) stopped = await lifecycle.stop(name);
- else if (active(inventory, 'omp')) {defer(name);continue;}
- log('Updating OMP program and plugins…');
- await checked('omp',['update']);
- await checked('omp',['update','--plugins']);
- result.updated.push(name);
- log('OMP update completed successfully');
- continue;
- }
+        if (lifecycle) stopped = await lifecycle.stop(name);
+        else if (active(await processes(), name)) { defer(name); continue; }
+        log('Checking OMP program updates…');
+        const programOutput = await checked('omp', ['update']);
+        if (programOutput.trim()) log(programOutput.trim());
+        log('Updating OMP plugin packages…');
+        const pluginOutput = await checked('omp', ['update', '--plugins']);
+        if (pluginOutput.trim()) log(pluginOutput.trim());
+        result.updated.push(name);
+        log('OMP program and plugin update completed successfully');
+        continue;
+      }
  installed ??= JSON.parse(await checked('npm', ['list', '--global', '--depth=0', '--json']));
       const current = installed.dependencies?.[packages[name]]?.version;
       if (!current) throw new Error(`${name} is not an npm global installation; update skipped`);
@@ -159,7 +163,9 @@ export async function checkAgentUpdates({ home, agents, run = runUpdateCommand, 
 
 // start/restart 的自动更新：有新版本且没有任何进程在用该 CLI 时直接安装，不为更新停止角色。
 // 运行中的进程会按需读取安装目录里带哈希的资源文件，替换会让它们出错，所以在用时跳过。
-export async function autoUpdateAgents({ home, agents, processes = processInventory, run = runUpdateCommand, log = console.log, now = Date.now }) {
+export async function autoUpdateAgents({ home, agents, processes = processInventory, run = runUpdateCommand, log = console.log, now = Date.now, syncConfigs }) {
+  // 配置合并不依赖联网检查缓存或 CLI 是否需要升级。
+  if (syncConfigs) await syncConfigs();
   const available = await checkAgentUpdates({ home, agents, run, log, now });
   if (!available.length) return { updated: [], deferred: [], warnings: [] };
   // 逐个 agent 的 deferred 日志由下面的汇总提示代替。

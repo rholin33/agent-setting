@@ -66,10 +66,10 @@ The default command first makes sure the Orca app is running: when the runtime m
 missing it launches Orca and waits until the CLI answers. It then syncs role
 models before launching. Codex roles without a `piProvider` take the top-level
 `model` and `model_reasoning_effort` from the local Codex config (`$CODEX_HOME/config.toml`, else
-`~/.codex/config.toml`). Codex launches explicitly pass these synced model and thinking values. All selected roles appear in the picker; Codex rows are read-only. Pi roles are
+`~/.codex/config.toml`). Codex launches explicitly pass these synced model and thinking values. All selected roles appear in the picker; Codex model/thinking follow local config, while its agent column remains editable. Pi/OMP roles are
 configured through an interactive picker in the terminal: presets and the last
 confirmed selection live in `pi-models.json` next to `team.json` and can be
-edited by hand. Newly configured Pi provider models are added to existing presets automatically, preserving saved role choices and custom labels. Starts without a terminal (Orca quick commands, CI) and
+edited by hand (`omp-models.json` for OMP teams). The picker has separate `role | agent | model | thinking | remote` columns. Up/Down selects a role; Tab/Shift-Tab switches the agent/model column; Left/Right changes only that column; `a`/`m` directly focus agent/model. Models are deduplicated and sorted by provider then natural model name (numeric versions included). Switching back to an agent restores its previous model/thinking within the menu. Newly configured Pi and OMP provider models are read from their native catalogs automatically, preserving saved role choices. Starts without a terminal (Orca quick commands, CI) and
 `--no-pick` never open the picker and keep `team.json` values unchanged.
 
 Pi roles also load their packaged skills from `source/<role>/skills/` at each
@@ -170,6 +170,10 @@ registry and install only when their version differs from the latest version;
 idle Pi then runs `pi update --extensions` for its packages. A shared update lock keeps
 multiple team commands from installing simultaneously. Update failures warn
 and continue startup with the available installation.
+
+The Agent update stage also merges local Pi and OMP model configuration, even when version checks are cached or no CLI update is available. It reads Pi `models.json` and OMP `models.yml`/`models.yaml` (legacy `models.json` only if YAML is absent). Providers and model IDs are unioned; conflicting fields prefer the catalog with more distinct provider/model pairs, with Pi winning ties. Per-model thinking overrides are merged as well. Original changed files receive sibling `.orca-sync-<id>.bak` backups; repeated sync is a no-op. Invalid configurations abort the merge before any write. Credentials remain local and are never printed or exported.
+
+Native themes, plugin lists, default model selection, compaction settings, authentication stores and conversation files are not mirrored. Default directories are `~/.pi/agent` and `~/.omp/agent`; `PI_CODING_AGENT_DIR` is honored. For distinct custom locations use `ORCA_PI_AGENT_DIR` and `ORCA_OMP_AGENT_DIR`. A shared directory is rejected to avoid overwriting two formats in one location. Existing processes are not restarted for a configuration merge; newly started sessions read it.
 The picker reads per-role model and thinking selections from local `pi-models.json`;
 `,` and `.` change the selected role's thinking level, and Enter saves it.
 Default startup reuses running roles whose applied fingerprint matches and stops

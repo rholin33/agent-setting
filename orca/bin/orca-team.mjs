@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { openRepair } from '../lib/startup-repair.mjs';
+import { reconcileProjectList } from '../lib/list-reconcile.mjs';
 import { recoverProtectedStart } from '../lib/protected-start.mjs';
 import { ensureClaudeLocalTerminal } from '../lib/claude-local-terminal.mjs';
 import { parseRemoteRequests, startRemoteRequests, verifyRemoteEnvironment } from '../lib/remote-start.mjs';
@@ -22,6 +23,7 @@ import { restartTeam, resolveRestartRoles } from '../lib/restart.mjs';
 import { inspectHealth } from '../lib/health.mjs';
 import { ensureOrca } from '../lib/orca-boot.mjs';
 import { syncModels } from '../lib/model-sync.mjs';
+import { syncLocalModelConfigs } from '../lib/local-model-config.mjs';
 import { switchProviders, pendingSwitches, startupSwitches, handoffPrompt } from '../lib/handoff.mjs';
 import { updateAgentsBeforeStart, autoUpdateAgents, clearUpdateCheck } from '../lib/agent-update.mjs';
 import { updateLifecycle } from '../lib/update-lifecycle.mjs';
@@ -48,6 +50,7 @@ async function updatePrehook(home, names) {
   const agents = catalog.filter(role => !names || names.includes(role.name)).map(role => role.agent);
   try {
     return await withLock(path.join(home, 'agent-update.lock'), () => updateAgentsBeforeStart({ agents,
+      syncConfigs: () => syncLocalModelConfigs({ log: console.log }),
       lifecycle: updateLifecycle({ home, cli: orca, snapshot }) }));
   } catch (error) {
     if (/session recovery|partial shutdown recovery/.test(error.message)) throw error;
@@ -58,7 +61,7 @@ async function updatePrehook(home, names) {
 async function autoUpdate(home, names) {
   const catalog = readJson(path.join(home, 'team.json'));
   const agents = catalog.filter(role => !names || names.includes(role.name)).map(role => role.agent);
-  try { await withLock(path.join(home, 'agent-update.lock'), () => autoUpdateAgents({ home, agents })); }
+  try { await withLock(path.join(home, 'agent-update.lock'), () => autoUpdateAgents({ home, agents, syncConfigs: () => syncLocalModelConfigs({ log: console.log }) })); }
   catch (error) { console.log(`Warning: agent update skipped: ${error.message}`); }
 }
 try {
@@ -140,6 +143,7 @@ try {
       await stage('Agent update', () => autoUpdate(home, restartNames));
       await restoreGroupLayout({ project, config: readJson(files.config), state: readJson(files.state) });
       await restartTeam({ home, project, forceExit: true, targets, cli: orca, snapshot });
+      if (!targets.length) await reconcileProjectList({ home, project, cli: orca });
     } else if (action === 'start') {
       if (await stage('Orca connection', () => ensureOrca({ cli: orca }))) console.log('Orca was started automatically');
       const files = projectFiles(home, project);
@@ -236,6 +240,7 @@ try {
         await stage('Layout and conversation recovery', () => runTeam({ home, project, action, group: values.group, cli: orca, snapshot }));
         if (skipped.length) throw new Error(`Roles not restarted: ${skipped.map(item => `${item.name}: ${item.reason}`).join('; ')}`);
       }
+      if (values.group === undefined) await stage('Terminal list reconciliation', () => reconcileProjectList({ home, project, cli: orca }));
     } else if (action === 'status') {
       await runTeam({ home, project, action, group: values.group, cli: orca, snapshot });
     } else if (action === 'launch') {

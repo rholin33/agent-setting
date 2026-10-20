@@ -85,3 +85,33 @@ for (const problem of ['wrong-role', 'missing', 'extra', 'foreign', 'disconnecte
     if (problem !== 'receipt') assert.equal(f.calls.length, 0);
   });
 }
+
+function customTitleFixture() {
+  const f = fixture(), row = f.inventory.terminals[1];
+  Object.assign(row, { title: 'OMP > RECOV: Verify frozen translation', incarnationId: 'inc', ptyId: 'pty', executionHostId: 'local' });
+  f.state.agents.loader.session = { id: 'original-session', transcriptPath: '/project/loader.jsonl' };
+  const live = { kind: 'agent', terminal: { ...row }, sessionPaths: ['/project/loader.jsonl'] };
+  f.inspect = async () => live;
+  f.log = () => {};
+  f.cli = async args => { f.calls.push(args); return { rename: { handle: 'master', tabId: 'tab', title: 'master · loader' } }; };
+  return { f, live };
+}
+
+test('a custom native session title keeps the shared label when its original conversation is proven', async () => {
+  const { f } = customTitleFixture();
+  await revealRoleTitles(f);
+  assert.deepEqual(f.calls, [['terminal', 'rename', '--terminal', 'master', '--title', 'master · loader']]);
+});
+
+for (const problem of ['different-session', 'shell', 'replaced-pane', 'foreign-worktree', 'inspection-failed']) {
+  test(`custom title fallback refuses ${problem}`, async () => {
+    const { f, live } = customTitleFixture();
+    if (problem === 'different-session') live.sessionPaths = ['/project/other.jsonl'];
+    if (problem === 'shell') live.kind = 'shell';
+    if (problem === 'replaced-pane') live.terminal.incarnationId = 'replacement';
+    if (problem === 'foreign-worktree') live.terminal.worktreePath = '/foreign';
+    if (problem === 'inspection-failed') f.inspect = async () => { throw new Error('probe failed'); };
+    await assert.rejects(revealRoleTitles(f), /role title|probe failed/);
+    assert.equal(f.calls.length, 0);
+  });
+}

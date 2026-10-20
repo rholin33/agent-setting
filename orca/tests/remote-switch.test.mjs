@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
 import { projectFiles } from '../lib/team.mjs';
-import { beginRemoteSwitch, claimRemoteSetup, commitRemoteSwitch, rejectRemoteSwitch, readRemoteSwitches, reattachOmpOwner } from '../lib/remote-switch.mjs';
+import { beginRemoteSwitch, claimRemoteSetup, commitRemoteSwitch, rejectRemoteSwitch, readRemoteSwitches, reattachOmpOwner, reattachClaudeOwner } from '../lib/remote-switch.mjs';
 
 function pythonJson(value) {
   if (Array.isArray(value)) return `[${value.map(pythonJson).join(', ')}]`;
@@ -85,6 +85,57 @@ async function acceptedRemote(f) {
   f.save(intent, f.record(intent));
   await commitRemoteSwitch(f.settle(intent));
   return intent;
+}
+
+for (const problem of [null, 'session', 'environment', 'old-live', 'incomplete', 'native']) {
+  test(`Claude exact-session reattachment preserves receipt ancestry: ${problem || 'success'}`, async t => {
+    const f = fixture(t);
+    const intent = await beginRemoteSwitch({ ...f.request, runtime: 'claude' });
+    await claimRemoteSetup(f.settle(intent));
+    const original = { ...f.remote, runtime: 'claude', environment: 'paired-host' };
+    const record = f.record(intent, original);
+    f.save(intent, record);
+    const files = projectFiles(f.home, f.project);
+    const registry = path.join(files.directory, 'remote-switches.json');
+    const config = path.join(files.directory, 'binding.json');
+    const entry = { ...f.state().roles.master, owner: original, runtime: 'claude', claudeConfig: config };
+    delete entry.pending;
+    fs.writeFileSync(registry, JSON.stringify({ version: 1, roles: { master: entry } }));
+    fs.writeFileSync(config, JSON.stringify({ registeredWorktree: '/remote/control', remoteWorktree: '/remote/control' }));
+    const endpoint = { ...original, terminal: 'restored', incarnation: 'new-incarnation' };
+    if (problem === 'session') endpoint.session = 'other';
+    if (problem === 'environment') endpoint.environment = 'other';
+    const before = fs.readFileSync(registry, 'utf8');
+    const ledger = path.join(intent.ledgerDirectory, 'state.json');
+    const beforeLedger = fs.readFileSync(ledger, 'utf8');
+    const cli = async args => {
+      assert.deepEqual(args, ['terminal', 'list', '--worktree', 'path:/remote/control', '--environment', original.environment]);
+      return { terminals: problem === 'old-live' ? [{ handle: original.terminal }] : [], truncated: problem === 'incomplete', totalCount: problem === 'old-live' ? 1 : 0 };
+    };
+    let verified = 0;
+    const verifyClaude = async proof => {
+      verified++;
+      assert.deepEqual(proof.endpoint, endpoint);
+      if (problem === 'native') throw Error('Native identity unavailable');
+    };
+    const action = () => reattachClaudeOwner({ ...f.options, endpoint, config, cli, verifyClaude });
+    if (problem) {
+      await assert.rejects(action);
+      assert.equal(fs.readFileSync(registry, 'utf8'), before);
+      assert.equal(fs.readFileSync(ledger, 'utf8'), beforeLedger);
+      return;
+    }
+    await action();
+    assert.equal(verified, 1);
+    assert.deepEqual(f.state().roles.master.owner, endpoint);
+    assert.deepEqual(f.state().roles.master.local, f.local);
+    const { owner_rebindings, ...retained } = JSON.parse(fs.readFileSync(ledger, 'utf8'))[intent.taskId];
+    assert.deepEqual(retained, record);
+    assert.deepEqual(owner_rebindings, [{ previous: original, current: endpoint }]);
+    const back = await beginRemoteSwitch({ ...f.options, runtime: null, source: endpoint, local: f.local });
+    assert.equal(back.baseRecordId, record.id);
+    assert.equal(back.baseRevision, record.revision);
+  });
 }
 
 test('absent registry is empty without creating directories; prepared intent is private and reusable', async t => {

@@ -15,6 +15,28 @@ const options = (extra = {}) => ({ agents: ['codex', 'pi'], log: () => {},
     return { status: 0, stdout: '' };
   }, ...extra });
 
+test('Agent update syncs local model configs before checking versions, including a cache hit with no update', async t => {
+  const { autoUpdateAgents } = await import('../lib/agent-update.mjs');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-config-update-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const calls = [];
+  const syncConfigs = async () => { calls.push('sync'); return { changed: [] }; };
+  const defaults = options();
+  await updateAgentsBeforeStart(options({ home, syncConfigs, agents: ['omp'], run: async () => { calls.push('update'); return { status: 0 }; } }));
+  assert.equal(calls[0], 'sync');
+  calls.length = 0;
+  fs.writeFileSync(path.join(home, 'agent-update-check.json'), JSON.stringify({ checkedAt: new Date().toISOString(), agents: { pi: { current: '1', latest: '1' } } }));
+  await autoUpdateAgents({ ...defaults, home, agents: ['pi'], syncConfigs });
+  assert.deepEqual(calls, ['sync']);
+});
+
+test('configuration sync failure stops explicit update before touching processes or installing packages', async () => {
+  await assert.rejects(() => updateAgentsBeforeStart(options({ home: 'unused', agents: ['omp'],
+    syncConfigs: async () => { throw new Error('Invalid model config'); },
+    processes: async () => { throw new Error('must not stop or scan'); },
+  })), /Invalid model config/);
+});
+
 test('active agents across projects defer both program and extension updates', async () => {
   const result = await updateAgentsBeforeStart(options({
     processes: async () => [{ Name: 'codex.exe' }, { Name: 'node.exe', CommandLine: 'node C:/global/pi-coding-agent/dist/bundle/cli.js' }],
@@ -242,4 +264,45 @@ test('startup auto-update installs only CLIs that no process uses and never stop
   assert.deepEqual(second.updated, ['omp']);
   assert.ok(calls.includes('omp update') && calls.includes('omp update --plugins'));
   assert.ok(!calls.some(call => call.startsWith('npm view')));
+});
+
+test('OMP rechecks running processes before changing its installation', async () => {
+  let scans = 0;
+  const result = await updateAgentsBeforeStart(options({ agents: ['omp'],
+    processes: async () => ++scans === 1 ? [] : [{ Name: '/usr/local/bin/omp' }],
+    run: async () => { throw new Error('must not touch an installation that became active'); },
+  }));
+  assert.deepEqual(result.deferred, ['omp']);
+  assert.deepEqual(result.warnings, []);
+});
+
+test('OMP reports program and plugin update output before restoring sessions', async () => {
+  const calls = [], logs = [];
+  const result = await updateAgentsBeforeStart(options({ agents: ['omp', 'omp'], log: line => logs.push(line),
+    lifecycle: {
+      stop: async agent => { calls.push(`stop ${agent}`); return ['original']; },
+      resume: async sessions => { assert.deepEqual(sessions, ['original']); calls.push('resume'); },
+    },
+    run: async (command, args) => {
+      assert.equal(command, 'omp');
+      calls.push(args.join(' '));
+      return { status: 0, stdout: args.includes('--plugins') ? 'Magic Context 0.47.0 → 0.49.0' : 'OMP is up to date' };
+    },
+  }));
+  assert.deepEqual(calls, ['stop omp', 'update', 'update --plugins', 'resume']);
+  assert.deepEqual(result.updated, ['omp']);
+  assert.ok(logs.includes('OMP is up to date'));
+  assert.ok(logs.includes('Magic Context 0.47.0 → 0.49.0'));
+});
+
+test('OMP plugin update failure warns and restores original sessions', async () => {
+  let resumed = false;
+  const result = await updateAgentsBeforeStart(options({ agents: ['omp'],
+    lifecycle: { stop: async () => ['original'], resume: async () => { resumed = true; } },
+    run: async (command, args) => args.includes('--plugins')
+      ? { status: 1, stderr: 'plugin registry unavailable' } : { status: 0 },
+  }));
+  assert.equal(resumed, true);
+  assert.deepEqual(result.updated, []);
+  assert.match(result.warnings[0], /plugin registry unavailable/);
 });

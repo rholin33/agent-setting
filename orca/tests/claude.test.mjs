@@ -118,7 +118,7 @@ test('claude rows retain native models and permit CLI selection', () => {
     initial: { reviewer: { model: 'pay/a', thinking: null } },
   });
   assert.deepEqual([state.rows[0].editable, state.rows[0].model, state.rows[1].editable], [true, 'opus', true]);
-  assert.match(renderPicker(state), /claude\/opus/);
+  assert.match(renderPicker(state), /claude\s+\[opus\]/);
 });
 
 const winRoot = { ProcessId: 10, ParentProcessId: 1, Name: 'pwsh.exe', Created: '100', SessionId: 1 };

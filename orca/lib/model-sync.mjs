@@ -3,6 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { readJson, saveJson } from './team.mjs';
 import { pickPiModels } from './model-picker.mjs';
+import { normalizePresets } from './model-presets.mjs';
+import { readAgentModelCatalog, agentConfigDirectory } from './local-model-config.mjs';
 
 // The top-level `model` key of the local Codex config; parsing stops at the
 // first section so section-local keys are never mistaken for the default model.
@@ -24,7 +26,7 @@ export function readCodexModel(codexHome) {
 }
 
 // First run seeds presets from the Pi provider catalog plus thinking defaults.
-export function seedPiModelConfig(piHome = path.join(os.homedir(), '.pi', 'agent')) {
+export function seedPiModelConfig(piHome = agentConfigDirectory('pi')) {
   const modelsFile = path.join(piHome, 'models.json');
   const settingsFile = path.join(piHome, 'settings.json');
   const providers = fs.existsSync(modelsFile) ? readJson(modelsFile).providers || {} : {};
@@ -37,7 +39,21 @@ export function seedPiModelConfig(piHome = path.join(os.homedir(), '.pi', 'agent
     }
   }
   if (!presets.length) throw new Error('No Pi models found; configure ~/.pi/agent/models.json first');
-  return { presets, roles: {} };
+  return { presets: normalizePresets(presets), roles: {} };
+}
+
+export function seedAgentModelConfig({ piHome = agentConfigDirectory('pi'), ompHome = agentConfigDirectory('omp') } = {}) {
+  const presets = [];
+  for (const [agent, directory] of [['omp', ompHome], ['pi', piHome]]) {
+    const { models, settings } = readAgentModelCatalog({ agent, directory });
+    for (const [provider, definition] of Object.entries(models.providers || {})) {
+      for (const model of definition.models || []) {
+        const id = `${provider}/${model.id}`;
+        presets.push({ agent, model: id, thinking: settings.modelThinkingLevels?.[id] ?? settings.defaultThinkingLevel ?? null, label: id });
+      }
+    }
+  }
+  return { presets: normalizePresets(presets), roles: {} };
 }
 
 export function loadPiModelConfig(home, seed = seedPiModelConfig, filename = 'pi-models.json') {
@@ -47,15 +63,18 @@ export function loadPiModelConfig(home, seed = seedPiModelConfig, filename = 'pi
     if (!Array.isArray(config.presets) || !config.presets.length) throw new Error(`Invalid presets in ${file}`);
     if (config.roles === undefined) config.roles = {};
     // 保留用户预设和选择，并补入 Pi 新增的 provider/model。
-    const known = new Set(config.presets.map(preset => preset.model));
-    const additions = seed().presets.filter(preset => !known.has(preset.model));
-    if (additions.length) {
-      config.presets.push(...additions);
+    const key = preset => `${preset.agent || ''}\0${preset.model}`;
+    const known = new Set(config.presets.map(key));
+    const additions = seed().presets.filter(preset => !known.has(key(preset)));
+    const sorted = normalizePresets([...config.presets, ...additions]);
+    if (JSON.stringify(config.presets) !== JSON.stringify(sorted)) {
+      config.presets = sorted;
       saveJson(file, config);
     }
     return { config, file, created: false };
   }
   const config = seed();
+  config.presets = normalizePresets(config.presets);
   saveJson(file, config);
   return { config, file, created: true };
 }
@@ -83,19 +102,24 @@ export async function syncModels({ home, names, pick = true, log = console.log, 
     log('Warning: local Codex config has no model key; Codex role models unchanged');
   }
   const piRoles = catalog.filter(role => ['pi', 'omp'].includes(role.agent) && inScope(role));
-  if (!seed && piRoles.some(role => role.agent === 'omp')) seed = () => ({ presets: piRoles.map(role => ({ model: role.model, thinking: role.thinking, label: role.model })), roles: {} });
+  seed ??= () => {
+    const configured = seedAgentModelConfig();
+    configured.presets = normalizePresets([...configured.presets, ...piRoles.filter(role => !configured.presets.some(p => p.agent === role.agent && p.model === role.model))
+      .map(role => ({ agent: role.agent, model: role.model, thinking: role.thinking, label: role.model }))]);
+    return configured;
+  };
   const modelConfigFile = piRoles.some(role => role.agent === 'omp') || fs.existsSync(path.join(home, 'omp-models.json')) ? 'omp-models.json' : 'pi-models.json';
   let config = null;
   let selectionMade = false;
   if (catalog.some(inScope) && pick) {
     const interactive = Boolean(stdin.isTTY && stdout.isTTY);
     let loaded = null;
-    try { loaded = piRoles.length ? loadPiModelConfig(home, seed, modelConfigFile) : { config: fs.existsSync(path.join(home, modelConfigFile)) ? readJson(path.join(home, modelConfigFile)) : { presets: [], roles: {} } }; }
+    try { loaded = piRoles.length || fs.existsSync(path.join(home, modelConfigFile)) ? loadPiModelConfig(home, seed, modelConfigFile) : { config: seed() }; }
     catch (error) { if (interactive) throw error; log(`Warning: ${error.message}`); }
     config = loaded?.config ?? null;
     if (config && interactive) {
       const presets = [...config.presets, ...(codexModel ? [{ agent: 'codex', model: codexModel, thinking: codexThinking }] : []),
-        ...['sonnet', 'opus', 'haiku'].map(model => ({ agent: 'claude', model, thinking: 'high', label: `Claude CLI / ${model}` }))];
+        ...['sonnet', 'opus', 'haiku'].map(model => ({ agent: 'claude', model, thinking: 'high', label: model }))];
       const selection = await pickPiModels({ roles: catalog.filter(inScope), presets, initial: config.roles, initialRemote: remoteStates, confirmRemote, stdin, stdout });
       menuResult.status = selection ? 'confirmed' : 'cancelled';
       if (selection) {
