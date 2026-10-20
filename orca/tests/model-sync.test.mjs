@@ -13,6 +13,16 @@ function temp(t) {
 }
 const noTTY = { isTTY: false };
 
+test('OMP/Pi seeding reads both effective native catalogs, not only selected role models', async t => {
+  const { seedAgentModelConfig } = await import('../lib/model-sync.mjs');
+  const piHome = temp(t), ompHome = temp(t);
+  fs.writeFileSync(path.join(piHome, 'models.json'), JSON.stringify({ providers: { piOnly: { models: [{ id: 'b' }] } } }));
+  fs.writeFileSync(path.join(ompHome, 'models.yml'), 'providers:\n  ompOnly:\n    models:\n      - id: a\n');
+  fs.writeFileSync(path.join(ompHome, 'config.yml'), 'defaultThinkingLevel: high\n');
+  const config = seedAgentModelConfig({ piHome, ompHome });
+  assert.deepEqual(config.presets.map(p => [p.agent, p.model, p.thinking]), [['omp', 'ompOnly/a', 'high'], ['pi', 'piOnly/b', null]]);
+});
+
 test('confirmed Claude selection persists and existing sessions reject CLI changes', async t => {
   const { EventEmitter } = await import('node:events');
   const home = temp(t), codexHome = temp(t);
@@ -26,13 +36,13 @@ test('confirmed Claude selection persists and existing sessions reject CLI chang
     const stdout = { isTTY: true, write(text) {
       if (text.includes('Up/Down') && !sent) {
         sent = true;
-        queueMicrotask(() => stdin.emit('data', '\u001b[C\r'));
+        queueMicrotask(() => stdin.emit('data', 'a\u001b[D\r'));
       }
     } };
-    return syncModels({ home, codexHome, stdin, stdout, sessionAgents, prepareSwitches, log() {} });
+    return syncModels({ home, codexHome, stdin, stdout, sessionAgents, prepareSwitches, seed: () => ({ presets: [{ model: 'pay/a', thinking: 'xhigh' }], roles: {} }), log() {} });
   };
   await run({});
-  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), [{ name: 'master', agent: 'claude', model: 'sonnet', thinking: 'high' }]);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), [{ name: 'master', agent: 'claude', model: 'haiku', thinking: 'high' }]);
   assert.equal(JSON.parse(fs.readFileSync(path.join(home, 'omp-models.json'), 'utf8')).roles.master.agent, 'claude');
   await assert.rejects(run({ master: 'omp' }), /use --fresh master/);
   assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), original);
@@ -42,7 +52,7 @@ test('confirmed Claude selection persists and existing sessions reject CLI chang
   const prepared = [];
   await run({ master: 'omp' }, async switches => { prepared.push(...switches); });
   assert.deepEqual(prepared, [{ name: 'master', from: 'omp', to: 'claude' }]);
-  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), [{ name: 'master', agent: 'claude', model: 'sonnet', thinking: 'high' }]);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), [{ name: 'master', agent: 'claude', model: 'haiku', thinking: 'high' }]);
 });
 
 test('readCodexModel reads only the top-level model key', t => {
@@ -98,12 +108,12 @@ test('picker switches Codex roles to Claude while retaining local Codex thinking
     initial: { coder1: { model: 'stale', thinking: 'xhigh' } },
   });
   const selected = pickerKey(state, 'down').state;
-  assert.match(renderPicker(selected), /codex\/local-codex \(local config\)/);
+  assert.match(renderPicker(selected), /codex\s+\[local-codex \(local config\)\]/);
   assert.equal(pickerKey(selected, 'think-next').state, selected);
-  const claude = pickerKey(selected, 'right').state;
+  const claude = pickerKey(pickerKey(selected, 'tab').state, 'right').state;
   assert.equal(claude.rows[1].agent, 'claude');
   assert.equal(claude.rows[1].model, 'sonnet');
-  assert.match(renderPicker(claude), /claude\/sonnet/);
+  assert.match(renderPicker(claude), /\[claude\]\s+sonnet/);
   assert.equal(pickerKey(claude, 'think-next').state.rows[1].thinking, 'max');
 });
 
@@ -167,15 +177,16 @@ test('picker state machine navigates, switches presets and cycles thinking', () 
       { model: 'local/deepseek-v4.1-flash', thinking: 'medium', label: 'deepseek' },
     ],
   });
-  assert.equal(state.rows[0].presetIndex, 0);
+  assert.equal(state.rows[0].presetIndex, 1);
   assert.equal(state.rows[1].presetIndex, -1);
   let result = pickerKey(state, 'down');
   assert.equal(result.state.cursor, 1);
   result = pickerKey(result.state, 'right');
   assert.deepEqual([result.state.rows[1].model, result.state.rows[1].thinking, result.state.rows[1].presetIndex],
-    ['pay/gpt-6-astra', null, 0]);
+    ['local/deepseek-v4.1-flash', 'medium', 0]);
   result = pickerKey(result.state, 'left');
-  assert.deepEqual([result.state.rows[1].model, result.state.rows[1].thinking], ['local/deepseek-v4.1-flash', 'medium']);
+  assert.deepEqual([result.state.rows[1].model, result.state.rows[1].thinking], ['pay/gpt-6-astra', null]);
+  result = pickerKey(result.state, 'right');
   result = pickerKey(result.state, 'think-next');
   assert.equal(result.state.rows[1].thinking, 'high');
   result = pickerKey(result.state, 'think-prev');

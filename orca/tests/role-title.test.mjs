@@ -46,6 +46,30 @@ test('working OMP title retains role identity when the native title appends the 
   assert.equal(f.calls.length, 1);
 });
 
+test('generic OMP idle title preserves an explicit shared role label without failing startup', async () => {
+  const f = fixture(), warnings = [];
+  f.inventory.terminals[1].title = 'OMP ready';
+  f.log = message => warnings.push(message);
+  f.cli = async args => {
+    f.calls.push(args);
+    return { rename: { handle: 'master', tabId: 'tab', title: 'master · loader' } };
+  };
+  await revealRoleTitles(f);
+  assert.deepEqual(f.calls, [['terminal', 'rename', '--terminal', 'master', '--title', 'master · loader']]);
+  assert.match(warnings.join('\n'), /OMP ready.*master · loader/);
+});
+
+test('generic idle title does not hide a wrong sibling identity or rename receipt', async () => {
+  const f = fixture();
+  f.inventory.terminals[1].title = 'OMP ready';
+  f.inventory.terminals[0].title = 'OMP > stranger';
+  await assert.rejects(revealRoleTitles(f), /native role title/);
+  assert.equal(f.calls.length, 0);
+  f.inventory.terminals[0].title = 'OMP > master';
+  f.log = () => {};
+  await assert.rejects(revealRoleTitles(f), /receipt mismatch/);
+});
+
 for (const problem of ['wrong-role', 'missing', 'extra', 'foreign', 'disconnected', 'orphaned', 'different-tab', 'receipt']) {
   test(`shared title is not reported repaired with ${problem}`, async () => {
     const f = fixture(), row = f.inventory.terminals[1];

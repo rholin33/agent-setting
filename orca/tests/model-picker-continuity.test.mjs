@@ -98,9 +98,9 @@ for (const agent of ['pi', 'omp', 'codex']) {
       await result;
       assert.deepEqual(remoteRequests, scenario.requests);
       assert.deepEqual(remoteStates, { worker: scenario.runtime });
-      // Codex 行可以选择 CLI：→ 切到下一个预设，即 Claude CLI。
-      const expected = !scenario.nextModel ? { agent, model: 'provider/current', thinking: null }
-        : agent === 'codex' ? { agent: 'claude', model: 'sonnet', thinking: 'high' } : { agent, model: 'provider/next', thinking: 'high' };
+      // 模型列不会切换 CLI；Codex 保持本机模型配置。
+      const expected = !scenario.nextModel || agent === 'codex' ? { agent, model: 'provider/current', thinking: null }
+        : { agent, model: 'provider/next', thinking: 'high' };
       const catalog = JSON.parse(fs.readFileSync(path.join(setup.home, 'team.json'), 'utf8'));
       assert.deepEqual(catalog, [{ ...setup.roles[0], ...expected }]);
       if (agent !== 'codex') {

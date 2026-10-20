@@ -9,8 +9,8 @@
   {
     "name": "loader",
     "agent": "codex",
-    "model": "gpt-6.1-sol",
-    "thinking": "medium",
+    "model": "gpt-6-astra",
+    "thinking": "xhigh",
     "role": "agentroles.ccb_self"
   },
   {
@@ -23,15 +23,15 @@
   {
     "name": "coder1",
     "agent": "codex",
-    "model": "gpt-6.1-sol",
-    "thinking": "medium",
+    "model": "gpt-6-astra",
+    "thinking": "xhigh",
     "role": "agentroles.coder"
   },
   {
     "name": "coder2",
     "agent": "codex",
-    "model": "gpt-6.1-sol",
-    "thinking": "medium",
+    "model": "gpt-6-astra",
+    "thinking": "xhigh",
     "role": "agentroles.coder"
   },
   {
@@ -65,8 +65,8 @@
   {
     "name": "simple",
     "agent": "codex",
-    "model": "gpt-6.1-sol",
-    "thinking": "medium",
+    "model": "gpt-6-astra",
+    "thinking": "xhigh",
     "role": "agentroles.simple"
   },
   {

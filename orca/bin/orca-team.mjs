@@ -22,6 +22,7 @@ import { restartTeam, resolveRestartRoles } from '../lib/restart.mjs';
 import { inspectHealth } from '../lib/health.mjs';
 import { ensureOrca } from '../lib/orca-boot.mjs';
 import { syncModels } from '../lib/model-sync.mjs';
+import { syncLocalModelConfigs } from '../lib/local-model-config.mjs';
 import { switchProviders, pendingSwitches, startupSwitches, handoffPrompt } from '../lib/handoff.mjs';
 import { updateAgentsBeforeStart, autoUpdateAgents, clearUpdateCheck } from '../lib/agent-update.mjs';
 import { updateLifecycle } from '../lib/update-lifecycle.mjs';
@@ -48,6 +49,7 @@ async function updatePrehook(home, names) {
   const agents = catalog.filter(role => !names || names.includes(role.name)).map(role => role.agent);
   try {
     return await withLock(path.join(home, 'agent-update.lock'), () => updateAgentsBeforeStart({ agents,
+      syncConfigs: () => syncLocalModelConfigs({ log: console.log }),
       lifecycle: updateLifecycle({ home, cli: orca, snapshot }) }));
   } catch (error) {
     if (/session recovery|partial shutdown recovery/.test(error.message)) throw error;
@@ -58,7 +60,7 @@ async function updatePrehook(home, names) {
 async function autoUpdate(home, names) {
   const catalog = readJson(path.join(home, 'team.json'));
   const agents = catalog.filter(role => !names || names.includes(role.name)).map(role => role.agent);
-  try { await withLock(path.join(home, 'agent-update.lock'), () => autoUpdateAgents({ home, agents })); }
+  try { await withLock(path.join(home, 'agent-update.lock'), () => autoUpdateAgents({ home, agents, syncConfigs: () => syncLocalModelConfigs({ log: console.log }) })); }
   catch (error) { console.log(`Warning: agent update skipped: ${error.message}`); }
 }
 try {
