@@ -1,6 +1,6 @@
 ---
 name: ask
-description: Send a request to a CCB agent with `ask`. Use when the user asks to delegate work to a CCB agent or role (for example coder1, reviewer, test), invokes /ask, or project instructions require routing work through CCB ask.
+description: Send a request to a CCB agent with `ask`.
 metadata:
   short-description: Ask agent
 ---
@@ -73,8 +73,8 @@ Before every ask, decide:
   explicit debugging requests, not normal ask workflow tools.
 - Do not manually append output-policy text; stable reply policy comes from managed CCB memory, and `ask` adds only requested compact/silent mode metadata.
 
-Always send `MESSAGE` through the `<<'EOF' ... EOF` heredoc below. No other form
-is allowed. Use no flags or insert selected flags before `"$TARGET"`:
+Pass the message on stdin using a literal heredoc (Bash) or a single-quoted
+here-string (PowerShell). Do not interpolate message text into command arguments.
 
 ```bash
 command ask "$TARGET" <<'EOF'
@@ -82,11 +82,13 @@ $MESSAGE
 EOF
 ```
 
-```bash
-command ask --chain --artifact-reply "$TARGET" <<'EOF'
+```powershell
+@'
 $MESSAGE
-EOF
+'@ | & ask $TARGET
 ```
+
+Add selected flags before the target, for example `ask --chain --artifact-reply "$TARGET"`.
 
 After the command returns, end the turn. Do not wait for a reply,
 do not run `ask get` / `pend` / `ping` / `watch`, do not poll.

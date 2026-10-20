@@ -1,6 +1,6 @@
 ---
 name: ccb-compact
-description: Compact CCB managed agent conversation context with `ccb compact`. Use when the user invokes /ccb-compact, writes ccb_compact, or asks to summarize one or more mounted agent contexts without restarting agents or deleting project state.
+description: Compact CCB managed agent conversation context with `ccb compact`. Use when the user writes `$ccb-compact`, `$ccb_compact`, or asks to summarize one or more mounted agent contexts without restarting agents or deleting project state.
 metadata:
   short-description: Compact CCB agent context
 ---
