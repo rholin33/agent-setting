@@ -8,11 +8,11 @@ The Agent update stage merges effective local Pi/OMP model catalogs (Pi `models.
 
 Both explicit `orca-team update` and the start/restart Agent update stage run this merge, including when no newer CLI exists or the version cache is fresh. Automatic startup retains its existing warning/continue behavior when a sync fails. An explicit update skips package maintenance if configuration sync fails. No network, credential printing or remote configuration export is performed by the merge. Existing sessions are not restarted for configuration-only sync.
 
-Implementation: `orca/lib/model-picker.mjs`, `model-presets.mjs`, `model-sync.mjs`, `local-model-config.mjs`, `agent-update.mjs`, and `orca/bin/orca-team.mjs`. The portable package bundles MIT-licensed `yaml@2.9.1` under `lib/vendor` so deployment does not require npm/Python dependencies. Directories support `ORCA_PI_AGENT_DIR`, `ORCA_OMP_AGENT_DIR`, `PI_CODING_AGENT_DIR`, and OMP profiles; a shared Pi/OMP directory is rejected.
+Implementation: `orca/lib/model-picker.mjs`, `model-presets.mjs`, `model-sync.mjs`, `local-model-config.mjs`, `agent-update.mjs`, and `orca/bin/orca-team.mjs`. The portable package bundles ISC-licensed `yaml@2.9.1` under `lib/vendor` so deployment does not require npm/Python dependencies. Directories support `ORCA_PI_AGENT_DIR`, `ORCA_OMP_AGENT_DIR`, `PI_CODING_AGENT_DIR`, and OMP profiles; a shared Pi/OMP directory is rejected.
 
 Verification (2026-10-20): full `node --test tests/*.test.mjs` completed with 455 passed, 10 platform skips, 0 failures. Coverage includes column navigation through actual raw Tab input, stable ordering, agent memory, remote continuity, merge conflict preference, backups, idempotency and invalid configuration. Installed files were hash-verified against source. A live Orca preview verified agent-only and model-only edits then Escape; original team/state bytes and all 11 preexisting terminal incarnations were preserved. OMP native `models pay --json --no-extensions` read the updated catalog successfully. Both effective local catalogs contain 2 providers / 6 models; the second merge wrote no files.
 
-Limits: sync covers models/providers and per-model thinking only. It does not mirror native plugin/theme/default-model settings or auth/session stores. No end-to-end live package upgrade or role restart was performed. No service/API/database changes, commit or remote push.
+Limits: sync covers models/providers and per-model thinking only. It does not mirror native plugin/theme/default-model settings or auth/session stores. No end-to-end live package upgrade or role restart was performed. No service/API/database changes. The local validation above preceded the publishing review.
 
 Startup should let each role select Claude Code, Codex, or its existing Pi/OMP presets.
 Provider choices are saved only on confirmation; cancellation and --no-pick retain them.
@@ -26,6 +26,8 @@ Implementation: `orca/lib/model-picker.mjs`, `model-sync.mjs`, startup session g
 Verification: `node --test orca/tests/*.test.mjs` passed 196 tests; `git diff --check` passed. Local installation via `scripts/install-config.py --target orca` succeeded, with executable launchers regenerated and implementation bytes verified. Conflict originals are backed up in the installed package's backups directory. No live agents were launched or restarted, and no commit or push was performed.
 
 Limitations: live Claude startup was not exercised. Cross-provider raw conversation conversion is unsupported; the handoff workflow below carries context instead. Existing quick commands invoke the same installed entry point and skip the interactive picker when no TTY is available.
+
+Publishing verification (2026-10-20): `node --test orca/tests/*.test.mjs` completed with 472 passed, 10 platform skips and 0 failures. The Python sync suite has 3 Windows path-separator assertion failures and 1 default-encoding error; all four also reproduce on unmodified remote commit `898c4a0`. Publishing does not restart live agents.
 
 ## CLI switch handoff
 

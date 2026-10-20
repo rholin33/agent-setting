@@ -95,7 +95,7 @@ function ledgerOwner(record, role) {
   if (record.owner_rebindings !== undefined && !Array.isArray(record.owner_rebindings)) throw new Error('Invalid native owner history');
   for (const binding of record.owner_rebindings || []) {
     const target = identity(binding.current, role);
-    if (!equalIdentity(binding.previous, owner, role) || owner.runtime !== 'omp' ||
+    if (!equalIdentity(binding.previous, owner, role) || !['omp', 'claude'].includes(owner.runtime) ||
         ['runtime', 'role', 'environment', 'session'].some(key => owner[key] !== target[key])) throw new Error('Native owner history changed conversation');
     owner = target;
   }
@@ -135,6 +135,42 @@ export async function reattachOmpOwner({ home, project, role, endpoint, config, 
     return withLedgerLock(entry, () => {
       const record = ledgerRecord(entry);
       if (!record || ![entry.owner, target].some(value => equalIdentity(ledgerOwner(record, role), value, role))) throw new Error('Native owner ledger is not settled');
+      if (!equalIdentity(ledgerOwner(record, role), target, role)) {
+        record.owner_rebindings = [...(record.owner_rebindings || []), { previous: entry.owner, current: target }];
+        const ledgerPath = path.join(entry.ledgerDirectory, 'state.json');
+        const ledger = readJson(ledgerPath); ledger[entry.taskId] = record; savePrivate(ledgerPath, ledger);
+      }
+      entry.reattachments = [...(entry.reattachments || []), { previous: entry.owner, current: target, at: new Date().toISOString() }];
+      entry.owner = target;
+      savePrivate(files.registry, state);
+      return entry;
+    });
+  });
+}
+
+// Rebind only a verified original Claude conversation after its old terminal is
+// proven absent. Receipt payloads remain immutable; endpoint changes are audited.
+export async function reattachClaudeOwner({ home, project, role, endpoint, config, cli, verifyClaude = verifyClaudeBinding }) {
+  return locked({ home, project, role }, async (files, state) => {
+    const entry = own(state.roles, role), target = identity(endpoint, role);
+    if (!entry || entry.runtime !== 'claude' || entry.pending || entry.claudeConfig !== config ||
+        ['runtime', 'role', 'environment', 'session'].some(key => entry.owner[key] !== target[key])) {
+      throw new Error('Claude owner cannot be rebound to another task or conversation');
+    }
+    await verifyClaude({ config, endpoint: target, project, cli });
+    if (equalIdentity(entry.owner, target, role)) return entry;
+    const binding = readJson(config), worktree = binding.registeredWorktree || binding.remoteWorktree;
+    if (typeof worktree !== 'string' || !worktree) throw new Error('Claude remote worktree unavailable');
+    const inventory = await cli(['terminal', 'list', '--worktree', `path:${worktree}`, '--environment', entry.owner.environment]);
+    if (!Array.isArray(inventory.terminals) || inventory.truncated !== false ||
+        inventory.totalCount !== inventory.terminals.length || inventory.terminals.some(row => row.handle === entry.owner.terminal)) {
+      throw new Error('Original Claude terminal is not proven closed');
+    }
+    return withLedgerLock(entry, () => {
+      const record = ledgerRecord(entry);
+      if (!record || ![entry.owner, target].some(value => equalIdentity(ledgerOwner(record, role), value, role))) {
+        throw new Error('Claude owner ledger is not settled');
+      }
       if (!equalIdentity(ledgerOwner(record, role), target, role)) {
         record.owner_rebindings = [...(record.owner_rebindings || []), { previous: entry.owner, current: target }];
         const ledgerPath = path.join(entry.ledgerDirectory, 'state.json');

@@ -1,6 +1,6 @@
 # YAML parser
 
-`yaml.mjs` bundles the browser ESM entry of `yaml@2.9.1` (MIT, Eemeli Aro); license in `yaml.LICENSE`.
+`yaml.mjs` bundles the browser ESM entry of `yaml@2.9.1` (ISC, Eemeli Aro); license in `yaml.LICENSE`.
 Upstream: https://github.com/eemeli/yaml
 
 Generated with `esbuild@0.28.2`:

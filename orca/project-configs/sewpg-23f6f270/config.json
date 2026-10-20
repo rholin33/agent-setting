@@ -1,0 +1,57 @@
+{
+  "entry": "master",
+  "tabs": [
+    {
+      "title": "master",
+      "agents": [
+        "master",
+        "loader"
+      ],
+      "direction": "vertical",
+      "ratio": 0.5
+    },
+    {
+      "title": "archi",
+      "agents": [
+        "archi"
+      ]
+    },
+    {
+      "title": "coder",
+      "agents": [
+        "coder1",
+        "coder2"
+      ],
+      "direction": "vertical",
+      "ratio": 0.5
+    },
+    {
+      "title": "designer",
+      "agents": [
+        "designer"
+      ]
+    },
+    {
+      "title": "reviewer",
+      "agents": [
+        "reviewer",
+        "test"
+      ],
+      "direction": "vertical",
+      "ratio": 0.5
+    },
+    {
+      "title": "simple",
+      "agents": [
+        "simple"
+      ]
+    }
+  ],
+  "sourceSidebar": {
+    "agents_height": "50%",
+    "comms_height": "15%",
+    "tips_height": "35%"
+  },
+  "sidebarApplied": false,
+  "sidebarReason": "Orca does not expose equivalent CCB sidebar sections."
+}

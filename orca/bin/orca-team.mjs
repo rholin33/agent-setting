@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { openRepair } from '../lib/startup-repair.mjs';
+import { reconcileProjectList } from '../lib/list-reconcile.mjs';
 import { recoverProtectedStart } from '../lib/protected-start.mjs';
 import { ensureClaudeLocalTerminal } from '../lib/claude-local-terminal.mjs';
 import { parseRemoteRequests, startRemoteRequests, verifyRemoteEnvironment } from '../lib/remote-start.mjs';
@@ -142,6 +143,7 @@ try {
       await stage('Agent update', () => autoUpdate(home, restartNames));
       await restoreGroupLayout({ project, config: readJson(files.config), state: readJson(files.state) });
       await restartTeam({ home, project, forceExit: true, targets, cli: orca, snapshot });
+      if (!targets.length) await reconcileProjectList({ home, project, cli: orca });
     } else if (action === 'start') {
       if (await stage('Orca connection', () => ensureOrca({ cli: orca }))) console.log('Orca was started automatically');
       const files = projectFiles(home, project);
@@ -238,6 +240,7 @@ try {
         await stage('Layout and conversation recovery', () => runTeam({ home, project, action, group: values.group, cli: orca, snapshot }));
         if (skipped.length) throw new Error(`Roles not restarted: ${skipped.map(item => `${item.name}: ${item.reason}`).join('; ')}`);
       }
+      if (values.group === undefined) await stage('Terminal list reconciliation', () => reconcileProjectList({ home, project, cli: orca }));
     } else if (action === 'status') {
       await runTeam({ home, project, action, group: values.group, cli: orca, snapshot });
     } else if (action === 'launch') {
