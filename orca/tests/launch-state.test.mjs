@@ -5,6 +5,23 @@ import os from 'node:os';
 import path from 'node:path';
 import { prepareLaunch, captureSession } from '../lib/launch-state.mjs';
 
+test('OMP launch captures the session after a title prelude without changing history', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'omp-launch-title-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'session.jsonl');
+  const saved = { agent: 'omp', launchIntent: { transcriptPath: file } };
+  const live = { kind: 'agent', sessionPaths: [file] };
+  const title = JSON.stringify({ type: 'title', v: 1, title: 'master' }) + '\n';
+  fs.writeFileSync(file, title);
+  assert.equal(captureSession(saved, live, dir), false);
+  const text = title + JSON.stringify({ type: 'session', id: 'original', cwd: dir }) + '\n';
+  fs.writeFileSync(file, text);
+  assert.throws(() => captureSession(saved, live, dir + '-other'), /mismatch/);
+  assert.equal(captureSession(saved, live, dir), true);
+  assert.equal(saved.session.id, 'original');
+  assert.equal(fs.readFileSync(file, 'utf8'), text);
+});
+
 test('Pi launch waits for an empty or partially written header without discarding intent', t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'launch-header-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { validateTranscript } from './sessions.mjs';
+import { validateTranscript, readTranscriptHeader } from './sessions.mjs';
 import { claudeTranscriptPath } from './claude.mjs';
 import { dataDirectory } from './platform.mjs';
 
@@ -59,7 +59,9 @@ export function captureSession(saved, live, project, observed) {
       const text = fs.readFileSync(candidates[0], 'utf8');
       // Pi precreates the file before writing its session header. Retry during startup.
       if (!text.includes('\n')) return false;
-      const header = JSON.parse(text.split('\n')[0]);
+      const header = readTranscriptHeader(candidates[0], saved.agent);
+      if (header === undefined) return false;
+      if (!header?.id) throw new Error('Original conversation identity/project mismatch');
       session = { key: 'session_id', id: header.id, transcriptPath: candidates[0] };
     }
   }

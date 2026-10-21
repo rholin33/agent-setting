@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { openRepair } from '../lib/startup-repair.mjs';
+import { projectInventory } from '../lib/project-registration.mjs';
 import { reconcileProjectList } from '../lib/list-reconcile.mjs';
 import { recoverProtectedStart } from '../lib/protected-start.mjs';
 import { ensureClaudeLocalTerminal } from '../lib/claude-local-terminal.mjs';
@@ -149,7 +150,7 @@ try {
       const files = projectFiles(home, project);
       // Orca restores persisted PTYs when the workspace is revealed. Reveal via
       // the supported file-open CLI before checking for retained tabs without PTYs.
-      const initial = await orca(['terminal', 'list', '--worktree', `path:${project}`]);
+      const initial = await projectInventory({ project, cli: orca, register: true });
       if (!initial.terminals.length && fs.existsSync(files.state)) {
         const document = ['AGENTS.md', 'README.md'].find(name => fs.existsSync(path.join(project, name)));
         if (document) {

@@ -368,6 +368,31 @@ test('PowerShell profiles on macOS and Linux receive PowerShell syntax', t => {
   }
 });
 
+test('pending Codex split recovers from native proof without sleeping pane metadata', async t => {
+  const { home, project } = fixture(t);
+  const files = await initialize(home, project);
+  saveJson(files.config, { workspace: project, tabs: [{ title: 'coder', agents: ['coder2'] }] });
+  const transcriptPath = path.join(home, 'codex.jsonl');
+  fs.writeFileSync(transcriptPath, JSON.stringify(transcriptHeader('codex', 'original', project)) + '\n');
+  saveJson(files.state, { workspace: project, agents: { coder2: {
+    agent: 'codex', pending: true, launchIntent: { id: 'intent' },
+    session: { id: 'original', transcriptPath }, creationIntent: { tabId: 't', leafIds: ['old'] },
+  } } });
+  const terminal = { handle: 'h', tabId: 't', leafId: 'new', connected: true, worktreePath: project };
+  const cli = async args => {
+    if (args[1] === 'list') return { terminals: [terminal], visualLayouts: [{ root: { type: 'group', tabs: [{ tabId: 't', panes: { leafId: 'new' } }] } }] };
+    if (args[1] === 'show') return { terminal };
+    assert.fail(`unexpected mutation: ${args}`);
+  };
+  await runTeam({ home, project, action: 'start', cli, snapshot: () => ({}),
+    inspect: async () => ({ kind: 'agent', sessionPaths: [transcriptPath], terminal }),
+    focus: async () => {}, pin: async () => {}, log: () => {} });
+  const saved = readJson(files.state).agents.coder2;
+  assert.equal(saved.leafId, 'new');
+  assert.equal(saved.session.id, 'original');
+  assert.equal(saved.pending, undefined);
+});
+
 test('unconfirmed new pane retains pending and retry never duplicates its launch', async t => {
   const { home, project } = fixture(t);
   // 该用例验证预分配会话路径的 OMP 启动，不依赖仓库目录里 archi 当前选择的 CLI。

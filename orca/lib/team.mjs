@@ -1,4 +1,5 @@
 import { verifyMacAbsence } from './macos-health.mjs';
+import { projectInventory } from './project-registration.mjs';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -172,12 +173,8 @@ export async function runTeam({ home, project, action, group, preserveRoles = []
     const names = validateConfig(config, catalog).filter(name => !preserved.has(name));
     const mixed = config.tabs.filter(tab => tab.agents.some(name => preserved.has(name)));
     const movable = { ...config, tabs: config.tabs.filter(tab => !mixed.includes(tab)) };
-    const list = () => cli(['terminal', 'list', '--worktree', `path:${project}`, '--include-visual-layouts']);
-    let inventory;
-    try { inventory = await list(); } catch (error) {
-      if (error.code !== 'selector_not_found' || error.selector !== `path:${project}` || action !== 'start') throw error;
-      await cli(['repo', 'add', '--path', project]); inventory = await list();
-    }
+    const list = () => projectInventory({ project, cli, visualLayouts: true });
+    let inventory = await projectInventory({ project, cli, register: action === 'start', visualLayouts: true });
     const resolved = {}, resume = {}, health = {}, issues = [], missing = [];
     let snap = await snapshot();
     if (action === 'start') {
@@ -216,6 +213,20 @@ export async function runTeam({ home, project, action, group, preserveRoles = []
             return found && (saved.launchIntent?.transcriptPath ? found.transcriptPath === saved.launchIntent.transcriptPath : row.tabId === saved.creationIntent.tabId && !saved.creationIntent.leafIds.includes(row.leafId));
           });
           if (candidates.length === 1) Object.assign(saved, { tabId: candidates[0].tabId, leafId: candidates[0].leafId });
+          // A split can succeed while its RPC times out before returning a handle.
+          // Fresh Codex sessions may not yet have a sleeping-pane record. Require
+          // one new pane in the original tab, native process proof and launch marker.
+          if (!saved.leafId && saved.agent === 'codex' && saved.creationIntent && saved.launchIntent?.id) {
+            const fresh = inventory.terminals.filter(row => row.connected && !row.orphaned &&
+              sameWorktree(`local::${row.worktreePath}`, project) && row.tabId === saved.creationIntent.tabId &&
+              !saved.creationIntent.leafIds.includes(row.leafId));
+            if (fresh.length === 1) {
+              const row = fresh[0];
+              const proof = await inspect(row.handle, saved.agent);
+              const recovered = { ...saved, tabId: row.tabId, leafId: row.leafId };
+              if (captureSession(recovered, proof, project)) Object.assign(saved, recovered);
+            }
+          }
         }
         const candidates = inventory.terminals.filter(row => row.tabId === saved.tabId && row.leafId === saved.leafId && row.connected && !row.orphaned && sameWorktree(`local::${row.worktreePath}`, project));
         let live = candidates.length === 1 ? await inspect(candidates[0].handle, saved.agent) : null;
