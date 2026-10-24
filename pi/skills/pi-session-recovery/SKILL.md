@@ -25,6 +25,7 @@ Orca / `orca-team` 恢复后上下文超限、historian 缺配置或摘要子进
 | 超限且无历史 compartments，auto-compaction cancelled | 核对当前插件版本、有效 historian 配置与真实配置路径；备份后通过支持的 wrapup 生成摘要 |
 | TUI 无响应，CPU 持续增长，保留历史有巨型内容 | 停止核实过的单个目标进程，确认退出，用同一 session 的官方 RPC 模式恢复 |
 | 压缩后模型称没有文件/终端工具 | 核对工具调用证据、Pi/扩展版本与 GitHub issue；按参考检查 #485 |
+| omp 所有工具被 pending action 门禁拒绝，`write xd://reject` 又称无待处理操作，最终触发三轮 `write` 强制要求中止；新消息也无效 | 按参考的 omp 门禁恢复流程 `/exit`，显式指定同一模型新开会话并交接；不要当成原会话已恢复 |
 | `ParseError` 或扩展加载失败 | 先定位当前文件和错误；语法检查通过不代表 Pi 扩展加载成功 |
 | 403/429/524、连接失败 | 按服务/认证问题处理，不据此反复压缩或清历史 |
 | 无 Magic Context | 使用当前 Pi 官方 compaction 文档；不要发送 `/ctx-*` |

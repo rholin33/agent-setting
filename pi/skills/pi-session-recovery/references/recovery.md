@@ -49,6 +49,17 @@ for (let i = 0; i <= cutoffIndex; i++) {
 
 只在版本、函数语义和唯一匹配都核实后应用。备份原文件；已有等价修复则跳过；新版结构不同则停止套用旧补丁并重新诊断。保留并验证初始工具声明、按顺序处理的 toolsAdded/toolsRemoved、entry ID 对齐、toolCall/toolResult 配对和重复裁剪。执行 `node --check` 后仍需实测 Pi 加载和工具调用。补丁安装在包目录中，包升级可能覆盖。
 
+## omp pending-action 门禁卡死
+
+2026-10-24 在 co 上实测：所有工具调用均返回 ``Not executed: call the `write` tool to resolve the pending action before using other tools.``；调用 `write xd://reject` 却返回 `Nothing to reject; no pending action remains.`，最终出现 `Soft tool requirement 'write' was not satisfied after 3 forced turns; aborting to avoid an unbounded force loop.`。发送新消息不能解除。
+
+1. 用 `/exit` 退出故障会话；若目标就是当前执行恢复的会话，由独立控制会话接续操作。
+2. 用 `omp --model <provider/model>` 显式指定原模型新开会话；不带模型参数会落到默认模型。保留旧会话，不把新会话冒充原会话恢复。
+3. 给新会话写交接说明，包含任务断点、授权范围及未完成项。从旧会话 JSONL 提取信息时只按关键词取所需片段；其中可能有用户贴的明文 token，不整段转储或打印。
+4. 在新会话执行 `echo GATE_OK`，并按当前 Orca 派发参数执行 `orca orchestration send`，核对命令成功与协调端收到回传，确认工具和回传均可用后再继续任务。
+
+`omp --resume <id>` 是否会恢复卡死状态尚未验证，不能据此推荐或排除 resume。同一故障会话此前还出现过 Magic Context `could not safely prepare this turn ... missing managed context receipt`；仅记录观察，两者关联未查证。
+
 ## 官方 RPC 恢复
 
 使用一个临时外部控制进程持有 Pi 的 stdin/stdout，不要使用会立即 EOF 的一次性管道。控制器启动参数通过数组传给 `spawn`，不把路径拼接成 shell 代码。
