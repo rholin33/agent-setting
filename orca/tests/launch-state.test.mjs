@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { prepareLaunch, captureSession } from '../lib/launch-state.mjs';
+import { prepareLaunch, captureSession, appliedModelOf, sameAppliedConfig } from '../lib/launch-state.mjs';
 
 test('OMP launch captures the session after a title prelude without changing history', t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'omp-launch-title-'));
@@ -54,4 +54,13 @@ test('durable launch intent survives retries and binds only a persisted live con
   assert.equal(saved.session.id, 'session');
   assert.throws(() => captureSession(saved, { kind: 'agent', sessionPaths: [path.join(dir, 'other')] }, dir), /differs/);
   assert.throws(() => captureSession(saved, { kind: 'agent' }, dir, { id: 'other', transcriptPath: original.transcriptPath }), /changed/);
+});
+
+test('Claude permission mode is part of the applied fingerprint; legacy Claude state restarts once', () => {
+  const claude = { name: 'master', agent: 'claude', model: 'opus', thinking: 'high' };
+  const codex = { name: 'coder1', agent: 'codex', model: 'gpt', thinking: 'medium' };
+  assert.equal(sameAppliedConfig({ appliedModel: appliedModelOf(claude) }, claude), true);
+  assert.equal(sameAppliedConfig({ appliedModel: { agent: 'claude', model: 'opus', thinking: 'high' } }, claude), false);
+  assert.equal(sameAppliedConfig({ appliedModel: { agent: 'claude', model: 'opus', thinking: 'high', permission: 'default' } }, claude), false);
+  assert.equal(sameAppliedConfig({ appliedModel: { agent: 'codex', model: 'gpt', thinking: 'medium' } }, codex), true);
 });

@@ -80,10 +80,10 @@ test('claude launch appends the role prompt, effort and resume id', t => {
   const role = { name: 'reviewer', agent: 'claude', model: 'opus', thinking: 'high', role: 'agentroles.code_reviewer' };
   const fresh = launchArguments(role, prompt, null, project, '/team');
   assert.equal(fresh.executable, 'claude');
-  assert.deepEqual(fresh.args, ['--model', 'opus', '--permission-mode', 'default', '--append-system-prompt-file', prompt, '--effort', 'high']);
+  assert.deepEqual(fresh.args, ['--model', 'opus', '--permission-mode', 'bypassPermissions', '--append-system-prompt-file', prompt, '--effort', 'high']);
   const transcriptPath = write(ID, conversation(ID));
   const resumed = launchArguments({ ...role, thinking: null }, prompt, { id: ID, transcriptPath }, project, '/team');
-  assert.deepEqual(resumed.args, ['--model', 'opus', '--permission-mode', 'default', '--resume', ID, '--append-system-prompt-file', prompt]);
+  assert.deepEqual(resumed.args, ['--model', 'opus', '--permission-mode', 'bypassPermissions', '--resume', ID, '--append-system-prompt-file', prompt]);
   assert.throws(() => launchArguments(role, prompt, { id: OTHER, transcriptPath }, project, '/team'), /mismatch/);
 });
 

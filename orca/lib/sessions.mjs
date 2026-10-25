@@ -5,6 +5,9 @@ import { claudeExecutable } from './claude.mjs';
 import { StringDecoder } from 'node:string_decoder';
 import { normalizeProject } from './platform.mjs';
 
+// 用户要求团队 Claude 席位统一免权限确认（2026-10-25）；启动参数与配置指纹共用此值。
+export const CLAUDE_PERMISSION_MODE = 'bypassPermissions';
+
 export function binding(snapshot, saved, project) {
   const record = snapshot.sleepingAgentSessionsByPaneKey?.[`${saved.tabId}:${saved.leafId}`];
   if (!record) return null;
@@ -114,8 +117,7 @@ export function launchArguments(role, prompt, session, project, home, { codexNoD
     // Codex 没有追加系统提示参数，角色提示即首条消息；切换 CLI 的交接说明附在其后。
     if (!session) args.push(fs.readFileSync(prompt, 'utf8') + (initialNote ? `\n\n${initialNote}` : ''));
   } else if (role.agent === 'claude') {
-    // Do not inherit a global bypass mode for a newly configured team role.
-    args.push('--permission-mode', 'default');
+    args.push('--permission-mode', CLAUDE_PERMISSION_MODE);
     // 角色提示每次启动都追加（Claude 不在会话里持久化 system prompt），resume 时同样需要。
     if (session) args.push('--resume', session.id);
     args.push('--append-system-prompt-file', prompt);

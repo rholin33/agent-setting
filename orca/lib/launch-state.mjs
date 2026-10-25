@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { validateTranscript, readTranscriptHeader } from './sessions.mjs';
+import { validateTranscript, readTranscriptHeader, CLAUDE_PERMISSION_MODE } from './sessions.mjs';
 import { claudeTranscriptPath } from './claude.mjs';
 import { dataDirectory } from './platform.mjs';
 
@@ -104,17 +104,19 @@ export function captureSession(saved, live, project, observed) {
   return true;
 }
 
-// 配置指纹：CLI、模型、思考强度和角色提示内容。指纹不变的运行中角色在 start 时直接复用。
+// 配置指纹：CLI、模型、思考强度、角色提示内容和 Claude 权限模式。指纹不变的运行中角色在 start 时直接复用。
 export function appliedModelOf(catalogRole, home) {
   const applied = { agent: catalogRole.agent, model: catalogRole.model, thinking: catalogRole.thinking ?? null };
+  if (catalogRole.agent === 'claude') applied.permission = CLAUDE_PERMISSION_MODE;
   const prompt = home && path.join(home, 'roles', `${catalogRole.name}.md`);
   if (prompt && fs.existsSync(prompt)) applied.prompt = createHash('sha256').update(fs.readFileSync(prompt)).digest('hex').slice(0, 16);
   return applied;
 }
 // 旧状态没有提示指纹时只比较模型字段，升级后不会因此重启全部角色。
+// 权限模式不做此豁免：旧 Claude 状态没有记录权限，无法证明进程以当前权限启动，必须重启一次。
 export function sameAppliedConfig(saved, catalogRole, home) {
   const applied = saved.appliedModel, desired = appliedModelOf(catalogRole, home);
   if (!applied) return false;
   return applied.agent === desired.agent && applied.model === desired.model && (applied.thinking ?? null) === desired.thinking &&
-    (applied.prompt === undefined || applied.prompt === desired.prompt);
+    (applied.prompt === undefined || applied.prompt === desired.prompt) && (applied.permission ?? null) === (desired.permission ?? null);
 }
