@@ -67,3 +67,15 @@ for (const scenario of ['truncated', 'omitted host', 'remote', 'hidden pty', 'ws
     await assert.rejects(health.verifyWindowsAbsence(o));
   });
 }
+
+test('fresh native Codex cannot own a missing OMP conversation', async () => {
+  const o = options(); o.missing[0].saved.agent = 'omp';
+  o.desktop.terminals[0].agentIdentity = 'codex';
+  o.rows.push({ProcessId:11, ParentProcessId:10, Name:'codex.exe',CommandLine:'codex --no-daemon'});
+  assert.equal(await health.verifyWindowsAbsence(o), true);
+  o.missing[0].saved.agent = 'codex';
+  await assert.rejects(health.verifyWindowsAbsence(o), /unbound/);
+  o.missing[0].saved.agent = 'omp';
+  o.rows.push({ProcessId:12,ParentProcessId:10,Name:'omp.exe',CommandLine:'omp'});
+  await assert.rejects(health.verifyWindowsAbsence(o), /unbound/);
+});

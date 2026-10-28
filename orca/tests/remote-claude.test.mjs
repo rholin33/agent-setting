@@ -58,3 +58,37 @@ test('Claude intent accepts proven Claude source and survives registry reload', 
   const prompt = remoteManagementPrompt({ intents: [{ ...intent, role: 'master' }], home, project: home, skill: 'skill.md' });
   assert.match(prompt, /orca-remote -claude master/);
 });
+
+test('Claude reuse validates each saved owner when multiple environments exist', async () => {
+  const requests = [{ runtime: 'claude', role: 'master' }, { runtime: 'claude', role: 'archi' }];
+  const registry = { roles: {
+    master: { runtime: 'claude', owner: { environment: 'a' } },
+    archi: { runtime: 'claude', owner: { environment: 'b' } },
+  } };
+  const cli = async () => ({ environments: [{ id: 'a', name: 'host-a' }, { id: 'b', name: 'host-b' }] });
+  assert.equal(await verifyRemoteEnvironment({ requests, registry, cli }), undefined);
+  await assert.rejects(verifyRemoteEnvironment({ requests, registry, environment: 'host-a', cli }), /differs from current owner/);
+  await assert.rejects(verifyRemoteEnvironment({ requests, registry, cli: async () => ({ environments: [{ id: 'a' }] }) }), /saved Claude environment/);
+  await assert.rejects(verifyRemoteEnvironment({ requests: [...requests, { runtime: 'claude', role: 'new' }], registry, cli }), /select --environment/);
+  await assert.rejects(verifyRemoteEnvironment({ requests: [requests[0]], registry: { roles: { master: { ...registry.roles.master, pending: {} } } }, cli }), /select --environment/);
+});
+
+test('Claude startup reads saved ownership before ambiguous environment preflight', async t => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'remote-claude-bound-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const { projectFiles, saveJson } = await import('../lib/team.mjs');
+  const files = projectFiles(home, home);
+  fs.mkdirSync(path.dirname(files.state), { recursive: true });
+  const owner = { runtime: 'claude', role: 'master', environment: 'a', terminal: 'term_saved', incarnation: 'inc_saved', session: 'session_saved' };
+  saveJson(path.join(path.dirname(files.state), 'remote-switches.json'), { version: 1, roles: {
+    master: { runtime: 'claude', owner, local: { ...owner, environment: 'local' }, taskId: 'task-saved',
+      ledgerDirectory: path.join(path.dirname(files.state), 'remote-handoffs', 'master') },
+  } });
+  const calls = [];
+  await assert.rejects(startRemoteRequests({ home, project: home, requests: [{ runtime: 'claude', role: 'master' }],
+    skill: fileURLToPath(import.meta.url), cli: async args => {
+      calls.push(args);
+      return args[0] === 'environment' ? { environments: [{ id: 'a' }, { id: 'b' }] } : { terminals: [] };
+    } }), /Claude owner has no verified scoped binding/);
+  assert.ok(calls.every(args => ['environment', 'terminal'].includes(args[0]) && ['list'].includes(args[1])));
+});

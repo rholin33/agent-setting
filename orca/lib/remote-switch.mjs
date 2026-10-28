@@ -3,7 +3,7 @@ import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { projectFiles, withLock } from './team.mjs';
-import { normalizeProject, pythonCommand } from './platform.mjs';
+import { normalizeProject, pythonCommand, completeLocalInventory } from './platform.mjs';
 import { sameWorktree, validateTranscript } from './sessions.mjs';
 import { inspectHealth, provesSession } from './health.mjs';
 import { rpc } from './orca.mjs';
@@ -117,6 +117,43 @@ async function locked(options, action) {
  */
 export function readRemoteSwitches({ home, project }) {
   return readRegistry(filesFor(home, project));
+}
+
+// 原返回窗格关闭后只更新同一原生会话的终端地址，不改变远端归属或历史回执。
+export async function reattachLocalReturn({ home, project, role, endpoint, cli,
+  inspect = (handle, provider) => inspectHealth(cli, rpc, handle, provider) }) {
+  return locked({ home, project, role }, async (files, state) => {
+    const entry = own(state.roles, role), target = identity(endpoint, role);
+    if (!entry?.runtime || entry.pending || target.environment !== 'local' ||
+        ['runtime', 'role', 'environment', 'session'].some(key => entry.local[key] !== target[key])) {
+      throw new Error('Local return cannot change the original conversation or a pending handoff');
+    }
+    const saved = readJson(files.state).agents?.[role];
+    if (!saved || saved.agent !== target.runtime || saved.session?.id !== target.session ||
+        saved.handle !== target.terminal || saved.incarnationId !== target.incarnation) throw new Error('Local return differs from saved original session');
+    validateTranscript(saved, project);
+    const inventory = await cli(['terminal', 'list', '--worktree', `path:${project}`]);
+    if (!completeLocalInventory(inventory) || inventory.terminals.some(t => t.handle === entry.local.terminal && t.handle !== target.terminal)) {
+      throw new Error('Original local terminal is not proven absent');
+    }
+    const live = await inspect(target.terminal, target.runtime), terminal = live.terminal;
+    if (!provesSession(live, saved) || terminal?.handle !== target.terminal || terminal.incarnationId !== target.incarnation ||
+        terminal.tabId !== saved.tabId || terminal.leafId !== saved.leafId || terminal.executionHostId !== 'local' ||
+        !terminal.connected || terminal.orphaned || !sameWorktree(`local::${terminal.worktreePath}`, project) ||
+        inventory.terminals.filter(t => t.handle === terminal.handle && t.incarnationId === terminal.incarnationId && t.ptyId === terminal.ptyId).length !== 1) {
+      throw new Error('Original local native process/session is unverified');
+    }
+    return withLedgerLock(entry, () => {
+      const record = ledgerRecord(entry);
+      if (!record || !equalIdentity(ledgerOwner(record, role), entry.owner, role)) throw new Error('Remote owner ledger is not settled');
+      if (!equalIdentity(entry.local, target, role)) {
+        entry.localReattachments = [...(entry.localReattachments || []), { previous: entry.local, current: target, at: new Date().toISOString() }];
+        entry.local = target;
+        savePrivate(files.registry, state);
+      }
+      return entry;
+    });
+  });
 }
 export async function reattachOmpOwner({ home, project, role, endpoint, config, cli, verifyOmp = verifyOmpBinding }) {
   return locked({ home, project, role }, async (files, state) => {

@@ -592,3 +592,33 @@ test('closed native UI reconnects to the same remote session and preserves origi
   assert.equal(final.runtime, null);
   assert.equal(final.pending, undefined);
 });
+
+for (const problem of [null,'session','pending','old-live','incomplete','native','transcript']) {
+  test(`local return rebind preserves remote owner and receipts: ${problem || 'success'}`, async t => {
+    const f=fixture(t); const first=await acceptedRemote(f);
+    const files=projectFiles(f.home,f.project), registry=path.join(files.directory,'remote-switches.json');
+    const ledger=path.join(first.ledgerDirectory,'state.json'), oldLedger=fs.readFileSync(ledger,'utf8');
+    const endpoint={...f.local,terminal:'restored-local',incarnation:'restored-inc'};
+    const transcript=path.join(f.home,'original.jsonl');
+    fs.writeFileSync(transcript,JSON.stringify({type:'session',id:f.local.session,cwd:f.project})+'\n');
+    const saved={agent:'pi',handle:endpoint.terminal,incarnationId:endpoint.incarnation,tabId:'restored-tab',leafId:'restored-leaf',session:{id:f.local.session,transcriptPath:transcript}};
+    fs.writeFileSync(files.state,JSON.stringify({workspace:f.project,agents:{master:saved}}));
+    if(problem==='session') endpoint.session='other';
+    if(problem==='transcript') fs.writeFileSync(transcript,'{}\n');
+    if(problem==='pending') await beginRemoteSwitch({...f.options,runtime:null,source:f.remote,local:f.local});
+    const old=fs.readFileSync(registry,'utf8');
+    const terminal={handle:endpoint.terminal,incarnationId:endpoint.incarnation,ptyId:'restored-pty',tabId:saved.tabId,leafId:saved.leafId,connected:true,executionHostId:'local',worktreePath:f.project};
+    const cli=async()=>({terminals:[terminal,...(problem==='old-live'?[{handle:f.local.terminal}]:[])],truncated:problem==='incomplete',totalCount:problem==='old-live'?2:1,hostScope:{hostIds:['local'],omittedHostIds:[]}});
+    const inspect=async()=>({kind:problem==='native'?'shell':'agent',terminal,sessionPaths:[transcript]});
+    const {reattachLocalReturn}=await import('../lib/remote-switch.mjs');
+    const action=()=>reattachLocalReturn({...f.options,endpoint,cli,inspect});
+    if(problem){await assert.rejects(action);assert.equal(fs.readFileSync(registry,'utf8'),old);}
+    else{
+      await action();const entry=f.state().roles.master;
+      assert.deepEqual(entry.local,endpoint);assert.deepEqual(entry.owner,f.remote);assert.equal(entry.runtime,'codex');
+      assert.deepEqual(entry.localReattachments[0].previous,f.local);assert.deepEqual(entry.localReattachments[0].current,endpoint);
+      const back=await beginRemoteSwitch({...f.options,runtime:null,source:f.remote,local:endpoint});assert.equal(back.baseRevision,1);
+    }
+    assert.equal(fs.readFileSync(ledger,'utf8'),oldLedger);
+  });
+}

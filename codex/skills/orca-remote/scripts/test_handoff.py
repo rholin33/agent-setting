@@ -120,5 +120,20 @@ class HandoffTests(unittest.TestCase):
 
 
 
+
+class ClaudeRebindingTests(HandoffTests):
+    def test_claude_rebind_returns_same_session(self):
+        self.remote['runtime'] = 'claude'
+        outbound = handoff.prepare(self.state, self.payload)
+        handoff.claim(outbound, self.remote)
+        handoff.accept(outbound, self.receipt(outbound))
+        receipt = copy.deepcopy(outbound['receipt'])
+        current = {**self.remote, 'terminal':'restored', 'incarnation':'restored-inc'}
+        outbound['owner_rebindings'] = [{'previous':dict(self.remote), 'current':current}]
+        inbound = handoff.prepare(self.state, {**self.payload, 'source':current, 'target':self.local})
+        self.assertEqual(inbound['revision'],2)
+        self.assertEqual(outbound['receipt'],receipt)
+
+
 if __name__ == '__main__':
     unittest.main()

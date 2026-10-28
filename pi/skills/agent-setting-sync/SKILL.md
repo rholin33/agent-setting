@@ -84,6 +84,14 @@ credentials are not part of the Orca package.
 5. Report target, applied files, backups and limitations. Explicitly report
    "no commit or push".
 
+## Complete Push Policy
+
+An explicit target push publishes every valid, reviewed local change in the selected target and common scope. Do not silently narrow it to the most recent feature or a convenient subset. Exclusions for credentials, runtime state, unselected targets and repository-owned bootstrap files still apply.
+
+Before publishing, inventory the entire export and classify every difference. Merge overlapping upstream changes instead of replacing newer remote code with older local copies. Preserve current local model choices unless the user requests otherwise. If a decision prevents publishing the full allowed scope, explain the exact unresolved items and resolve them with the user before pushing; a partial push requires explicit user approval. A stash or backup preserves data but does not count as publishing it.
+
+After a successful push, verify the remote SHA, reconcile any reviewed merge-only changes back into the corresponding live managed files with backups, and verify live configuration against the published result. Update the synchronization baseline only to the verified remote snapshot, never to local unpublished content. Do not leave a successful partial or full publication described as complete while live files and the baseline are unintentionally divergent. Report any deliberate local-only differences and preserved checkout edits separately. Never restart agents merely to align configuration.
+
 ## Explicit Push Only
 
 1. Verify target, clean checkout, origin/main and original project root.
@@ -102,15 +110,30 @@ credentials are not part of the Orca package.
    Inspect the actual diff before staging. Reject secrets, runtime state,
    unselected-target changes, unexplained deletions or unrelated paths.
    Retain conflicting data/backups; do not resolve silently.
-5. Stage only the exact reviewed changed paths, never git add -A or a blanket
-   root directory. Review git diff --cached and --cached --check. If no changes,
-   report no commit; do not create an empty commit.
-6. Commit with a concise configuration-change message, then git push origin main.
-   Explicit push authorizes this workflow; do not ask a second routine approval.
-   A rejected/non-fast-forward push stops without force or history rewriting.
+5. Stage every exact reviewed changed path, never git add -A or a blanket
+   root directory. Review git diff --cached and --cached --check. Require:
+
+   python scripts/sync-local-config.py --target orca --verify-index
+
+   Use the same target, project and home overrides as the export. The export
+   manifest lives in the Git directory and survives stash. The check compares
+   all exported files (including new skills/references) with the index, and
+   rejects live source changes since export. Fix every reported omission before
+   continuing. If no changes, report no commit; do not create an empty commit.
+   A reviewed upstream merge must be backed up and reconciled into the relevant
+   live files, then fully re-exported/reviewed. Do not edit the manifest or bypass
+   the check to publish a subset. Review extra staged paths separately.
+6. Commit with a concise configuration-change message. Before pushing, require:
+
+   python scripts/sync-local-config.py --target orca --verify-head
+
+   Then git push origin main. Explicit push authorizes this workflow; do not ask
+   a second routine approval. A rejected/non-fast-forward push stops without
+   force or history rewriting. The checker never stages, commits or pushes.
 7. Verify local commit SHA and git ls-remote origin refs/heads/main. Report the
-   commit, push result and remaining local changes; do not claim success from
-   command launch alone.
+   manifest file count, verification results, commit, push result and remaining
+   local changes. Exported/stashed files are not published files. Reconcile live
+   files and the verified remote baseline as required by Complete Push Policy.
 
 The pre-commit hook validates staged whitespace only. It must never export or
 stage local settings automatically, even during an unrelated development commit.

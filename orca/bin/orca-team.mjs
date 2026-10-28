@@ -202,7 +202,7 @@ try {
         if (!remoteRequests.some(item => item.role === request.role)) remoteRequests.push(request);
       }
       // Validate remote prerequisites before stopping any local conversation.
-      await verifyRemoteEnvironment({ requests: remoteRequests, environment: values.environment, cli: orca });
+      await verifyRemoteEnvironment({ requests: remoteRequests, environment: values.environment, cli: orca, registry: continuity });
       // Only independent local conversations migrate CLI. Remote sources and
       // original return sessions remain bound to their existing native history.
       const switches = fs.existsSync(files.state) ? startupSwitches(readJson(files.state), readJson(path.join(home, 'team.json')), names, continuity, remoteRequests) : [];

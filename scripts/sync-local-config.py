@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -60,10 +62,12 @@ def export_candidates():
                 yield Path('orca') / source.relative_to(sync.ORCA_HOME), source
 
 
-def export_configuration(destination: Path) -> int:
-    pending = []
+def collect_configuration(destination: Path) -> dict[Path, bytes]:
+    """Collect and validate the complete live scope without writing anything."""
+    pending = {}
     for relative, source in export_candidates():
-        if not source.is_file() or source.is_symlink() or not sync.is_portable_path(relative):
+        if (not source.is_file() or source.is_symlink() or relative.name.lower() == '.ds_store'
+                or not sync.is_portable_path(relative)):
             continue
         # Never follow a linked parent into credentials or another installation.
         if any(parent.is_symlink() for parent in source.parents):
@@ -82,8 +86,7 @@ def export_configuration(destination: Path) -> int:
             print(f'Warning: global Codex AGENTS.md matches the other target variant; skipped {relative} to preserve it.')
             continue
         sync.validate_managed_content(relative, content)
-        if source.resolve() != target.resolve():
-            pending.append((target, content))
+        pending[relative] = content
     if sync.TARGET == 'orca':
         entry = REPO_ROOT / 'orca/bin/orca-team.mjs'
         directory = sync.get_orca_project_directory()
@@ -100,18 +103,116 @@ def export_configuration(destination: Path) -> int:
             target = destination / 'orca/project-configs' / sync.get_project_key() / 'config.json'
             if target.is_symlink() or any(parent.is_symlink() for parent in target.parents):
                 raise ValueError(f'export destination contains a symlink: {target}')
-            pending.append((target, (json.dumps(config, indent=2, ensure_ascii=False) + '\n').encode('utf-8')))
-    for target, content in pending:
+            relative = target.relative_to(destination)
+            content = (json.dumps(config, indent=2, ensure_ascii=False) + '\n').encode('utf-8')
+            sync.validate_managed_content(relative, content)
+            pending[relative] = content
+    return pending
+
+
+def export_configuration(destination: Path, pending=None) -> int:
+    if pending is None:
+        pending = collect_configuration(destination)
+    for relative, content in pending.items():
+        target = destination / relative
         sync.ensure_directory(target.parent)
         target.write_bytes(content)
     return len(pending)
 
 
+def git(repo: Path, *args: str, content=None, check=True):
+    return subprocess.run(['git', '-C', str(repo), *args], input=content,
+                          capture_output=True, check=check)
+
+
+def head(repo: Path):
+    result = git(repo, 'rev-parse', '--verify', 'HEAD', check=False)
+    return result.stdout.decode().strip() if result.returncode == 0 else None
+
+
+def manifest_path(repo: Path) -> Path:
+    directory = git(repo, 'rev-parse', '--absolute-git-dir').stdout.decode('utf-8').strip()
+    return Path(directory) / 'agent-setting-export.json'
+
+
+def source_digests(pending):
+    return {path.as_posix(): hashlib.sha256(content).hexdigest()
+            for path, content in sorted(pending.items())}
+
+
+def write_manifest(repo: Path, pending, base) -> None:
+    # Hash with Git's clean filters, including Windows line ending conversion.
+    blobs = {path.as_posix(): git(repo, 'hash-object', '--stdin',
+                                '--path=' + path.as_posix(), content=content).stdout.decode().strip()
+             for path, content in sorted(pending.items())}
+    # Existing repositories may retain CRLF blobs that Git add leaves unchanged.
+    raw_blobs = {path.as_posix(): git(repo, 'hash-object', '--stdin', '--no-filters',
+                                    content=content).stdout.decode().strip()
+                 for path, content in sorted(pending.items())}
+    manifest = {'version': 1, 'target': sync.TARGET, 'repo': str(repo.resolve()),
+                'project': str(sync.get_project_root().resolve()), 'base': base,
+                'sources': source_digests(pending), 'blobs': blobs, 'raw_blobs': raw_blobs}
+    path = manifest_path(repo)
+    temporary = path.with_suffix('.tmp')
+    temporary.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+    temporary.replace(path)
+
+
+def verify_complete(repo: Path, committed=False) -> int:
+    path = manifest_path(repo)
+    if not path.is_file():
+        raise ValueError('Missing export manifest; run a full explicit --push export first.')
+    manifest = json.loads(path.read_text(encoding='utf-8'))
+    if manifest.get('version') != 1 or manifest.get('target') != sync.TARGET:
+        raise ValueError('Export manifest version/target mismatch; re-export the selected target.')
+    if manifest.get('repo') != str(repo.resolve()) or manifest.get('project') != str(sync.get_project_root().resolve()):
+        raise ValueError('Export manifest repository/project mismatch; use the original export context.')
+    current = head(repo)
+    base = manifest['base']
+    if committed:
+        if not current:
+            raise ValueError('No committed HEAD to verify.')
+        parents = git(repo, 'rev-list', '--parents', '-n', '1', 'HEAD').stdout.decode().split()[1:]
+        if current != base and parents != ([base] if base else []):
+            raise ValueError('Export base changed; review and re-export before publishing.')
+    elif current != base:
+        raise ValueError('Export base changed; review and re-export before staging.')
+
+    live = source_digests(collect_configuration(repo))
+    old = manifest['sources']
+    problems = [f'source changed (re-export required): {name}'
+                for name in sorted(live.keys() | old.keys()) if live.get(name) != old.get(name)]
+    entries = {}
+    if committed:
+        output = git(repo, 'ls-tree', '-r', '-z', 'HEAD').stdout
+    else:
+        output = git(repo, 'ls-files', '--stage', '-z').stdout
+    for record in output.split(b'\0'):
+        if not record:
+            continue
+        metadata, name = record.split(b'\t', 1)
+        fields = metadata.decode().split()
+        mode, oid, stage = (fields[0], fields[2], '0') if committed else fields
+        if stage == '0' and mode in ('100644', '100755'):
+            entries[name.decode('utf-8')] = oid
+    label = 'HEAD' if committed else 'index'
+    for name, expected in manifest['blobs'].items():
+        acceptable = {expected, manifest.get('raw_blobs', {}).get(name, expected)}
+        if entries.get(name) not in acceptable:
+            problems.append(f'{label} missing or different: {name}')
+    if problems:
+        raise ValueError('Incomplete full export:\n' + '\n'.join(problems))
+    return len(manifest['blobs'])
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--target', choices=('ccb', 'orca'), action=sync.UniqueTarget, required=True)
-    parser.add_argument('--push', action='store_true', required=True,
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument('--push', action='store_true',
                         help='explicitly authorize exporting local files; Git commit/push remain separate')
+    mode.add_argument('--verify-index', action='store_true', help='verify the full export in the Git index, read-only')
+    mode.add_argument('--verify-head', action='store_true', help='verify the full export in HEAD before pushing, read-only')
     parser.add_argument('--repo', type=Path, default=REPO_ROOT)
     parser.add_argument('--project', type=Path)
     args = parser.parse_args()
@@ -119,7 +220,21 @@ def main() -> int:
     sync.REMOTE_REPO = args.repo.resolve()
     if args.project:
         sync.os.environ[sync.PROJECT_ROOT_ENV] = str(args.project.resolve())
-    print(f'Exported {export_configuration(args.repo.resolve())} files for {args.target}; no Git commit or push performed.')
+    repo = args.repo.resolve()
+    try:
+        if args.push:
+            manifest_path(repo)  # Require a Git checkout before any export writes.
+            base = head(repo)
+            pending = collect_configuration(repo)
+            count = export_configuration(repo, pending)
+            write_manifest(repo, pending, base)
+            print(f'Exported {count} files for {args.target}; manifest: {manifest_path(repo)}; no Git commit or push performed.')
+        else:
+            count = verify_complete(repo, committed=args.verify_head)
+            print(f'Complete {args.target} export verified: {count} files in {"HEAD" if args.verify_head else "index"}; no Git commit or push performed.')
+    except (ValueError, SyntaxError, OSError, subprocess.CalledProcessError) as error:
+        print(str(error), file=sys.stderr)
+        return 1
     return 0
 
 

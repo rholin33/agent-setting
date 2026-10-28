@@ -64,7 +64,7 @@ def current_owner(record):
         raise ValueError('Invalid native owner history')
     for binding in bindings:
         target = identity(binding['current'])
-        if identity(binding['previous']) != owner or owner['runtime'] != 'omp' or any(
+        if identity(binding['previous']) != owner or owner['runtime'] not in ('omp', 'claude') or any(
                 target[key] != owner[key] for key in ('runtime', 'role', 'environment', 'session')):
             raise ValueError('Native owner history changed conversation')
         owner = target

@@ -16,12 +16,12 @@ sync = exporter.sync
 class AgentsVariantTests(unittest.TestCase):
     def test_pathspec_selects_only_the_target_variant(self):
         with patch.object(sync, "TARGET", "orca"):
-            paths = sync.get_managed_remote_pathspecs()
+            paths = [Path(path).as_posix() for path in sync.get_managed_remote_pathspecs()]
             self.assertIn("codex/AGENTS.orca.md", paths)
             self.assertNotIn("codex/AGENTS.ccb.md", paths)
             self.assertNotIn("codex/AGENTS.md", paths)
         with patch.object(sync, "TARGET", "ccb"):
-            paths = sync.get_managed_remote_pathspecs()
+            paths = [Path(path).as_posix() for path in sync.get_managed_remote_pathspecs()]
             self.assertIn("codex/AGENTS.ccb.md", paths)
             self.assertNotIn("codex/AGENTS.orca.md", paths)
 

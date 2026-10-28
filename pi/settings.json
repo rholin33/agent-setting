@@ -1,24 +1,24 @@
 {
-  "hideThinkingBlock": false,
-  "defaultProvider": "pay",
-  "tuiMode": "fullscreen",
+  "theme": "dark",
+  "defaultThinkingLevel": "xhigh",
   "skills": [
     "skills"
   ],
+  "defaultModel": "gpt-5.6-sol",
   "packages": [
     "npm:@cortexkit/pi-magic-context",
     "npm:@narumitw/pi-statusline",
     "npm:pi-tool-display",
     "npm:pi-mcp-adapter@2.33.0"
   ],
-  "modelThinkingLevels": {
-    "local/deepseek-v4.1-flash": "medium"
-  },
-  "theme": "dark",
-  "lastChangelogVersion": "1.1.0",
-  "defaultModel": "gpt-5.6-sol",
   "extensions": [
     "-builtin:mcp"
   ],
-  "defaultThinkingLevel": "xhigh"
+  "defaultProvider": "pay",
+  "lastChangelogVersion": "1.1.0",
+  "hideThinkingBlock": false,
+  "tuiMode": "fullscreen",
+  "modelThinkingLevels": {
+    "local/deepseek-v4.1-flash": "medium"
+  }
 }

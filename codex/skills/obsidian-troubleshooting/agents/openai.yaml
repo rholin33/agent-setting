@@ -1,0 +1,4 @@
+interface:
+  display_name: "故障知识库"
+  short_description: "用 Obsidian 记录、检索和维护故障案例，保留根因、版本、修复证据与回滚方法"
+  default_prompt: "使用 $obsidian-troubleshooting 将这次故障记录到我的知识库，先查重，再保存根因、修复步骤与验证结果。"

@@ -140,8 +140,8 @@ class SyncExclusionsTest(unittest.TestCase):
 
     def test_pull_and_force_skip_previously_tracked_exclusions(self):
         self.write(self.project / "pi/settings.json", SETTINGS)
-        self.export()
         self.run_command("git", "init", "-q")
+        self.export()
         for directory in ("codex", "pi"):
             self.write(self.repo / directory / EXCLUDED_SKILL, "# Must not restore\n")
         self.write(self.repo / "pi/projects/sample" / AGENT_SETTINGS, "not portable JSON\n")

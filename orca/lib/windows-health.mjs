@@ -55,7 +55,8 @@ export async function verifyWindowsAbsence({ project, missing, cli, platform = p
           const agents = rows.filter(r => descendants.has(r.ProcessId) && (/^(?:codex|omp|claude)\.exe$/i.test(r.Name) ||
             /^node\.exe$/i.test(r.Name) && /pi-coding-agent[\\/]dist[\\/](?:bundle[\\/])?cli\.js/i.test(r.CommandLine || '')));
           if ((!agents.length && !presentation({ terminal: t, descendants, rows })) || agents.some(r => /^codex\.exe$/i.test(r.Name)
-            ? !/(?:^|\s)resume\s+"?[0-9a-f-]{36}(?:"|\s|$)/i.test(r.CommandLine || '')
+            // Codex 不可能恢复 OMP/Pi 的原生记录；仍检查全部进程中的原会话参数。
+            ? !missing.every(({ saved }) => ['omp', 'pi'].includes(saved.agent)) && !/(?:^|\s)resume\s+"?[0-9a-f-]{36}(?:"|\s|$)/i.test(r.CommandLine || '')
             : /^claude\.exe$/i.test(r.Name) ? !claudeSessionIds(r.CommandLine || '').length
             : !/(?:^|\s)(?:--session|--resume)\s+(?:"[^"]+"|[^\s"]+)/.test(r.CommandLine || ''))) throw new Error('Running agent conversation is unbound');
         }

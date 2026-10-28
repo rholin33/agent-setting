@@ -3,35 +3,35 @@
     "name": "master",
     "agent": "omp",
     "model": "pay/gpt-6-astra",
-    "thinking": "xhigh",
+    "thinking": "high",
     "role": "agentroles.ccb_self"
   },
   {
     "name": "loader",
     "agent": "omp",
     "model": "pay/gpt-6.1-sol",
-    "thinking": "medium",
+    "thinking": "xhigh",
     "role": "agentroles.ccb_self"
   },
   {
     "name": "archi",
     "agent": "omp",
     "model": "pay/gpt-6-astra",
-    "thinking": "xhigh",
+    "thinking": "high",
     "role": "agentroles.archi"
   },
   {
     "name": "coder1",
     "agent": "codex",
     "model": "gpt-6-astra",
-    "thinking": "medium",
+    "thinking": "high",
     "role": "agentroles.coder"
   },
   {
     "name": "coder2",
     "agent": "codex",
     "model": "gpt-6-astra",
-    "thinking": "medium",
+    "thinking": "high",
     "role": "agentroles.coder"
   },
   {
@@ -52,7 +52,7 @@
     "name": "reviewer",
     "agent": "omp",
     "model": "pay/gpt-6-astra",
-    "thinking": "xhigh",
+    "thinking": "medium",
     "role": "agentroles.code_reviewer"
   },
   {
@@ -65,8 +65,8 @@
   {
     "name": "simple",
     "agent": "omp",
-    "model": "pay/gpt-6.1-sol",
-    "thinking": "xhigh",
+    "model": "pay/gpt-6-astra",
+    "thinking": "medium",
     "role": "agentroles.simple"
   },
   {
@@ -79,8 +79,8 @@
   {
     "name": "copywriter",
     "agent": "omp",
-    "model": "local/cline-pass/deepseek-v4.1-flash",
-    "thinking": "high",
+    "model": "pay-copy/gpt-6.1-sol",
+    "thinking": "xhigh",
     "role": "agentroles.copywriter"
   }
 ]

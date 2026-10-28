@@ -78,16 +78,33 @@ async function liveEndpoint({ cli, project, handle, role, saved, expected, snaps
   return actual;
 }
 
-export async function verifyRemoteEnvironment({ requests, environment, cli }) {
+export async function verifyRemoteEnvironment({ requests, environment, cli, registry }) {
   if (environment !== undefined && (!environment.trim() || /[\r\n\0]/.test(environment))) throw new Error('Invalid remote environment');
   if (requests.some(request => request.runtime === 'claude')) {
     const listed = await cli(['environment', 'list']);
     const candidates = listed.environments || listed.result?.environments || [];
     if (!candidates.length) throw new Error('Claude remote requires one verified Orca environment: no saved remote environment. Pair the remote Orca host with orca environment add --name NAME --pairing-code CODE before retrying.');
+    const claudeRequests = requests.filter(request => request.runtime === 'claude');
+    const bound = claudeRequests.filter(request => {
+      const previous = registry?.roles?.[request.role];
+      return previous?.runtime === 'claude' && !previous.pending;
+    });
+    for (const request of bound) {
+      const saved = registry.roles[request.role].owner?.environment;
+      if (!saved || saved === 'local' || candidates.filter(item => item.id === saved).length !== 1) {
+        throw new Error(`${request.role}: saved Claude environment is unavailable or ambiguous; original owner retained`);
+      }
+    }
+    // Reuse is scoped to each durable owner, not to the number of paired hosts.
+    // New/pending switches still require an unambiguous destination below.
+    if (environment === undefined && bound.length === claudeRequests.length) return undefined;
     const matches = environment === undefined ? candidates : candidates.filter(item => item.id === environment || item.name === environment);
     if (matches.length !== 1) throw new Error('Claude remote requires one verified Orca environment; select --environment explicitly or configure a remote environment first');
     environment = matches[0].id || matches[0].name;
     if (!environment || environment === 'local') throw new Error('Claude remote requires a remote environment, not local');
+    for (const request of bound) {
+      if (registry.roles[request.role].owner.environment !== environment) throw new Error(`${request.role}: Claude environment differs from current owner`);
+    }
   }
   return environment;
 }
@@ -95,11 +112,11 @@ export async function verifyRemoteEnvironment({ requests, environment, cli }) {
 async function startRemoteRequestsAtLocal({ requests, home = path.join(os.homedir(), '.orca', 'roles', 'ccb-team'), project, environment, sourceHandle, cli, snapshot, ensureOmp = ensureOmpAdapter, verifyOmp = verifyOmpBinding, inspect = (handle, provider) => inspectHealth(cli, rpc, handle, provider), skill = path.join(os.homedir(), '.codex', 'skills', 'orca-remote', 'SKILL.md'), runDirectHandoff = runDirectHandoffDefault, log = console.log }) {
   if (!requests.length) return null;
   if (!fs.existsSync(skill)) throw new Error(`Remote skill not found: ${skill}`);
-  environment = await verifyRemoteEnvironment({ requests, environment, cli });
   if (sourceHandle && requests.length !== 1) throw new Error('--from-agent requires exactly one role');
   project = normalizeProject(fs.realpathSync(project));
   home = fs.realpathSync(home);
   const registry = readRemoteSwitches({ home, project });
+  environment = await verifyRemoteEnvironment({ requests, environment, cli, registry });
   const failed = preflightFailureMessage(registry, requests.filter(request => request.runtime !== null && request.runtime !== 'omp').map(request => request.role));
   if (failed) throw remotePreflightError(failed);
   const stateFile = projectFiles(home, project).state;

@@ -81,8 +81,20 @@ python scripts/sync-local-config.py --target orca --push --project /path/to/proj
 ```
 
 The exporter itself never commits or pushes. Review the exact changed files,
-stage only approved portable paths, commit, then push. Never apply remote CCB
+stage every reviewed portable change, verify the complete index, commit, verify
+HEAD, then push. Never apply remote CCB
 configuration to the live home before exporting intended local changes.
+
+```text
+python scripts/sync-local-config.py --target orca --verify-index --project /path/to/project
+# Commit only after the index check succeeds.
+python scripts/sync-local-config.py --target orca --verify-head --project /path/to/project
+# Push only after the HEAD check succeeds.
+```
+
+Use the same target, project and home overrides as the export. The manifest in
+the Git directory survives stash and detects missing/new skills and stale content.
+See [complete push verification](docs/features/global-config-sync.md#complete-push-verification).
 
 Export validates all candidate Python, JSON and skill documents before writing
 any files, including the sync hook itself. Invalid or concatenated documents stop
@@ -100,6 +112,8 @@ before installation.
 
 ```text
 python -m unittest discover -s tests -v
+python scripts/test-sync-exclusions.py
+python scripts/test-sync-completeness.py
 node --test orca/tests/*.test.mjs
 ```
 

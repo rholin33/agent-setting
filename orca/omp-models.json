@@ -57,6 +57,30 @@
       "label": "pay/gpt-image-2"
     },
     {
+      "agent": "omp",
+      "model": "pay/gpt-image-2.5-sunburst",
+      "thinking": "xhigh",
+      "label": "pay/gpt-image-2.5-sunburst"
+    },
+    {
+      "agent": "omp",
+      "model": "pay-copy/gpt-6-astra",
+      "thinking": "xhigh",
+      "label": "pay-copy/gpt-6-astra"
+    },
+    {
+      "agent": "omp",
+      "model": "pay-copy/gpt-6.1-sol",
+      "thinking": "xhigh",
+      "label": "pay-copy/gpt-6.1-sol"
+    },
+    {
+      "agent": "omp",
+      "model": "pay-copy/gpt-image-2",
+      "thinking": "xhigh",
+      "label": "pay-copy/gpt-image-2"
+    },
+    {
       "agent": "pi",
       "model": "local/cline-pass/deepseek-v4.1-flash",
       "thinking": "xhigh",
@@ -91,23 +115,47 @@
       "model": "pay/gpt-image-2",
       "thinking": "xhigh",
       "label": "pay/gpt-image-2"
+    },
+    {
+      "agent": "pi",
+      "model": "pay/gpt-image-2.5-sunburst",
+      "thinking": "xhigh",
+      "label": "pay/gpt-image-2.5-sunburst"
+    },
+    {
+      "agent": "pi",
+      "model": "pay-copy/gpt-6-astra",
+      "thinking": "xhigh",
+      "label": "pay-copy/gpt-6-astra"
+    },
+    {
+      "agent": "pi",
+      "model": "pay-copy/gpt-6.1-sol",
+      "thinking": "xhigh",
+      "label": "pay-copy/gpt-6.1-sol"
+    },
+    {
+      "agent": "pi",
+      "model": "pay-copy/gpt-image-2",
+      "thinking": "xhigh",
+      "label": "pay-copy/gpt-image-2"
     }
   ],
   "roles": {
     "master": {
       "agent": "omp",
       "model": "pay/gpt-6-astra",
-      "thinking": "xhigh"
+      "thinking": "high"
     },
     "loader": {
       "agent": "omp",
       "model": "pay/gpt-6.1-sol",
-      "thinking": "medium"
+      "thinking": "xhigh"
     },
     "archi": {
       "agent": "omp",
       "model": "pay/gpt-6-astra",
-      "thinking": "xhigh"
+      "thinking": "high"
     },
     "designer": {
       "agent": "omp",
@@ -121,8 +169,8 @@
     },
     "simple": {
       "agent": "omp",
-      "model": "pay/gpt-6.1-sol",
-      "thinking": "xhigh"
+      "model": "pay/gpt-6-astra",
+      "thinking": "medium"
     },
     "coder1": {
       "agent": "codex",
@@ -137,7 +185,7 @@
     "reviewer": {
       "agent": "omp",
       "model": "pay/gpt-6-astra",
-      "thinking": "xhigh"
+      "thinking": "medium"
     },
     "designer2": {
       "agent": "omp",
@@ -146,8 +194,8 @@
     },
     "copywriter": {
       "agent": "omp",
-      "model": "local/cline-pass/deepseek-v4.1-flash",
-      "thinking": "high"
+      "model": "pay-copy/gpt-6.1-sol",
+      "thinking": "xhigh"
     }
   }
 }

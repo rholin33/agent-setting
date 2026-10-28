@@ -33,10 +33,10 @@ class SyncScopeTests(unittest.TestCase):
     def test_magic_context_scope_and_jsonc_security(self):
         relative = Path('cortexkit/magic-context.jsonc')
         with patch.object(sync, 'TARGET', 'orca'):
-            self.assertIn(str(relative), sync.get_managed_remote_pathspecs())
+            self.assertIn(relative, map(Path, sync.get_managed_remote_pathspecs()))
             self.assertEqual(sync.get_local_managed_path(relative), sync.MAGIC_CONTEXT_HOME / 'magic-context.jsonc')
         with patch.object(sync, 'TARGET', 'ccb'):
-            self.assertNotIn(str(relative), sync.get_managed_remote_pathspecs())
+            self.assertNotIn(relative, map(Path, sync.get_managed_remote_pathspecs()))
             with self.assertRaises(ValueError):
                 sync.get_local_managed_path(relative)
         sync.validate_managed_content(relative, b'{/*comment*/"historian":{"pi":{"model":"local/model",}},"dreamer":{},}')
@@ -224,7 +224,7 @@ class SyncScopeTests(unittest.TestCase):
     def test_claude_scope_is_common_and_excludes_account_synced_skills(self):
         for target in ('ccb', 'orca'):
             with patch.object(sync, 'TARGET', target):
-                pathspecs = sync.get_managed_remote_pathspecs()
+                pathspecs = [Path(path).as_posix() for path in sync.get_managed_remote_pathspecs()]
                 self.assertIn('claude/CLAUDE.md', pathspecs)
                 self.assertIn('claude/skills', pathspecs)
                 self.assertEqual(sync.get_local_managed_path(Path('claude/CLAUDE.md')), sync.CLAUDE_HOME / 'CLAUDE.md')
