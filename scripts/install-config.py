@@ -11,6 +11,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--target', choices=('ccb', 'orca'), required=True)
     parser.add_argument('--force', action='store_true', help='back up and replace managed local files')
+    parser.add_argument('--offline', action='store_true', help='use an already verified pinned source cache; upstream freshness is not checked')
     parser.add_argument('--quick-commands', action='store_true')
     parser.add_argument('--shell-profile', type=Path, help='append a backed-up managed Orca entry block')
     args = parser.parse_args()
@@ -26,6 +27,8 @@ def main():
     sync.REMOTE_REPO = root
     sync.INCLUDE_UNTRACKED = True
     sync.validate_remote_layout()
+    if args.target == 'orca':
+        print('Orca runtime:', sync.orca_runtime_module().install(root, sync.ORCA_HOME, offline=args.offline))
     if args.force:
         sync.force_sync_managed_files()
     else:

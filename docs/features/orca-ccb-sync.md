@@ -1,5 +1,7 @@
 # Selective CCB and Orca Configuration Sync
 
+Current runtime ownership and dual-repository workflow: [Orca runtime repository](orca-runtime-repository.md). Historical bundled-runtime details below describe earlier versions.
+
 ## Scope
 
 Develop an explicit `ccb` or `orca` selector. Both selections include common

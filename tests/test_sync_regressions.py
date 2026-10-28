@@ -110,6 +110,9 @@ class SyncRegressionTests(unittest.TestCase):
                 layout = sync.get_orca_project_directory() / 'team.json'
                 layout.parent.mkdir(parents=True)
                 layout.write_text('{"workspace": "private", "tabs": []}', encoding='utf-8')
+                entry = sync.ORCA_HOME / 'bin/orca-team.mjs'
+                entry.parent.mkdir(parents=True)
+                entry.write_text('// test entry')
                 exporter.export_configuration(destination)
                 exported = destination / 'orca/project-configs/fixture/config.json'
                 self.assertEqual(json.loads(exported.read_text()), {'tabs': []})

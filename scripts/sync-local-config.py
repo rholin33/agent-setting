@@ -88,7 +88,11 @@ def collect_configuration(destination: Path) -> dict[Path, bytes]:
         sync.validate_managed_content(relative, content)
         pending[relative] = content
     if sync.TARGET == 'orca':
-        entry = REPO_ROOT / 'orca/bin/orca-team.mjs'
+        pin = destination / 'orca/runtime.json'
+        if pin.is_file():
+            sync.orca_runtime_module().read_pin(destination)
+            pending[Path('orca/runtime.json')] = pin.read_bytes()
+        entry = sync.ORCA_HOME / 'bin/orca-team.mjs'
         directory = sync.get_orca_project_directory()
         has_project_config = (directory / 'config.json').is_file() or (directory / 'team.json').is_file()
         if entry.is_file() and has_project_config:
@@ -223,6 +227,8 @@ def main() -> int:
     repo = args.repo.resolve()
     try:
         if args.push:
+            if args.target == 'orca' and (repo / 'orca/runtime.json').is_file():
+                print('Orca runtime:', sync.orca_runtime_module().check(repo, sync.ORCA_HOME))
             manifest_path(repo)  # Require a Git checkout before any export writes.
             base = head(repo)
             pending = collect_configuration(repo)
@@ -230,6 +236,8 @@ def main() -> int:
             write_manifest(repo, pending, base)
             print(f'Exported {count} files for {args.target}; manifest: {manifest_path(repo)}; no Git commit or push performed.')
         else:
+            if args.target == 'orca' and (repo / 'orca/runtime.json').is_file():
+                print('Orca runtime:', sync.orca_runtime_module().check(repo, sync.ORCA_HOME))
             count = verify_complete(repo, committed=args.verify_head)
             print(f'Complete {args.target} export verified: {count} files in {"HEAD" if args.verify_head else "index"}; no Git commit or push performed.')
     except (ValueError, SyntaxError, OSError, subprocess.CalledProcessError) as error:

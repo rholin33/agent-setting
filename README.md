@@ -18,6 +18,25 @@ The legacy `codex-sync` alias follows the same rules. No SessionStart hook is
 registered: starting an agent never synchronizes or selects CCB or Orca.
 The pre-commit hook only checks staged whitespace; it never exports or stages.
 
+## Separate Orca Runtime
+
+Runtime source, tests and bundled role resources live in the private
+[rholin33/orca-team](https://github.com/rholin33/orca-team) repository.
+`orca/runtime.json` locks its exact commit; `orca/` here retains personal settings
+and role prompts. Skills remain complete, including their executable helpers.
+
+Every Orca sync checks source upstream and local code before applying the pinned
+version. Newer source commits are reported for review; unpublished live changes
+stop the operation. Ordinary sync requires network access to both repositories.
+For explicit offline installation, `scripts/install-config.py --target orca
+--offline` uses an existing cache and reports that upstream was not checked.
+
+Before a full configuration push, run `python scripts/sync-orca-runtime.py --check`.
+Runtime changes use `--push`, review/test, exact staging, `--verify-index`, source
+commit, `--verify-head`, source push, then `--pin-published`. Configuration is
+published only after the source commit is verified remotely. Both repositories
+must be accounted for; see [migration and contract](docs/features/orca-runtime-repository.md).
+
 ## Install From A Checkout
 
 Orca, Pi, Codex, model services and credentials are already configured.
@@ -36,7 +55,7 @@ files should replace divergent local managed files with backups.
 
 Orca installation generates local shell entry scripts and optionally registers
 nine global quick commands. Follow the printed shell profile/PATH instruction
-once; then run `orca-team` from any project. See [Orca guide](orca/README.md).
+once; then run `orca-team` from any project. See [Orca source guide](https://github.com/rholin33/orca-team).
 Or pass `--shell-profile PATH` to register a backed-up managed block directly
 (Windows wrapper: `-ShellProfile $PROFILE`; zsh: `$HOME/.zshrc`; bash: `$HOME/.bashrc`).
 
@@ -51,7 +70,7 @@ accounts or model services. CCB role resources may be installed with --skip-tool
 | codex/ | Shared instructions, hooks, rules and non-system skills |
 | pi/ | Shared instructions, settings, skills and launch helper |
 | ccb/, roles/ | CCB configuration and role bootstrap |
-| orca/ | Orca team manager, nine role prompts and 199 original role resources |
+| orca/ | Team/layout/model configuration, role prompts, project layouts and runtime commit pin |
 | scripts/ | Cross-platform install/export entry points |
 | docs/features/orca-ccb-sync.md | Scope, design and validation |
 
@@ -114,7 +133,8 @@ before installation.
 python -m unittest discover -s tests -v
 python scripts/test-sync-exclusions.py
 python scripts/test-sync-completeness.py
-node --test orca/tests/*.test.mjs
+# In the separate orca-team source checkout:
+node --test tests/*.test.mjs
 ```
 
 Tests use isolated homes and mocked Orca. Native macOS/Linux desktop acceptance

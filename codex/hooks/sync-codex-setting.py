@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -47,10 +48,18 @@ def codex_agents_variant_relative(target: str) -> Path:
     return CODEX_CONFIG_DIR / f"AGENTS.{target}.md"
 INCLUDE_UNTRACKED = False
 ORCA_HOME = Path(os.environ.get("ORCA_TEAM_HOME", str(Path.home() / ".orca/roles/ccb-team"))).expanduser()
-ORCA_PACKAGE_DIRECTORIES = {"bin", "lib", "roles", "source", "tests", "docs", "remote-master"}
+ORCA_PACKAGE_DIRECTORIES = {"roles"}
 MAGIC_CONTEXT_RELATIVE = Path("cortexkit/magic-context.jsonc")
 MAGIC_CONTEXT_HOME = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))).expanduser() / "cortexkit"
-ORCA_PACKAGE_FILES = {"team.json", "layout.json", "package.json", "README.md", "FILE-INVENTORY.json", "omp-models.json", "omp-context.json"}
+ORCA_PACKAGE_FILES = {"team.json", "layout.json", "omp-models.json", "omp-context.json"}
+
+
+def orca_runtime_module():
+    helper = Path(__file__).with_name('orca_runtime.py')
+    spec = importlib.util.spec_from_file_location('orca_runtime', helper)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 TEXT_EXTENSIONS = {
     ".jsonc",
     ".md",
@@ -527,8 +536,7 @@ def validate_remote_layout() -> None:
                 raise ValueError("Orca tabs require one or two agents")
             if any(agent not in names for agent in tab["agents"]):
                 raise ValueError("Orca layout references an unknown agent")
-        if not (REMOTE_REPO / "orca/bin/orca-team.mjs").is_file():
-            raise ValueError("Orca command entry is missing")
+        orca_runtime_module().read_pin(REMOTE_REPO)
 
 
 def install_packaged_roles() -> None:
@@ -1085,6 +1093,9 @@ def main() -> int:
 
         update_remote_checkout()
         validate_remote_layout()
+        if TARGET == 'orca':
+            report = orca_runtime_module().install(REMOTE_REPO, ORCA_HOME)
+            print('Orca runtime: ' + json.dumps(report))
 
         if args.force:
             force_sync_managed_files()

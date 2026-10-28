@@ -91,7 +91,7 @@ class SyncExclusionsTest(unittest.TestCase):
         portable = hook['is_portable_path']
         root = Path('orca/remote-master/device-preview')
         for name in ('policy.json', 'role.md', 'README.md', 'service.py', 'launch.py'):
-            self.assertTrue(portable(root / name), name)
+            self.assertFalse(portable(root / name), name)
         for relative in (
             root / 'binding.json', root / 'mcp.json', root / 'auth.json',
             root / 'runtime/policy.json', root / 'nested/policy.json',
@@ -113,7 +113,7 @@ class SyncExclusionsTest(unittest.TestCase):
         namespace['export_configuration'](self.repo)
         destination = self.repo / 'orca/remote-master/device-preview'
         for name in ('policy.json', 'role.md', 'README.md', 'service.py'):
-            self.assertEqual((destination / name).read_bytes(), (root / name).read_bytes())
+            self.assertFalse((destination / name).exists())
         self.assertFalse((destination / 'binding.json').exists())
         self.assertFalse((destination / 'runtime').exists())
 

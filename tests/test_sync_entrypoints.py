@@ -33,13 +33,15 @@ class EntrypointTests(unittest.TestCase):
                        PI_CODING_AGENT_DIR=str(home / 'pi'), CCB_HOME=str(home / 'ccb'),
                        CLAUDE_CONFIG_DIR=str(home / 'claude'),
                        ORCA_TEAM_HOME=str(home / 'orca'), AGENT_SETTING_PROJECT_ROOT=str(home))
-            result = subprocess.run([sys.executable, str(ROOT / 'scripts/install-config.py'), '--target', 'orca'],
+            source = pathlib.Path(os.environ.get('ORCA_SOURCE_REPO', str(pathlib.Path.home() / '.codex/.sync/orca-team/source')))
+            env['ORCA_SOURCE_REPO'] = str(source)
+            result = subprocess.run([sys.executable, str(ROOT / 'scripts/install-config.py'), '--target', 'orca', '--offline'],
                                     env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertTrue((home / 'orca/bin/orca-team.mjs').is_file())
             self.assertTrue((home / 'orca/bin/orca-team.ps1').is_file())
             self.assertEqual(sum(file.is_file() for file in (home / 'orca/source').rglob('*')),
-                             sum(file.is_file() for file in (ROOT / 'orca/source').rglob('*')))
+                             sum(file.is_file() for file in (source / 'source').rglob('*')))
             self.assertTrue((home / 'orca/remote-master/omp_adapter.py').is_file())
             self.assertFalse((home / 'orca/remote-master/runtime').exists())
             self.assertFalse((home / 'ccb').exists())

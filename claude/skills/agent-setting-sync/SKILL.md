@@ -52,8 +52,8 @@ and pi/projects settings. CCB role bootstrap in roles/ and ccb/roles.json belong
 only to CCB. Orca mode must not apply CCB config, install CCB roles, or touch
 .ccb provider-state settings. CCB mode must not apply or export orca/.
 
-Orca scope: portable orca/ team package, all original source role resources,
-nine prompt templates, team/layout definitions and portable project layouts.
+Orca scope: team/layout/model/context configuration, role prompts, portable
+project layouts, and a repository-owned runtime version pin.
 Recreate shell launchers and Orca shortcuts for the destination machine.
 Never export generated launchers with absolute local paths, Orca profile data,
 quick-command backups, project state.json, locks, pane IDs, transcript bindings,
@@ -101,6 +101,51 @@ An explicit target push publishes every valid, reviewed local change in the sele
 Before publishing, inventory the entire export and classify every difference. Merge overlapping upstream changes instead of replacing newer remote code with older local copies. Preserve current local model choices unless the user requests otherwise. If a decision prevents publishing the full allowed scope, explain the exact unresolved items and resolve them with the user before pushing; a partial push requires explicit user approval. A stash or backup preserves data but does not count as publishing it.
 
 After a successful push, verify the remote SHA, reconcile any reviewed merge-only changes back into the corresponding live managed files with backups, and verify live configuration against the published result. Update the synchronization baseline only to the verified remote snapshot, never to local unpublished content. Do not leave a successful partial or full publication described as complete while live files and the baseline are unintentionally divergent. Report any deliberate local-only differences and preserved checkout edits separately. Never restart agents merely to align configuration.
+
+## Separate Orca Runtime Repository
+
+Orca uses two repositories: configuration in rholin33/agent-setting and private
+runtime source in https://github.com/rholin33/orca-team.git. `orca/runtime.json`
+pins a reviewed full commit. Source checkout: `$CODEX_HOME/.sync/orca-team/source`
+(or `ORCA_SOURCE_REPO`). Runtime bin/lib/source/tests/docs/remote-master belong
+only to the source repository. Configuration retains team/layout/models/context,
+role prompts and project layouts. Complete skills still include their helpers.
+
+Every Orca pull fetches source main, validates the pin and checks local runtime
+edits before installing the pinned code. Report pinned SHA, source main SHA,
+update_available and upstream_checked. A newer source main is reported for review;
+never silently advance the pin or claim both repositories are current. Network
+failure stops normal sync. Explicit offline installation may use the cached pin
+but must report upstream freshness unverified. Runtime updates preserve config,
+back up code and never restart agents. New source files and local edits cannot be
+silently overwritten, even with force. CCB does not fetch/install Orca.
+
+Every explicit Orca push checks both repositories before config export:
+
+1. Run `python scripts/sync-orca-runtime.py --check`. If live code differs or
+   source main is newer, inspect the source checkout and retain backups.
+2. With a clean source main checkout, run
+   `python scripts/sync-orca-runtime.py --push`. This exports the entire runtime
+   and merges nonoverlapping upstream/local file changes. Overlapping edits or
+   deletions require explicit resolution; never ignore a file to pass.
+3. Review every source diff and untracked path, run `node --test tests/*.test.mjs`
+   in the source checkout, stage exact reviewed paths there. Run configuration
+   checkout `python scripts/sync-orca-runtime.py --verify-index` before committing
+   source, then `--verify-head` before its ordinary `git push origin main`.
+   These checks use the full runtime export manifest. No changes needs no commit.
+4. Verify source remote SHA, then run `python scripts/sync-orca-runtime.py
+   --pin-published` (one command). It reconciles reviewed upstream-only changes
+   with backups, checks complete live content and updates the configuration pin.
+5. Continue the full configuration push below, including the changed runtime pin.
+   Its index/HEAD checks also verify the runtime repository. Publish runtime first,
+   configuration second. If the second push fails, report runtime published but
+   configuration pending; retain the pin and retry without claiming completion.
+
+Source code development should happen in the source checkout. Dirty checkout or
+unpublished commits must be reviewed/published before ordinary pull/install.
+Legacy live patches can use the explicit full runtime export workflow above.
+After successful two-repository sync, report both SHAs and refresh the baseline
+only from verified published configuration. Existing active sessions stay intact.
 
 ## Explicit Push Only
 

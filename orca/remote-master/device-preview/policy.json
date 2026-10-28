@@ -1,9 +1,0 @@
-{
-  "version": 1,
-  "role": "revisited-device-preview",
-  "task_relative": "Code/orca-remote/Revisited/device-preview-20261021",
-  "cli_relative": "Applications/wechatwebdevtools.app/Contents/MacOS/cli",
-  "package_sha256": "fec182587479727ce19b19f046c4fc0cfb9bdbb75f1bd7f02f970cc95a09614f",
-  "business_enabled": false,
-  "download_url": null
-}

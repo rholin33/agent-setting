@@ -16,7 +16,7 @@ export_spec.loader.exec_module(exporter)
 
 class SyncScopeTests(unittest.TestCase):
     def test_remote_sources_are_portable_but_runtime_and_backups_are_not(self):
-        self.assertTrue(sync.is_portable_path(Path('orca/remote-master/omp_adapter.py')))
+        self.assertFalse(sync.is_portable_path(Path('orca/remote-master/omp_adapter.py')))
         for name in ['orca/remote-master/runtime/adapter.json',
                      'orca/remote-master/credentials.json',
                      'orca/lib/health.mjs.startup-repair.bak',
@@ -133,7 +133,8 @@ class SyncScopeTests(unittest.TestCase):
                      'codex/skills/cad-fill-dimension-report/SKILL.md',
                      'pi/projects/project/agents/test/provider-state/pi/home/settings.json']:
             self.assertFalse(sync.is_portable_path(Path(path)), path)
-        self.assertTrue(sync.is_portable_path(Path('orca/source/coder/rules.md')))
+        self.assertFalse(sync.is_portable_path(Path('orca/source/coder/rules.md')))
+        self.assertTrue(sync.is_portable_path(Path('orca/roles/coder.md')))
 
     def test_explicit_failure_is_nonzero(self):
         with patch('sys.argv', ['sync-hook', '--target', 'orca']), \

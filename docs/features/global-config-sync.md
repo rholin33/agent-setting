@@ -1,5 +1,7 @@
 # Global Configuration Sync
 
+Current runtime ownership and dual-repository workflow: [Orca runtime repository](orca-runtime-repository.md). Historical bundled-runtime details below describe earlier versions.
+
 The current workflow is documented in [Selective CCB and Orca Sync](orca-ccb-sync.md).
 Both targets include portable Codex/Pi configuration. Exactly one of `ccb` and
 `orca` must be selected; no SessionStart hook runs synchronization.
