@@ -8,10 +8,11 @@ import { completeLocalInventory, dataDirectory } from './platform.mjs';
 import { sameWorktree } from './sessions.mjs';
 import { snapshot as readSnapshot } from './orca.mjs';
 import { claudeSessionIds } from './claude.mjs';
+import { provesClaudePresentation } from './claude-presentation-proof.mjs';
 
 // Newer Orca builds remove closed panes without persisting tombstones.
 // Prove absence from both the native PTY host and OS before resuming history.
-export async function verifyWindowsAbsence({ project, missing, cli, platform = process.platform, inventory = daemonSessions, processes = windowsProcesses, snapshot = readSnapshot }) {
+export async function verifyWindowsAbsence({ project, missing, cli, platform = process.platform, inventory = daemonSessions, processes = windowsProcesses, snapshot = readSnapshot, presentation = provesClaudePresentation }) {
   if (platform !== 'win32') throw new Error('Native absence verification is only available on Windows');
   const normalize = value => value.replaceAll('\\', '/').toLowerCase();
   const proofs = [];
@@ -53,7 +54,7 @@ export async function verifyWindowsAbsence({ project, missing, cli, platform = p
           }
           const agents = rows.filter(r => descendants.has(r.ProcessId) && (/^(?:codex|omp|claude)\.exe$/i.test(r.Name) ||
             /^node\.exe$/i.test(r.Name) && /pi-coding-agent[\\/]dist[\\/](?:bundle[\\/])?cli\.js/i.test(r.CommandLine || '')));
-          if (!agents.length || agents.some(r => /^codex\.exe$/i.test(r.Name)
+          if ((!agents.length && !presentation({ terminal: t, descendants, rows })) || agents.some(r => /^codex\.exe$/i.test(r.Name)
             ? !/(?:^|\s)resume\s+"?[0-9a-f-]{36}(?:"|\s|$)/i.test(r.CommandLine || '')
             : /^claude\.exe$/i.test(r.Name) ? !claudeSessionIds(r.CommandLine || '').length
             : !/(?:^|\s)(?:--session|--resume)\s+(?:"[^"]+"|[^\s"]+)/.test(r.CommandLine || ''))) throw new Error('Running agent conversation is unbound');

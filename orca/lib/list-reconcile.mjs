@@ -71,6 +71,12 @@ export async function reconcileProjectList({ home, project, cli, log = console.l
     readBindings(path.join(home, 'remote-master', 'runtime'), handles, panes);
     const inventory = await cli(['terminal', 'list', '--worktree', `path:${project}`]);
     if (!completeLocalInventory(inventory)) throw new Error('Complete inventory required');
+    const absentReturns = Object.entries(remote.roles).filter(([name, entry]) => entry.runtime &&
+      !inventory.terminals.some(t => t.tabId === state.agents[name]?.tabId && t.leafId === state.agents[name]?.leafId));
+    if (absentReturns.length) {
+      log(`Terminal list cleanup deferred: original local return panes absent for ${absentReturns.map(([name]) => name).join(', ')}; all live terminals retained.`);
+      return { status: 'deferred', closed: [] };
+    }
     for (const t of inventory.terminals) if (panes.has(`${t.tabId}:${t.leafId}`)) handles.add(t.handle);
     const directory = path.join(files.directory, 'list-reconciliation');
     fs.mkdirSync(directory, { recursive: true });

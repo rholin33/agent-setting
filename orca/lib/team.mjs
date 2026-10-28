@@ -171,10 +171,29 @@ export async function runTeam({ home, project, action, group, preserveRoles = []
     }
     const preserved = new Set(preserveRoles);
     const names = validateConfig(config, catalog).filter(name => !preserved.has(name));
+    const initialInventory = await projectInventory({ project, cli, register: action === 'start', visualLayouts: true });
+    const detached = [];
+    for (const tab of config.tabs) {
+      const sources = tab.agents.filter(name => preserved.has(name));
+      if (!sources.length || sources.length === tab.agents.length) continue;
+      const sourcePresent = sources.some(name => initialInventory.terminals.some(row =>
+        row.tabId === state.agents[name]?.tabId && row.leafId === state.agents[name]?.leafId));
+      if (sourcePresent) continue;
+      const originalTabs = new Set(sources.map(name => state.agents[name]?.tabId).filter(Boolean));
+      const visible = await published(`path:${project}`);
+      if (!Array.isArray(visible?.tabs) || visible.tabs.some(row => originalTabs.has(row.parentTabId || row.id)) ||
+          initialInventory.terminals.some(row => originalTabs.has(row.tabId))) {
+        throw new Error(`${tab.title}: original protected tab is still present or unverified`);
+      }
+      detached.push(tab);
+    }
+    // 原返回窗格已消失时，只恢复本地兄弟角色；保留远端角色的原绑定，绝不启动替身。
+    config = { ...config, tabs: config.tabs.map(tab => detached.includes(tab)
+      ? { ...tab, agents: tab.agents.filter(name => !preserved.has(name)) } : tab) };
     const mixed = config.tabs.filter(tab => tab.agents.some(name => preserved.has(name)));
     const movable = { ...config, tabs: config.tabs.filter(tab => !mixed.includes(tab)) };
     const list = () => projectInventory({ project, cli, visualLayouts: true });
-    let inventory = await projectInventory({ project, cli, register: action === 'start', visualLayouts: true });
+    let inventory = initialInventory;
     const resolved = {}, resume = {}, health = {}, issues = [], missing = [];
     let snap = await snapshot();
     if (action === 'start') {
