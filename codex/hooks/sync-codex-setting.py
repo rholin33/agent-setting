@@ -261,7 +261,13 @@ def is_portable_path(relative_path: Path) -> bool:
     # 手工备份常带日期/用途后缀，如 team.mjs.bak.20261012-omp-recovery、x.backup-20261012T194854。
     if re.search(r"\.(bak|backup)([.-]|$)", name):
         return False
-    if parts[:2] == ("orca", "remote-master") and relative_path.suffix.lower() not in {".py", ".ts"}:
+    preview_resources = {
+        ("orca", "remote-master", "device-preview", name)
+        for name in ("policy.json", "role.md", "README.md")
+    }
+    if (parts[:2] == ("orca", "remote-master")
+            and relative_path.suffix.lower() not in {".py", ".ts"}
+            and parts not in preview_resources):
         return False
     if name.startswith((".env.", "local-legacy")) or name == ".coverage" or (name.startswith("coverage") and name.endswith(".json")):
         return False
