@@ -85,6 +85,38 @@ class SyncExclusionsTest(unittest.TestCase):
             (self.project / ".ccb" / AGENT_SETTINGS).read_text(), "local runtime settings\n"
         )
 
+    def test_preview_resources_are_exactly_allowlisted(self):
+        hook = self.load_hook()
+        hook['TARGET'] = 'orca'
+        portable = hook['is_portable_path']
+        root = Path('orca/remote-master/device-preview')
+        for name in ('policy.json', 'role.md', 'README.md', 'service.py', 'launch.py'):
+            self.assertTrue(portable(root / name), name)
+        for relative in (
+            root / 'binding.json', root / 'mcp.json', root / 'auth.json',
+            root / 'runtime/policy.json', root / 'nested/policy.json',
+            root / 'sessions/session.jsonl', root / 'policy.json.bak',
+            Path('orca/remote-master/other/policy.json'),
+        ):
+            self.assertFalse(portable(relative), str(relative))
+
+    def test_preview_export_includes_resources_but_not_runtime(self):
+        namespace = runpy.run_path(str(ROOT / 'scripts/sync-local-config.py'))
+        sync = namespace['sync']
+        sync.TARGET = 'orca'
+        sync.ORCA_HOME = self.base / 'orca-home'
+        root = sync.ORCA_HOME / 'remote-master/device-preview'
+        for name, content in [('policy.json', '{}\n'), ('role.md', '# Role\n'),
+                              ('README.md', '# Guide\n'), ('service.py', '# Source\n'),
+                              ('binding.json', '{}\n'), ('runtime/policy.json', '{}\n')]:
+            self.write(root / name, content)
+        namespace['export_configuration'](self.repo)
+        destination = self.repo / 'orca/remote-master/device-preview'
+        for name in ('policy.json', 'role.md', 'README.md', 'service.py'):
+            self.assertEqual((destination / name).read_bytes(), (root / name).read_bytes())
+        self.assertFalse((destination / 'binding.json').exists())
+        self.assertFalse((destination / 'runtime').exists())
+
     def test_repeated_export_skips_excluded_files(self):
         self.run_command("git", "init", "-q")
         for _ in range(2):
