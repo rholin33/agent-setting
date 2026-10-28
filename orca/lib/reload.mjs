@@ -6,12 +6,12 @@ import { restartRoles } from './restart.mjs';
 import { sameAppliedConfig } from './launch-state.mjs';
 import { mapLimit, INSPECT_CONCURRENCY } from './platform.mjs';
 
-// Running roles whose applied fingerprint (CLI, model, thinking, role prompt)
+// Running roles whose applied fingerprint (CLI, model, thinking, role prompt, OMP proxy)
 // still matches are reused untouched; only changed roles are stopped and resumed
 // with their original conversation. `orca-team restart` forces a restart.
 // Shells recover in the start pass.
 // Restarts stay sequential because desktop focus is shared between panes.
-export async function reloadRunning({ home, project, names, cli, snapshot, inspect, log = console.log, restart = restartRoles, now = Date.now }) {
+export async function reloadRunning({ home, project, names, cli, snapshot, inspect, log = console.log, restart = restartRoles, now = Date.now, ompProxyOptions }) {
   const files = projectFiles(home, project);
   if (!fs.existsSync(files.config) || !fs.existsSync(files.state)) return { reloaded: [], skipped: [], current: [] };
   const config = readJson(files.config);
@@ -29,7 +29,7 @@ export async function reloadRunning({ home, project, names, cli, snapshot, inspe
     if (rows.length !== 1) continue;
     if (!rows[0].connected || rows[0].orphaned) continue;
     // 指纹未变的角色不检查进程、不重启；窗格里不是 agent 的情况留给启动阶段恢复。
-    if (sameAppliedConfig(saved, role, home)) { current.push(name); continue; }
+    if (sameAppliedConfig(saved, role, home, ompProxyOptions)) { current.push(name); continue; }
     changed.push({ name, handle: rows[0].handle, agent: saved.agent });
   }
   // 只有真正跑着智能体的窗格才在这里重启；空壳或不可验证的窗格留给启动阶段

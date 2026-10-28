@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ompExecutable } from './omp.mjs';
+import { ompProxyEnvironment } from './omp-proxy.mjs';
 import { claudeExecutable } from './claude.mjs';
 import { StringDecoder } from 'node:string_decoder';
 import { normalizeProject } from './platform.mjs';
@@ -69,7 +70,7 @@ export function validateTranscript(saved, project) {
   if (!meta || meta.id !== session.id || !sameWorktree(`local::${meta.cwd}`, project)) throw new Error('Original conversation identity/project mismatch');
   return session;
 }
-export function launchArguments(role, prompt, session, project, home, { codexNoDaemon = false, initialNote = null } = {}) {
+export function launchArguments(role, prompt, session, project, home, { codexNoDaemon = false, initialNote = null, ompProxyOptions } = {}) {
   // 模型来自账本；Codex 账本在每次 start 时同步为本机 Codex 配置，显式传入
   // 可避免 resume 恢复会话内记录的旧模型和推理强度。
   const args = ['--model', role.model];
@@ -95,6 +96,7 @@ export function launchArguments(role, prompt, session, project, home, { codexNoD
  }
     }
     if (role.agent === 'omp') {
+      Object.assign(env, ompProxyEnvironment(ompProxyOptions));
       args.push('--config', path.join(home, 'omp-context.json'));
       if (home && /^[a-z][a-z0-9_]*$/.test(role.name || '')) {
         args.push('--extension', path.join(home, 'lib', 'omp-role-title.mjs'));

@@ -5,6 +5,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { validateTranscript, readTranscriptHeader, CLAUDE_PERMISSION_MODE } from './sessions.mjs';
 import { claudeTranscriptPath } from './claude.mjs';
 import { dataDirectory } from './platform.mjs';
+import { ompProxyFingerprint } from './omp-proxy.mjs';
 
 // 新 Codex 会话的进程参数和 Orca 实时接口都不带会话 ID：启动时首条消息附带本次 launchIntent 标记，
 // 再在 Codex 会话目录中按标记找到唯一的会话记录。macOS 与 Windows 通用。
@@ -105,8 +106,9 @@ export function captureSession(saved, live, project, observed) {
 }
 
 // 配置指纹：CLI、模型、思考强度、角色提示内容和 Claude 权限模式。指纹不变的运行中角色在 start 时直接复用。
-export function appliedModelOf(catalogRole, home) {
+export function appliedModelOf(catalogRole, home, ompProxyOptions) {
   const applied = { agent: catalogRole.agent, model: catalogRole.model, thinking: catalogRole.thinking ?? null };
+  if (catalogRole.agent === 'omp') applied.proxy = ompProxyFingerprint(ompProxyOptions);
   if (catalogRole.agent === 'claude') applied.permission = CLAUDE_PERMISSION_MODE;
   const prompt = home && path.join(home, 'roles', `${catalogRole.name}.md`);
   if (prompt && fs.existsSync(prompt)) applied.prompt = createHash('sha256').update(fs.readFileSync(prompt)).digest('hex').slice(0, 16);
@@ -114,9 +116,10 @@ export function appliedModelOf(catalogRole, home) {
 }
 // 旧状态没有提示指纹时只比较模型字段，升级后不会因此重启全部角色。
 // 权限模式不做此豁免：旧 Claude 状态没有记录权限，无法证明进程以当前权限启动，必须重启一次。
-export function sameAppliedConfig(saved, catalogRole, home) {
-  const applied = saved.appliedModel, desired = appliedModelOf(catalogRole, home);
+export function sameAppliedConfig(saved, catalogRole, home, ompProxyOptions) {
+  const applied = saved.appliedModel, desired = appliedModelOf(catalogRole, home, ompProxyOptions);
   if (!applied) return false;
   return applied.agent === desired.agent && applied.model === desired.model && (applied.thinking ?? null) === desired.thinking &&
-    (applied.prompt === undefined || applied.prompt === desired.prompt) && (applied.permission ?? null) === (desired.permission ?? null);
+    (applied.prompt === undefined || applied.prompt === desired.prompt) && (applied.permission ?? null) === (desired.permission ?? null) &&
+    (catalogRole.agent !== 'omp' || applied.proxy === desired.proxy);
 }

@@ -1,5 +1,17 @@
 # Restart with current local credentials
 
+## OMP system proxy (2026-10-28)
+
+Every local OMP launch, including exact-session restart/recovery, now reads the current enabled Windows manual system proxy from `HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings`. `lib/omp-proxy.mjs` resolves `ProxyEnable`/`ProxyServer`; the shared `launchArguments` entry adds `PI_PROXY` only to the launched child's environment. Nothing is cached across launches, so changed or disabled system settings take effect on the next restart. Existing running processes need a restart to adopt this behavior.
+
+Explicit nonempty `PI_PROXY`, `HTTPS_PROXY`, `HTTP_PROXY` or `ALL_PROXY` (including lowercase variants) retain priority. Provider-specific `PI_PROXY_<PROVIDER>` and `NO_PROXY` remain inherited, with OMP's native precedence/bypass behavior. A Windows protocol map prefers `https=` then `http=`; a bare proxy address uses HTTP CONNECT. Disabled, missing, malformed or unreadable settings add no override; the registry query has a three-second timeout. Codex, Pi and Claude launch behavior is unchanged.
+
+No UI, credential, model, registry or global environment changes. PAC/WPAD, SOCKS-only system settings and automatic macOS/Linux system proxy discovery are not implemented. Windows `ProxyOverride` is not converted; existing `NO_PROXY` and OMP's native local-address bypass continue to apply.
+
+The default `orca-team` reload comparison includes an OMP proxy fingerprint (`appliedModel.proxy`). Older OMP state without that field triggers one exact-session restart; subsequent starts reuse an unchanged fingerprint. Changes to detected system proxy, explicit proxy variables or bypass variables trigger another restart. Only a SHA-256 digest is stored, never proxy credentials. Other runtimes retain their previous reuse rules. Protected remote owners and pending handoffs continue to use the existing protection path.
+
+Verification: regression tests cover disabled and changed proxies, explicit environment priority, protocol-specific values, exact-session resume, child environment inheritance, legacy fingerprint migration and unchanged-configuration reuse. Local live verification restarted seven OMP roles and reused two Codex roles, preserving all original sessions and panes; every new OMP process inherited the detected system proxy. Proxy selection also completed a real model connectivity request. Published candidate verification: `node --test tests/*.test.mjs` passed 523 tests with 10 skipped and zero failures; `python scripts/test-sync-exclusions.py` passed all four tests.
+
 ## Overview
 `orca-team restart` restarts every configured role; `restart ROLE` targets one role. Original panes and conversations are retained. The default `orca-team` command now uses the same restart path: every role whose pane is running its provider agent is restarted with the configured agent, model, and thinking level, so a team that Orca restored on its own is normalized by one invocation.
 
