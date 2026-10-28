@@ -60,12 +60,38 @@ export async function recoverInPane({ name, saved, handle, command, cli, inspect
   const before = await inspect(handle, saved.agent);
   if (before.kind !== 'shell') throw new Error(`${name}: idle shell cannot be verified (${before.reason})`);
   // Reading the terminal immediately before send avoids pasting into a nonempty prompt.
+  let promptScreen;
   const readPrompt = async () => {
     const screen = (await cli(['terminal', 'read', '--terminal', handle, '--screen', '--limit', '2000'])).terminal;
+    promptScreen = screen;
     return (screen.tail || []).filter(line => line.trim()).at(-1)?.trim() || '';
   };
   const prompt = /^(?:PS .+>|[^\n]*[$#%>]|➜ .+ [✗✔])$/;
   let last = await readPrompt();
+  // 原生进程已退出时，旧 TUI 页脚仍可能留在 PowerShell 提示符下方。
+  // Ctrl+L 只重绘且保留输入草稿；不能把历史提示符直接当成可执行位置。
+  if (!prompt.test(last) && !/^PS [^\r\n]+>/.test(last) &&
+      promptScreen.source === 'screen' && !promptScreen.draft &&
+      promptScreen.tail?.some(line => /^PS [^\r\n]+>$/.test(line.trim()))) {
+    const idle = await inspect(handle, saved.agent);
+    if (idle.kind !== 'shell' || idle.terminal.incarnationId !== before.terminal.incarnationId) {
+      throw new Error(`${name}: process changed before prompt redraw`);
+    }
+    const redrawn = await cli(['terminal', 'send', '--terminal', handle, '--text', '\x0c']);
+    if (redrawn.send?.accepted !== true) throw new Error(`${name}: prompt redraw was not confirmed`);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await sleep(200);
+      const current = await inspect(handle, saved.agent);
+      if (current.kind !== 'shell' || current.terminal.incarnationId !== before.terminal.incarnationId) {
+        throw new Error(`${name}: process changed during prompt redraw`);
+      }
+      last = await readPrompt();
+      if (promptScreen.source === 'screen' && !promptScreen.draft && /^PS [^\r\n]+>$/.test(last)) break;
+    }
+    if (promptScreen.source !== 'screen' || promptScreen.draft || !/^PS [^\r\n]+>$/.test(last)) {
+      throw new Error(`${name}: shell prompt is not empty after redraw`);
+    }
+  }
   // Preserve POSIX mouse-report cleanup alongside Windows prompt handling.
   if (/^(?:.*[%$#>]\s*)?(?:\d*;\d+;\d+[Mm])+$/.test(last)) {
     const cancelled = await cli(['terminal', 'send', '--terminal', handle, '--text', '\u0003']);

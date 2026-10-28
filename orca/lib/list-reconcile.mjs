@@ -4,7 +4,7 @@ import { completeLocalInventory } from './platform.mjs';
 import { sameWorktree } from './sessions.mjs';
 import { projectFiles, readJson, saveJson, withLock } from './team.mjs';
 
-export async function reconcileTerminalList({ project, config, state, protectedHandles = [], cli, audit }) {
+export async function reconcileTerminalList({ project, config, state, protectedHandles = [], closeTargets = [], cli, audit }) {
   const list = async () => {
     const inventory = await cli(['terminal', 'list', '--worktree', `path:${project}`]);
     if (!completeLocalInventory(inventory) || inventory.terminals.some(t =>
@@ -20,6 +20,10 @@ export async function reconcileTerminalList({ project, config, state, protectedH
     if (matches.length !== 1 || saved.pending) throw new Error(`${name}: configured pane unconfirmed; no list cleanup`);
     keep.add(matches[0].handle);
   }
+  // 不属于团队不等于可以关闭：它可能承载开发服务、修复代理或用户工作。
+  // 普通启动没有关闭授权；只有精确指定同一终端实例的调用才能清理。
+  for (const row of rows) if (!closeTargets.some(target =>
+    target.handle === row.handle && target.incarnationId === row.incarnationId && row.incarnationId)) keep.add(row.handle);
   const extras = rows.filter(t => !keep.has(t.handle));
   const record = { project, at: new Date().toISOString(), status: 'planned', kept: [...keep], extras, closed: [] };
   await audit(structuredClone(record));
@@ -83,7 +87,7 @@ export async function reconcileProjectList({ home, project, cli, log = console.l
     const file = path.join(directory, `${Date.now()}-${process.pid}.json`);
     const result = await reconcileTerminalList({ project, config, state, protectedHandles: [...handles], cli,
       audit: record => saveJson(file, record) });
-    log(`Verified team list: removed ${result.closed.length} extra terminal(s); configured roles and remote bindings retained.`);
+    log(`Verified team list: removed ${result.closed.length} explicitly selected terminal(s); configured roles, remote bindings and other local terminals retained.`);
     return result;
   });
 }

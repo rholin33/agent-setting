@@ -13,6 +13,7 @@ function fixture() {
   const closed = [], audits = [];
   const inventory = () => ({ terminals: rows, totalCount: rows.length, truncated: false, hostScope: { hostIds: ['local'], omittedHostIds: [] } });
   const options = { project: '/project', config: { tabs: [{ agents: ['master'] }] },
+    closeTargets: [row('extra')],
     state: { agents: { master: { tabId: 'role', leafId: 'role' } } },
     protectedHandles: ['return', 'remote', 'helper'], audit: r => audits.push(r),
     cli: async args => {
@@ -30,6 +31,23 @@ test('removes extras, preserves configured and remote return/service panes, repe
   assert.equal(f.audits[0].status, 'planned');
   await reconcileTerminalList(f.options);
   assert.deepEqual(f.closed, ['extra']);
+});
+
+test('startup without explicit close targets preserves unregistered service and repair terminals', async () => {
+  const f = fixture();
+  delete f.options.closeTargets;
+  f.options.protectedHandles = [];
+  const result = await reconcileTerminalList(f.options);
+  assert.deepEqual(f.closed, []);
+  assert.equal(f.inventory().terminals.length, 5);
+  assert.equal(result.status, 'completed');
+});
+
+test('stale close target cannot authorize closing a replacement terminal', async () => {
+  const f = fixture();
+  f.options.closeTargets[0].incarnationId = 'previous';
+  await reconcileTerminalList(f.options);
+  assert.deepEqual(f.closed, []);
 });
 test('missing configured pane prevents every close', async () => {
   const f = fixture(); f.options.state.agents.master.leafId = 'missing';

@@ -352,7 +352,11 @@ business roles or change their models. `restart --group TITLE` selects that grou
 restart's update check covers only its requested runtime families. Pending remote
 handoffs preserve their groups while independent groups can recover; they no longer
 silently report a complete startup. Shell recovery reads the rendered screen so old
-TUI scrollback does not falsely block an empty prompt.
+TUI scrollback does not falsely block an empty prompt. If stale TUI footer rows
+remain below a PowerShell prompt, recovery rechecks the native idle shell and
+unchanged pane incarnation, then sends one Ctrl+L redraw without Enter. Resume
+requires a freshly read empty prompt and the same verified shell; redraw failure,
+input drafts, or changed process identity stop recovery without launching.
 
 ### Remote OMP preparation failure
 
