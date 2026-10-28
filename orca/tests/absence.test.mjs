@@ -25,6 +25,23 @@ test('explicit process session proves identity before Orca hooks are persisted',
   assert.equal(await health.verifyWindowsAbsence(o), true);
 });
 
+test('verified remote presentation is not mistaken for an unbound local agent', async () => {
+  const o = options();
+  o.desktop.terminals[0].agentIdentity = 'claude';
+  o.rows.push({ ProcessId: 11, ParentProcessId: 10, Name: 'node.exe', CommandLine: 'node remote-presentation' });
+  let checks = 0;
+  o.presentation = ({ terminal, descendants }) => {
+    checks++;
+    assert.equal(terminal.handle, 'current');
+    assert.ok(descendants.has(11));
+    return true;
+  };
+  assert.equal(await health.verifyWindowsAbsence(o), true);
+  assert.equal(checks, 2);
+  o.rows.push({ Name: 'omp.exe', CommandLine: 'omp --session C:/sessions/original.jsonl' });
+  await assert.rejects(health.verifyWindowsAbsence(o), /original conversation process/);
+});
+
 test('absence accepts an omitted paired remote runtime but not other omitted hosts', async () => {
   const o = options();
   o.desktop.hostScope.omittedHostIds.push('runtime:6d307c6b');

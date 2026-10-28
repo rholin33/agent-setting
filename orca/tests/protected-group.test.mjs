@@ -76,3 +76,39 @@ test('missing local sibling in a protected tab fails instead of creating another
   assert.ok(!f.calls.some(call => ['send', 'create', 'split'].includes(call[1])));
   assert.deepEqual(readJson(f.files.state).agents.master, f.master);
 });
+
+test('absent protected source allows exact local sibling resume in a separate tab', async t => {
+  const f = fixture(t), state = readJson(f.files.state);
+  const transcriptPath = path.join(f.options.home, 'loader.jsonl');
+  fs.writeFileSync(transcriptPath, JSON.stringify({ type: 'session', id: 'original-loader', cwd: f.options.project }) + '\n');
+  state.agents.loader.session = { id: 'original-loader', transcriptPath };
+  saveJson(f.files.state, state);
+  f.terminals.length = 0;
+  const tabs = [];
+  let creations = 0, proofs = 0;
+  const cli = async args => {
+    if (args[1] === 'list') return { terminals: f.terminals, visualLayouts: [{ root: { type: 'group', tabs } }] };
+    if (args[1] === 'create') {
+      creations++;
+      const command = args.at(-1);
+      assert.ok(command.includes('--resume') || Buffer.from(command.split(' ').at(-1), 'base64').toString('utf16le').includes('--resume'));
+      assert.equal(readJson(f.files.state).agents.loader.session.id, 'original-loader');
+      const terminal = { handle: 'loader', tabId: 'detached', leafId: 'loader', worktreePath: f.options.project, connected: true };
+      f.terminals.push(terminal); tabs.push({ tabId: 'detached', panes: { leafId: 'loader' } });
+      return { terminal };
+    }
+    if (args[1] === 'show') return { terminal: f.terminals[0] };
+    if (args[1] === 'switch') return {};
+    assert.fail(`unexpected mutation ${args.join(' ')}`);
+  };
+  const options = { ...f.options, cli, published: async () => ({ tabs: [] }), titles: async () => {}, focus: async () => {},
+    inspect: async () => ({ kind: 'agent', sessionPaths: [transcriptPath] }),
+    verifyAbsent: async ({ missing }) => { proofs++; assert.deepEqual(missing.map(x => x.name), ['loader']); return true; },
+    restoreLayout: async ({ config }) => assert.deepEqual(config.tabs[0].agents, ['loader']), pin: async () => {} };
+  await runTeam(options);
+  assert.ok(proofs > 0);
+  assert.deepEqual(readJson(f.files.state).agents.master, f.master);
+  assert.equal(readJson(f.files.state).agents.loader.session.id, 'original-loader');
+  await runTeam(options);
+  assert.equal(creations, 1);
+});

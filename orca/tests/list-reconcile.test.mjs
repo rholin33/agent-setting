@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { reconcileTerminalList } from '../lib/list-reconcile.mjs';
+import { reconcileProjectList } from '../lib/list-reconcile.mjs';
+import { projectFiles, saveJson } from '../lib/team.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 function fixture() {
   const row = (handle, tabId = handle) => ({ handle, tabId, leafId: handle, incarnationId: 'epoch', executionHostId: 'local', worktreePath: '/project', connected: true });
@@ -46,4 +51,19 @@ test('unconfirmed close fails verification', async () => {
   const f = fixture(), cli = f.options.cli;
   f.options.cli = async args => args[1] === 'close' ? {} : cli(args);
   await assert.rejects(reconcileTerminalList(f.options), /remain/i);
+});
+
+test('remote owner with an absent original return pane defers cleanup and preserves all live terminals', async t => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'remote-list-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const files = projectFiles(home, '/project');
+  fs.mkdirSync(files.directory, { recursive: true });
+  saveJson(files.config, { tabs: [{ agents: ['master'] }] });
+  saveJson(files.state, { agents: { master: { tabId: 'old', leafId: 'return' } } });
+  saveJson(path.join(files.directory, 'remote-switches.json'), { roles: { master: { runtime: 'claude' } } });
+  const result = await reconcileProjectList({ home, project: '/project', log: () => {}, cli: async args => {
+    assert.equal(args[1], 'list');
+    return { terminals: [], totalCount: 0, truncated: false, hostScope: { hostIds: ['local'], omittedHostIds: [] } };
+  } });
+  assert.equal(result.status, 'deferred');
 });
