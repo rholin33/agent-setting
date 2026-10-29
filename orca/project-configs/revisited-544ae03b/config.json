@@ -58,6 +58,12 @@
       "agents": [
         "copywriter"
       ]
+    },
+    {
+      "title": "image",
+      "agents": [
+        "image"
+      ]
     }
   ],
   "sourceSidebar": {

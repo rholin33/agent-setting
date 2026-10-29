@@ -28,12 +28,6 @@
     },
     {
       "agent": "omp",
-      "model": "local/cline-pass/mimo-v2.6-flash",
-      "thinking": "xhigh",
-      "label": "local/cline-pass/mimo-v2.6-flash"
-    },
-    {
-      "agent": "omp",
       "model": "local/gemini-3.8-flash-high",
       "thinking": "xhigh",
       "label": "local/gemini-3.8-flash-high"
@@ -49,12 +43,6 @@
       "model": "pay/gpt-6.1-sol",
       "thinking": "xhigh",
       "label": "pay/gpt-6.1-sol"
-    },
-    {
-      "agent": "omp",
-      "model": "pay/gpt-image-2",
-      "thinking": "xhigh",
-      "label": "pay/gpt-image-2"
     },
     {
       "agent": "omp",
@@ -88,12 +76,6 @@
     },
     {
       "agent": "pi",
-      "model": "local/cline-pass/mimo-v2.6-flash",
-      "thinking": "xhigh",
-      "label": "local/cline-pass/mimo-v2.6-flash"
-    },
-    {
-      "agent": "pi",
       "model": "local/gemini-3.8-flash-high",
       "thinking": "xhigh",
       "label": "local/gemini-3.8-flash-high"
@@ -109,12 +91,6 @@
       "model": "pay/gpt-6.1-sol",
       "thinking": "xhigh",
       "label": "pay/gpt-6.1-sol"
-    },
-    {
-      "agent": "pi",
-      "model": "pay/gpt-image-2",
-      "thinking": "xhigh",
-      "label": "pay/gpt-image-2"
     },
     {
       "agent": "pi",
@@ -139,22 +115,46 @@
       "model": "pay-copy/gpt-image-2",
       "thinking": "xhigh",
       "label": "pay-copy/gpt-image-2"
+    },
+    {
+      "agent": "omp",
+      "model": "local/claude-opus-5-5-high",
+      "thinking": "xhigh",
+      "label": "local/claude-opus-5-5-high"
+    },
+    {
+      "agent": "omp",
+      "model": "local/deepseek-v4.1-flash",
+      "thinking": "medium",
+      "label": "local/deepseek-v4.1-flash"
+    },
+    {
+      "agent": "pi",
+      "model": "local/claude-opus-5-5-high",
+      "thinking": "xhigh",
+      "label": "local/claude-opus-5-5-high"
+    },
+    {
+      "agent": "pi",
+      "model": "local/deepseek-v4.1-flash",
+      "thinking": "medium",
+      "label": "local/deepseek-v4.1-flash"
     }
   ],
   "roles": {
     "master": {
-      "agent": "omp",
-      "model": "pay/gpt-6-astra",
+      "agent": "claude",
+      "model": "opus",
       "thinking": "high"
     },
     "loader": {
-      "agent": "omp",
-      "model": "pay/gpt-6.1-sol",
-      "thinking": "xhigh"
+      "agent": "codex",
+      "model": "gpt-6.1-sol",
+      "thinking": "medium"
     },
     "archi": {
-      "agent": "omp",
-      "model": "pay/gpt-6-astra",
+      "agent": "claude",
+      "model": "opus",
       "thinking": "high"
     },
     "designer": {
@@ -165,27 +165,27 @@
     "test": {
       "agent": "omp",
       "model": "pay/gpt-6.1-sol",
-      "thinking": "xhigh"
+      "thinking": "high"
     },
     "simple": {
-      "agent": "omp",
-      "model": "pay/gpt-6-astra",
+      "agent": "codex",
+      "model": "gpt-6.1-sol",
       "thinking": "medium"
     },
     "coder1": {
       "agent": "codex",
-      "model": "gpt-6-astra",
+      "model": "gpt-6.1-sol",
       "thinking": "medium"
     },
     "coder2": {
       "agent": "codex",
-      "model": "gpt-6-astra",
+      "model": "gpt-6.1-sol",
       "thinking": "medium"
     },
     "reviewer": {
-      "agent": "omp",
-      "model": "pay/gpt-6-astra",
-      "thinking": "medium"
+      "agent": "claude",
+      "model": "sonnet",
+      "thinking": "high"
     },
     "designer2": {
       "agent": "omp",
@@ -194,8 +194,13 @@
     },
     "copywriter": {
       "agent": "omp",
-      "model": "pay-copy/gpt-6.1-sol",
-      "thinking": "xhigh"
+      "model": "local/gemini-3.8-flash-high",
+      "thinking": null
+    },
+    "image": {
+      "agent": "omp",
+      "model": "pay/gpt-image-2.5-sunburst",
+      "thinking": "high"
     }
   }
 }

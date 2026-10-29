@@ -1,37 +1,37 @@
 [
   {
     "name": "master",
-    "agent": "omp",
-    "model": "pay/gpt-6-astra",
+    "agent": "claude",
+    "model": "opus",
     "thinking": "high",
     "role": "agentroles.ccb_self"
   },
   {
     "name": "loader",
-    "agent": "omp",
-    "model": "pay/gpt-6.1-sol",
-    "thinking": "xhigh",
+    "agent": "codex",
+    "model": "gpt-6.1-sol",
+    "thinking": "medium",
     "role": "agentroles.ccb_self"
   },
   {
     "name": "archi",
-    "agent": "omp",
-    "model": "pay/gpt-6-astra",
+    "agent": "claude",
+    "model": "opus",
     "thinking": "high",
     "role": "agentroles.archi"
   },
   {
     "name": "coder1",
     "agent": "codex",
-    "model": "gpt-6-astra",
-    "thinking": "high",
+    "model": "gpt-6.1-sol",
+    "thinking": "medium",
     "role": "agentroles.coder"
   },
   {
     "name": "coder2",
     "agent": "codex",
-    "model": "gpt-6-astra",
-    "thinking": "high",
+    "model": "gpt-6.1-sol",
+    "thinking": "medium",
     "role": "agentroles.coder"
   },
   {
@@ -50,22 +50,22 @@
   },
   {
     "name": "reviewer",
-    "agent": "omp",
-    "model": "pay/gpt-6-astra",
-    "thinking": "medium",
+    "agent": "claude",
+    "model": "sonnet",
+    "thinking": "high",
     "role": "agentroles.code_reviewer"
   },
   {
     "name": "test",
     "agent": "omp",
     "model": "pay/gpt-6.1-sol",
-    "thinking": "xhigh",
+    "thinking": "high",
     "role": "agentroles.code_reviewer"
   },
   {
     "name": "simple",
-    "agent": "omp",
-    "model": "pay/gpt-6-astra",
+    "agent": "codex",
+    "model": "gpt-6.1-sol",
     "thinking": "medium",
     "role": "agentroles.simple"
   },
@@ -79,8 +79,15 @@
   {
     "name": "copywriter",
     "agent": "omp",
-    "model": "pay-copy/gpt-6.1-sol",
-    "thinking": "xhigh",
+    "model": "local/gemini-3.8-flash-high",
+    "thinking": null,
     "role": "agentroles.copywriter"
+  },
+  {
+    "name": "image",
+    "agent": "omp",
+    "model": "pay/gpt-image-2.5-sunburst",
+    "thinking": "high",
+    "role": "agentroles.image"
   }
 ]
