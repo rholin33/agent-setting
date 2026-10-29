@@ -1,0 +1,4 @@
+interface:
+  display_name: "Orca 角色修复"
+  short_description: "诊断并恢复 OMP、Codex、Claude 角色，保留原会话并验证工具执行"
+  default_prompt: "使用 $orca-agent-repair 诊断并修复当前项目指定角色，保留原会话并验证工具恢复。"
