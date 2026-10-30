@@ -28,6 +28,12 @@
     },
     {
       "agent": "omp",
+      "model": "local/cline-pass/mimo-v2.6-flash",
+      "thinking": "xhigh",
+      "label": "local/cline-pass/mimo-v2.6-flash"
+    },
+    {
+      "agent": "omp",
       "model": "local/gemini-3.8-flash-high",
       "thinking": "xhigh",
       "label": "local/gemini-3.8-flash-high"
@@ -43,6 +49,12 @@
       "model": "pay/gpt-6.1-sol",
       "thinking": "xhigh",
       "label": "pay/gpt-6.1-sol"
+    },
+    {
+      "agent": "omp",
+      "model": "pay/gpt-image-2",
+      "thinking": "xhigh",
+      "label": "pay/gpt-image-2"
     },
     {
       "agent": "omp",
@@ -76,6 +88,12 @@
     },
     {
       "agent": "pi",
+      "model": "local/cline-pass/mimo-v2.6-flash",
+      "thinking": "xhigh",
+      "label": "local/cline-pass/mimo-v2.6-flash"
+    },
+    {
+      "agent": "pi",
       "model": "local/gemini-3.8-flash-high",
       "thinking": "xhigh",
       "label": "local/gemini-3.8-flash-high"
@@ -91,6 +109,12 @@
       "model": "pay/gpt-6.1-sol",
       "thinking": "xhigh",
       "label": "pay/gpt-6.1-sol"
+    },
+    {
+      "agent": "pi",
+      "model": "pay/gpt-image-2",
+      "thinking": "xhigh",
+      "label": "pay/gpt-image-2"
     },
     {
       "agent": "pi",
@@ -143,18 +167,18 @@
   ],
   "roles": {
     "master": {
-      "agent": "claude",
-      "model": "opus",
+      "agent": "omp",
+      "model": "pay/gpt-6-astra",
       "thinking": "high"
     },
     "loader": {
-      "agent": "codex",
-      "model": "gpt-6.1-sol",
-      "thinking": "medium"
+      "agent": "omp",
+      "model": "pay/gpt-6.1-sol",
+      "thinking": "xhigh"
     },
     "archi": {
-      "agent": "claude",
-      "model": "opus",
+      "agent": "omp",
+      "model": "pay/gpt-6-astra",
       "thinking": "high"
     },
     "designer": {
@@ -165,27 +189,27 @@
     "test": {
       "agent": "omp",
       "model": "pay/gpt-6.1-sol",
-      "thinking": "high"
+      "thinking": "xhigh"
     },
     "simple": {
-      "agent": "codex",
-      "model": "gpt-6.1-sol",
+      "agent": "omp",
+      "model": "pay/gpt-6-astra",
       "thinking": "medium"
     },
     "coder1": {
       "agent": "codex",
-      "model": "gpt-6.1-sol",
+      "model": "gpt-6-astra",
       "thinking": "medium"
     },
     "coder2": {
       "agent": "codex",
-      "model": "gpt-6.1-sol",
+      "model": "gpt-6-astra",
       "thinking": "medium"
     },
     "reviewer": {
-      "agent": "claude",
-      "model": "sonnet",
-      "thinking": "high"
+      "agent": "omp",
+      "model": "pay/gpt-6.1-sol",
+      "thinking": "xhigh"
     },
     "designer2": {
       "agent": "omp",
@@ -194,8 +218,8 @@
     },
     "copywriter": {
       "agent": "omp",
-      "model": "local/gemini-3.8-flash-high",
-      "thinking": null
+      "model": "pay-copy/gpt-6.1-sol",
+      "thinking": "xhigh"
     },
     "image": {
       "agent": "omp",
