@@ -22,6 +22,12 @@
     },
     {
       "agent": "omp",
+      "model": "local/claude-opus-5-5-high",
+      "thinking": "xhigh",
+      "label": "local/claude-opus-5-5-high"
+    },
+    {
+      "agent": "omp",
       "model": "local/cline-pass/deepseek-v4.1-flash",
       "thinking": "xhigh",
       "label": "local/cline-pass/deepseek-v4.1-flash"
@@ -31,6 +37,12 @@
       "model": "local/cline-pass/mimo-v2.6-flash",
       "thinking": "xhigh",
       "label": "local/cline-pass/mimo-v2.6-flash"
+    },
+    {
+      "agent": "omp",
+      "model": "local/deepseek-v4.1-flash",
+      "thinking": "medium",
+      "label": "local/deepseek-v4.1-flash"
     },
     {
       "agent": "omp",
@@ -82,6 +94,12 @@
     },
     {
       "agent": "pi",
+      "model": "local/claude-opus-5-5-high",
+      "thinking": "xhigh",
+      "label": "local/claude-opus-5-5-high"
+    },
+    {
+      "agent": "pi",
       "model": "local/cline-pass/deepseek-v4.1-flash",
       "thinking": "xhigh",
       "label": "local/cline-pass/deepseek-v4.1-flash"
@@ -91,6 +109,12 @@
       "model": "local/cline-pass/mimo-v2.6-flash",
       "thinking": "xhigh",
       "label": "local/cline-pass/mimo-v2.6-flash"
+    },
+    {
+      "agent": "pi",
+      "model": "local/deepseek-v4.1-flash",
+      "thinking": "medium",
+      "label": "local/deepseek-v4.1-flash"
     },
     {
       "agent": "pi",
@@ -139,30 +163,6 @@
       "model": "pay-copy/gpt-image-2",
       "thinking": "xhigh",
       "label": "pay-copy/gpt-image-2"
-    },
-    {
-      "agent": "omp",
-      "model": "local/claude-opus-5-5-high",
-      "thinking": "xhigh",
-      "label": "local/claude-opus-5-5-high"
-    },
-    {
-      "agent": "omp",
-      "model": "local/deepseek-v4.1-flash",
-      "thinking": "medium",
-      "label": "local/deepseek-v4.1-flash"
-    },
-    {
-      "agent": "pi",
-      "model": "local/claude-opus-5-5-high",
-      "thinking": "xhigh",
-      "label": "local/claude-opus-5-5-high"
-    },
-    {
-      "agent": "pi",
-      "model": "local/deepseek-v4.1-flash",
-      "thinking": "medium",
-      "label": "local/deepseek-v4.1-flash"
     }
   ],
   "roles": {

@@ -1,6 +1,6 @@
 ---
 name: agent-setting-sync
-description: Use when the user invokes agent-setting-sync, asks to synchronize the agent-setting repository, or uses the legacy codex-sync alias. Requires an explicit ccb or orca target; explicit push is required to publish local configuration.
+description: Use when the user invokes agent-setting-sync, asks to synchronize the agent-setting repository, or uses the legacy codex-sync alias. Requires an explicit ccb or orca target; proactively merge changes and require push authorization before publishing.
 ---
 
 # Agent Settings Sync
@@ -23,9 +23,12 @@ runtime state. Provider CLIs, model services and login are already configured.
 Require exactly one target. Missing target: ask "Sync ccb or orca?" before any
 mutation. Both targets, unknown modes, or force plus push: reject the request.
 Do not infer target from the current application, existing folders or past runs.
-Only the literal explicit push request authorizes local export/staging/commit/push.
-"Sync", "update", and force never authorize those steps. A default invocation
-ends after applying and verifying local configuration, even if local edits exist.
+An explicit target push request authorizes the publication workflow. A later
+confirmation of a concrete merge-and-push proposal also authorizes that workflow
+for the stated target, repositories and reviewed changes. Confirmation to merge
+alone does not authorize pushing. "Sync", "update", and force alone never
+authorize export/staging/commit/push. A default invocation ends after applying
+and verifying local configuration unless the user confirms publication.
 
 ## Paths And Scope
 
@@ -37,8 +40,10 @@ implementation on Windows, macOS and Linux; use python on Windows or python3
 where available. No Bash or PowerShell dependency is required for the sync core.
 
 The managed checkout is $CODEX_HOME/.sync/codex-setting/remote. Verify its origin
-and main branch; clone the canonical remote there if absent. Stop on a dirty
-checkout, detached/non-main branch, staged changes or unresolved merge.
+and main branch; clone the canonical remote there if absent. A dirty checkout,
+staged changes or unpublished commits trigger proactive reconciliation below,
+not an immediate refusal. Stop for an origin mismatch or detached/non-main branch.
+Preserve existing merge state and inspect it before attempting another merge.
 Do not discard changes to make synchronization proceed.
 
 Common scope: target-selected Codex AGENTS.md variants codex/AGENTS.ccb.md and
@@ -65,7 +70,8 @@ credentials are not part of the Orca package.
 
 ## Pull Or Force
 
-1. Verify clean checkout/origin/branch and preserve the original project root.
+1. Verify checkout/origin/branch, preserve the original project root and
+   reconcile local changes using Proactive Reconciliation below.
 2. Run the checkout hook with the selected target:
 
    python codex/hooks/sync-codex-setting.py --target orca
@@ -76,17 +82,54 @@ credentials are not part of the Orca package.
    global Codex `AGENTS.md`. Do not invoke an older installed hook that lacks target support.
 3. Require exit success and review the current run's sync log at
    $CODEX_HOME/log/agent-setting-sync.log. Conflicts or incomplete configuration
-   stop the workflow. Do not call export, git add, git commit or git push.
+   enter Proactive Reconciliation below; do not stop at reporting a conflict.
+   Export/staging/commit/push still require publication authorization.
 4. For Orca, follow the pinned source README.md to register the installed package's local
    shell/quick-command entries. Registration is distinct from starting agents;
    never launch a team merely to synchronize configuration. Preserve unrelated
    shortcuts and user shell profile content.
-5. Report target, applied files, backups and limitations. Explicitly report
-   "no commit or push".
+5. Report target, applied files, backups and limitations. Report "no commit or
+   push" when publication was not authorized; otherwise report the verified
+   publication result.
+
+## Proactive Reconciliation
+
+Apply this to both configuration and Orca runtime repositories, and to managed
+live-file conflicts. Local edits alone are not a reason to stop.
+
+1. Inventory tracked, staged, untracked and unpublished changes; preserve their
+   contents and the original index before mutations. Fetch upstream even when
+   the working tree is dirty so freshness is known. Classify selected/common
+   changes separately from credentials, runtime state and unrelated files.
+2. Prepare a three-way merge from the common ancestor or verified sync baseline.
+   Use an isolated task directory under the OS temporary directory when the
+   original checkout is dirty; preserve untracked files and same-path additions.
+   Do not reset, clean, overwrite, automatically commit, or rewrite local history
+   to obtain a clean tree. A temporary copy or stash is preservation, not a
+   completed merge or publication. Clean up disposable merge artifacts after use.
+3. Proactively combine independent changes and review the result. Apply verified
+   conflict-free live-file merges with backups when ordinary pull permits them.
+   Preserve local-only checkout work; reconcile it back without changing the
+   existing staged/unstaged selection. Do not publish or advance the runtime pin
+   without authorization. If the installer requires a clean/published source,
+   prepare the reviewed publication proposal rather than bypassing its guard.
+4. For actual conflicts (including semantic conflicts, deletions or competing
+   additions), show each path, local and upstream intent, a concrete proposed
+   resolution and its effect. Offer 2-3 options when useful, with a recommendation.
+   Prepare a reviewable diff in isolation before asking. Ask once for confirmation
+   of the stated resolutions; explicitly include repositories and push scope if
+   publication is needed. Keep unrelated work moving while awaiting the answer.
+5. After confirmation, apply the agreed merge, run relevant checks, then commit
+   and push only when the existing request or that confirmation authorizes it.
+   Follow the complete runtime/configuration export and verification workflows;
+   publish runtime first and configuration second. New conflicts or scope changes
+   require a new proposal. Without push authorization, retain reviewed local
+   changes, report what remains, and do not commit or push. After publication,
+   verify remote SHAs, reconcile live files and refresh only the published baseline.
 
 ## Complete Push Policy
 
-An explicit target push publishes every valid, reviewed local change in the selected target and common scope. Do not silently narrow it to the most recent feature or a convenient subset. Exclusions for credentials, runtime state, unselected targets and repository-owned bootstrap files still apply.
+An authorized publication publishes every valid, reviewed local change in the selected target and common scope. Do not silently narrow it to the most recent feature or a convenient subset. Exclusions for credentials, runtime state, unselected targets and repository-owned bootstrap files still apply.
 
 Before publishing, inventory the entire export and classify every difference. Merge overlapping upstream changes instead of replacing newer remote code with older local copies. Preserve current local model choices unless the user requests otherwise. If a decision prevents publishing the full allowed scope, explain the exact unresolved items and resolve them with the user before pushing; a partial push requires explicit user approval. A stash or backup preserves data but does not count as publishing it.
 
@@ -110,7 +153,7 @@ but must report upstream freshness unverified. Runtime updates preserve config,
 back up code and never restart agents. New source files and local edits cannot be
 silently overwritten, even with force. CCB does not fetch/install Orca.
 
-Every explicit Orca push checks both repositories before config export:
+Every authorized Orca publication checks both repositories before config export:
 
 1. Run `python scripts/sync-orca-runtime.py --check`. If live code differs or
    source main is newer, inspect the source checkout and retain backups.
@@ -132,16 +175,26 @@ Every explicit Orca push checks both repositories before config export:
    configuration pending; retain the pin and retry without claiming completion.
 
 Source code development should happen in the source checkout. Dirty checkout or
-unpublished commits must be reviewed/published before ordinary pull/install.
-Legacy live patches can use the explicit full runtime export workflow above.
+unpublished commits trigger Proactive Reconciliation; inspect and attempt a
+three-way merge before asking the user to intervene. The installer clean-checkout
+guard remains in force: if reviewed local runtime changes require publication
+before installation, prepare a concrete merge-and-push proposal and obtain
+authorization instead of bypassing the guard or silently dropping local changes.
+Legacy live patches can use the full runtime export workflow above once
+publication is authorized.
 After successful two-repository sync, report both SHAs and refresh the baseline
 only from verified published configuration. Existing active sessions stay intact.
 
-## Explicit Push Only
+## Authorized Publication
 
-1. Verify target, clean checkout, origin/main and original project root.
-2. Fetch and fast-forward the checkout. Do NOT apply remote files to the live
-   home first: CCB's authoritative pull could erase the user's intended upload.
+Use this workflow after an explicit target push request or confirmation of a
+concrete merge-and-push proposal.
+
+1. Verify target, origin/main and original project root. Reconcile existing
+   checkout edits first; preserve unrelated files and staged state.
+2. Fetch and merge upstream changes using Proactive Reconciliation. Do NOT apply
+   remote files to the live home first: CCB's authoritative pull could erase the
+   user's intended upload.
 3. Export only the selected/common scope:
 
    python scripts/sync-local-config.py --target orca --push
@@ -154,7 +207,8 @@ only from verified published configuration. Existing active sessions stay intact
 4. Review git status --short, git diff --check and the full changed-file list.
    Inspect the actual diff before staging. Reject secrets, runtime state,
    unselected-target changes, unexplained deletions or unrelated paths.
-   Retain conflicting data/backups; do not resolve silently.
+   Retain conflicting data/backups; propose resolutions and obtain confirmation
+   before applying conflicting changes.
 5. Stage every exact reviewed changed path, never git add -A or a blanket
    root directory. Review git diff --cached and --cached --check. Require:
 
@@ -172,9 +226,11 @@ only from verified published configuration. Existing active sessions stay intact
 
    python scripts/sync-local-config.py --target orca --verify-head
 
-   Then git push origin main. Explicit push authorizes this workflow; do not ask
-   a second routine approval. A rejected/non-fast-forward push stops without
-   force or history rewriting. The checker never stages, commits or pushes.
+   Then git push origin main. Existing publication authorization needs no second
+   routine approval. If a concurrent update rejects the push, fetch and prepare
+   a new merge; obtain confirmation for any new conflicts, rerun verification
+   and retry once. Stop and report if rejected again. Never force-push or rewrite
+   existing history. The checker never stages, commits or pushes.
 7. Verify local commit SHA and git ls-remote origin refs/heads/main. Report the
    manifest file count, verification results, commit, push result and remaining
    local changes. Exported/stashed files are not published files. Reconcile live
