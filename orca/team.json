@@ -2,15 +2,15 @@
   {
     "name": "master",
     "agent": "omp",
-    "model": "pay/gpt-6-astra",
-    "thinking": "high",
+    "model": "pay/gpt-6.1-sol",
+    "thinking": "xhigh",
     "role": "agentroles.ccb_self"
   },
   {
     "name": "loader",
     "agent": "omp",
     "model": "pay/gpt-6.1-sol",
-    "thinking": "xhigh",
+    "thinking": "high",
     "role": "agentroles.ccb_self"
   },
   {
@@ -59,7 +59,7 @@
     "name": "test",
     "agent": "omp",
     "model": "pay/gpt-6.1-sol",
-    "thinking": "xhigh",
+    "thinking": "high",
     "role": "agentroles.code_reviewer"
   },
   {
@@ -73,7 +73,7 @@
     "name": "deploy",
     "agent": "codex",
     "model": "gpt-6.1-sol",
-    "thinking": "medium",
+    "thinking": "high",
     "role": "agentroles.deploy"
   },
   {

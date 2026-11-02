@@ -168,13 +168,13 @@
   "roles": {
     "master": {
       "agent": "omp",
-      "model": "pay/gpt-6-astra",
-      "thinking": "high"
+      "model": "pay/gpt-6.1-sol",
+      "thinking": "xhigh"
     },
     "loader": {
       "agent": "omp",
       "model": "pay/gpt-6.1-sol",
-      "thinking": "xhigh"
+      "thinking": "high"
     },
     "archi": {
       "agent": "omp",
@@ -189,7 +189,7 @@
     "test": {
       "agent": "omp",
       "model": "pay/gpt-6.1-sol",
-      "thinking": "xhigh"
+      "thinking": "high"
     },
     "simple": {
       "agent": "omp",
