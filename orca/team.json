@@ -3,7 +3,7 @@
     "name": "master",
     "agent": "omp",
     "model": "pay/gpt-6.1-sol",
-    "thinking": "xhigh",
+    "thinking": "high",
     "role": "agentroles.ccb_self"
   },
   {

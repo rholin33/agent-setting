@@ -2,11 +2,19 @@
   "$schema": "https://raw.githubusercontent.com/cortexkit/magic-context/master/assets/magic-context.schema.json",
   "enabled": true,
   "historian": {
-    "opencode": {"model":"local/gemini-3.8-flash-high"},
-    "pi": {"model":"local/gemini-3.8-flash-high","thinking_level": "xhigh"}
+    "opencode": {
+      "model": "local/gemini-3.8-flash-high"
+    },
+    "pi": {
+      "model": "local/gemini-3.8-flash-high",
+      "thinking_level": "high"
+    }
   },
   "dreamer": {
-    "pi": {"model":"local/gemini-3.8-flash-high","thinking_level": "xhigh"}
+    "pi": {
+      "model": "local/gemini-3.8-flash-high",
+      "thinking_level": "high"
+    }
   },
   "embedding": {
     "provider": "local"

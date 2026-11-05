@@ -21,10 +21,12 @@ class EntrypointTests(unittest.TestCase):
         self.assertIn('git diff --cached --check', hook)
 
     def test_skill_requires_target_and_explicit_push(self):
-        skill = (ROOT / 'codex/skills/agent-setting-sync/SKILL.md').read_text()
+        skill = (ROOT / 'codex/skills/agent-setting-sync/SKILL.md').read_text(encoding='utf-8')
         self.assertIn('Require exactly one target', skill)
-        self.assertIn('Only the literal explicit push request', skill)
-        self.assertIn('Do NOT apply remote files to the live', skill)
+        self.assertIn('An explicit target push request authorizes the publication workflow', skill)
+        normalized = ' '.join(skill.split())
+        self.assertIn('Confirmation to merge alone does not authorize pushing', normalized)
+        self.assertIn('Do NOT apply remote files to the live', normalized)
 
     def test_fresh_orca_install_isolated_home(self):
         with tempfile.TemporaryDirectory() as directory:
