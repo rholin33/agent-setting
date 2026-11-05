@@ -4,7 +4,7 @@
   "skills": [
     "skills"
   ],
-  "defaultModel": "gpt-5.6-sol",
+  "defaultModel": "pay/gpt-6.1-sol",
   "packages": [
     "npm:@cortexkit/pi-magic-context",
     "npm:@narumitw/pi-statusline",
@@ -14,7 +14,7 @@
   "extensions": [
     "-builtin:mcp"
   ],
-  "defaultProvider": "pay",
+  "defaultProvider": "magpie",
   "lastChangelogVersion": "1.1.0",
   "hideThinkingBlock": false,
   "tuiMode": "fullscreen",

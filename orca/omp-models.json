@@ -52,6 +52,18 @@
     },
     {
       "agent": "omp",
+      "model": "local/glm-5.3-flash",
+      "thinking": "xhigh",
+      "label": "local/glm-5.3-flash"
+    },
+    {
+      "agent": "omp",
+      "model": "local/hy4",
+      "thinking": "xhigh",
+      "label": "local/hy4"
+    },
+    {
+      "agent": "omp",
       "model": "pay/gpt-6-astra",
       "thinking": "xhigh",
       "label": "pay/gpt-6-astra"
@@ -121,6 +133,90 @@
       "model": "local/gemini-3.8-flash-high",
       "thinking": "xhigh",
       "label": "local/gemini-3.8-flash-high"
+    },
+    {
+      "agent": "pi",
+      "model": "local/glm-5.3-flash",
+      "thinking": "xhigh",
+      "label": "local/glm-5.3-flash"
+    },
+    {
+      "agent": "pi",
+      "model": "local/hy4",
+      "thinking": "xhigh",
+      "label": "local/hy4"
+    },
+    {
+      "agent": "pi",
+      "model": "magpie/auto/gpt-6.1-sol",
+      "thinking": "xhigh",
+      "label": "magpie/auto/gpt-6.1-sol"
+    },
+    {
+      "agent": "pi",
+      "model": "magpie/elysiver-h-e-top/glm-5.2",
+      "thinking": "xhigh",
+      "label": "magpie/elysiver-h-e-top/glm-5.2"
+    },
+    {
+      "agent": "pi",
+      "model": "magpie/grox/gpt-5.6-sol",
+      "thinking": "xhigh",
+      "label": "magpie/grox/gpt-5.6-sol"
+    },
+    {
+      "agent": "pi",
+      "model": "magpie/local/deepseek-v4.1-flash",
+      "thinking": "xhigh",
+      "label": "magpie/local/deepseek-v4.1-flash"
+    },
+    {
+      "agent": "pi",
+      "model": "magpie/local/glm-5.3-flash",
+      "thinking": "xhigh",
+      "label": "magpie/local/glm-5.3-flash"
+    },
+    {
+      "agent": "pi",
+      "model": "magpie/local/hy4",
+      "thinking": "xhigh",
+      "label": "magpie/local/hy4"
+    },
+    {
+      "agent": "pi",
+      "model": "magpie/metapi-lilililwan-xyz/kimi-k3",
+      "thinking": "xhigh",
+      "label": "magpie/metapi-lilililwan-xyz/kimi-k3"
+    },
+    {
+      "agent": "pi",
+      "model": "magpie/pay-copy/gpt-6.1-sol",
+      "thinking": "xhigh",
+      "label": "magpie/pay-copy/gpt-6.1-sol"
+    },
+    {
+      "agent": "pi",
+      "model": "magpie/pay/gpt-6-astra",
+      "thinking": "xhigh",
+      "label": "magpie/pay/gpt-6-astra"
+    },
+    {
+      "agent": "pi",
+      "model": "magpie/pay/gpt-6.1-sol",
+      "thinking": "xhigh",
+      "label": "magpie/pay/gpt-6.1-sol"
+    },
+    {
+      "agent": "pi",
+      "model": "magpie/pay/gpt-image-2",
+      "thinking": "xhigh",
+      "label": "magpie/pay/gpt-image-2"
+    },
+    {
+      "agent": "pi",
+      "model": "magpie/pay/gpt-image-2.5-sunburst",
+      "thinking": "xhigh",
+      "label": "magpie/pay/gpt-image-2.5-sunburst"
     },
     {
       "agent": "pi",
