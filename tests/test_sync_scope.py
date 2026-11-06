@@ -15,6 +15,17 @@ export_spec.loader.exec_module(exporter)
 
 
 class SyncScopeTests(unittest.TestCase):
+    def test_model_catalogs_and_saved_presets_are_local_only(self):
+        with patch.object(sync, 'TARGET', 'orca'):
+            for name in ['orca/omp-models.json', 'orca/pi-models.json',
+                         'pi/models.json', 'pi/models.yml', 'pi/models.yaml',
+                         'codex/skills/example/models.json']:
+                self.assertFalse(sync.is_portable_path(Path(name)), name)
+            self.assertNotIn('omp-models.json', sync.ORCA_PACKAGE_FILES)
+            with patch.object(exporter.sync, 'TARGET', 'orca'):
+                candidates = list(exporter.export_candidates())
+            self.assertNotIn(Path('orca/omp-models.json'), [relative for relative, _ in candidates])
+
     def test_remote_sources_are_portable_but_runtime_and_backups_are_not(self):
         self.assertFalse(sync.is_portable_path(Path('orca/remote-master/omp_adapter.py')))
         for name in ['orca/remote-master/runtime/adapter.json',

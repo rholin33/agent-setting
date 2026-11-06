@@ -32,6 +32,11 @@ and verifying local configuration unless the user confirms publication.
 
 ## Paths And Scope
 
+Model catalogs and saved model presets are local-only: never pull, force-apply,
+export or synchronize `omp-models.json`, `pi-models.json`, `models.json`,
+`models.yml`, `models.yaml` or `models-store.json`. Do not merge Pi and OMP
+provider catalogs during startup or synchronization. Preserve existing local files.
+
 Capture the user's original project directory before changing directories.
 Pass it through AGENT_SETTING_PROJECT_ROOT. Resolve CODEX_HOME (default ~/.codex),
 PI_CODING_AGENT_DIR (default ~/.pi/agent), CCB_HOME (default ~/.ccb), and

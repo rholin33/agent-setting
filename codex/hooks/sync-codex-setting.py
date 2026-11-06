@@ -51,7 +51,7 @@ ORCA_HOME = Path(os.environ.get("ORCA_TEAM_HOME", str(Path.home() / ".orca/roles
 ORCA_PACKAGE_DIRECTORIES = {"roles"}
 MAGIC_CONTEXT_RELATIVE = Path("cortexkit/magic-context.jsonc")
 MAGIC_CONTEXT_HOME = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))).expanduser() / "cortexkit"
-ORCA_PACKAGE_FILES = {"team.json", "layout.json", "omp-models.json", "omp-context.json"}
+ORCA_PACKAGE_FILES = {"team.json", "layout.json", "omp-context.json"}
 
 
 def orca_runtime_module():
@@ -280,7 +280,7 @@ def is_portable_path(relative_path: Path) -> bool:
         return False
     if name.startswith((".env.", "local-legacy")) or name == ".coverage" or (name.startswith("coverage") and name.endswith(".json")):
         return False
-    if name in {"models.json", "models-store.json"}:
+    if name in {"models.json", "models.yml", "models.yaml", "models-store.json", "omp-models.json", "pi-models.json"}:
         return False
     if name in {"auth.json", "token.json", "tokens.json", "credentials.json", "state.json", ".env", "history.jsonl"} or name.endswith((".pyc", ".lock", ".sqlite", ".sqlite3", ".db", ".log")):
         return False
