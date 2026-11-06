@@ -2,70 +2,70 @@
   {
     "name": "master",
     "agent": "omp",
-    "model": "pay/gpt-6.1-sol",
+    "model": "magpie/pay/gpt-6.1-sol",
     "thinking": "high",
     "role": "agentroles.ccb_self"
   },
   {
     "name": "loader",
     "agent": "omp",
-    "model": "pay/gpt-6.1-sol",
+    "model": "magpie/pay/gpt-6.1-sol",
     "thinking": "high",
     "role": "agentroles.ccb_self"
   },
   {
     "name": "archi",
     "agent": "omp",
-    "model": "pay/gpt-6-astra",
+    "model": "magpie/pay/gpt-6-astra",
     "thinking": "high",
     "role": "agentroles.archi"
   },
   {
     "name": "coder1",
     "agent": "codex",
-    "model": "gpt-6.1-sol",
+    "model": "pay/gpt-6.1-sol",
     "thinking": "high",
     "role": "agentroles.coder"
   },
   {
     "name": "coder2",
     "agent": "codex",
-    "model": "gpt-6.1-sol",
+    "model": "pay/gpt-6.1-sol",
     "thinking": "high",
     "role": "agentroles.coder"
   },
   {
     "name": "designer",
     "agent": "omp",
-    "model": "local/gemini-3.8-flash-high",
-    "thinking": null,
+    "model": "magpie/local/gemini-4-argon-high",
+    "thinking": "high",
     "role": "agentroles.frontend_engineer"
   },
   {
     "name": "designer2",
     "agent": "omp",
-    "model": "local/gemini-3.8-flash-high",
-    "thinking": null,
+    "model": "magpie/local/gemini-4-argon-high",
+    "thinking": "high",
     "role": "agentroles.frontend_engineer"
   },
   {
     "name": "reviewer",
     "agent": "omp",
-    "model": "pay/gpt-6.1-sol",
+    "model": "magpie/pay/gpt-6.1-sol",
     "thinking": "xhigh",
     "role": "agentroles.code_reviewer"
   },
   {
     "name": "test",
     "agent": "omp",
-    "model": "pay/gpt-6.1-sol",
+    "model": "magpie/pay/gpt-6.1-sol",
     "thinking": "high",
     "role": "agentroles.code_reviewer"
   },
   {
     "name": "simple",
     "agent": "omp",
-    "model": "pay/gpt-6-astra",
+    "model": "magpie/pay/gpt-6-astra",
     "thinking": "medium",
     "role": "agentroles.simple"
   },

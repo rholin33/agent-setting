@@ -3,16 +3,16 @@
   "enabled": true,
   "historian": {
     "opencode": {
-      "model": "local/gemini-3.8-flash-high"
+      "model": "local/hy4"
     },
     "pi": {
-      "model": "local/gemini-3.8-flash-high",
+      "model": "local/hy4",
       "thinking_level": "high"
     }
   },
   "dreamer": {
     "pi": {
-      "model": "local/gemini-3.8-flash-high",
+      "model": "local/hy4",
       "thinking_level": "high"
     }
   },
