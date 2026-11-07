@@ -54,6 +54,12 @@
       ]
     },
     {
+      "title": "deploy",
+      "agents": [
+        "deploy"
+      ]
+    },
+    {
       "title": "copywriter",
       "agents": [
         "copywriter"
