@@ -82,6 +82,19 @@ class HandoffTests(unittest.TestCase):
         self.assertEqual(next_record['revision'], 2)
         self.assertEqual(next_record['source'], self.local)
 
+    def test_cancelled_before_delivery_retains_source_and_revision_without_assistant_receipt(self):
+        record = handoff.prepare(self.state, self.payload)
+        record['status'] = 'cancelled_before_delivery'
+        record['cancellation'] = dict(reason='User keeps original local owner')
+        self.assertEqual(handoff.current_owner(record), self.local)
+        self.assertNotIn('receipt', record)
+        with self.assertRaises(ValueError):
+            handoff.claim(record, self.remote)
+        next_record = handoff.prepare(self.state, self.payload)
+        self.assertEqual(next_record['revision'], 2)
+        self.assertEqual(next_record['previous'], record['id'])
+        self.assertEqual(next_record['source'], self.local)
+
     def test_native_client_rebinding_allows_return_with_the_same_conversation(self):
         self.remote['runtime'] = 'omp'
         outbound = handoff.prepare(self.state, self.payload)

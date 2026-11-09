@@ -56,7 +56,7 @@ def identity(value):
 
 
 def current_owner(record):
-    if record['status'] not in ('accepted', 'rejected'):
+    if record['status'] not in ('accepted', 'rejected', 'cancelled_before_delivery'):
         raise ValueError('Unsettled handoff has no transferable owner')
     owner = identity(record['target'] if record['status'] == 'accepted' else record['source'])
     bindings = record.get('owner_rebindings', [])
@@ -98,7 +98,7 @@ def prepare(state, payload):
     previous = state.get(task)
     if previous:
         current = {'source': source, 'target': target, 'summary': summary, 'worktree': workspace}
-        if previous['status'] not in ('accepted', 'rejected'):
+        if previous['status'] not in ('accepted', 'rejected', 'cancelled_before_delivery'):
             if all(previous[k] == v for k, v in current.items()):
                 return previous
             raise ValueError('An unresolved handoff exists; do not fork or resend it')

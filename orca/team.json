@@ -1,93 +1,100 @@
 [
   {
     "name": "master",
-    "agent": "claude",
-    "model": "opus",
-    "thinking": "high",
+    "agent": "omp",
+    "model": "magpie/pay/gpt-6.1-sol",
+    "thinking": "xhigh",
     "role": "agentroles.ccb_self"
   },
   {
     "name": "loader",
     "agent": "omp",
-    "model": "pay/gpt-6.1-sol",
-    "thinking": "xhigh",
+    "model": "magpie/pay/gpt-6.1-sol",
+    "thinking": "medium",
     "role": "agentroles.ccb_self"
   },
   {
     "name": "archi",
-    "agent": "claude",
-    "model": "opus",
-    "thinking": "high",
+    "agent": "omp",
+    "model": "magpie/pay/gpt-6.1-sol",
+    "thinking": "xhigh",
     "role": "agentroles.archi"
   },
   {
     "name": "coder1",
-    "agent": "codex",
-    "model": "gpt-6.1-sol",
-    "thinking": "medium",
+    "agent": "omp",
+    "model": "magpie/pay/gpt-6.1-sol",
+    "thinking": "xhigh",
     "role": "agentroles.coder"
   },
   {
     "name": "coder2",
-    "agent": "codex",
-    "model": "gpt-6.1-sol",
-    "thinking": "medium",
+    "agent": "omp",
+    "model": "magpie/pay/gpt-6.1-sol",
+    "thinking": "xhigh",
     "role": "agentroles.coder"
   },
   {
     "name": "designer",
     "agent": "omp",
-    "model": "local/gemini-3.8-flash-high",
-    "thinking": null,
+    "model": "magpie/local/gemini-4-argon-high",
+    "thinking": "high",
     "role": "agentroles.frontend_engineer"
   },
   {
     "name": "designer2",
     "agent": "omp",
-    "model": "local/gemini-3.8-flash-high",
-    "thinking": null,
+    "model": "magpie/local/gemini-4-argon-high",
+    "thinking": "high",
     "role": "agentroles.frontend_engineer"
   },
   {
     "name": "reviewer",
     "agent": "omp",
-    "model": "pay/gpt-6-astra",
+    "model": "magpie/pay/gpt-6.1-sol",
     "thinking": "xhigh",
     "role": "agentroles.code_reviewer"
   },
   {
     "name": "test",
     "agent": "omp",
-    "model": "pay/gpt-6.1-sol",
-    "thinking": "xhigh",
+    "model": "magpie/pay/gpt-6.1-sol",
+    "thinking": "medium",
     "role": "agentroles.code_reviewer"
   },
   {
     "name": "simple",
     "agent": "omp",
-    "model": "pay/gpt-6-astra",
-    "thinking": "medium",
+    "model": "magpie/pay/gpt-6.1-sol",
+    "thinking": "high",
     "role": "agentroles.simple"
   },
   {
     "name": "deploy",
-    "agent": "codex",
-    "model": "gpt-6.1-sol",
-    "thinking": "medium",
+    "agent": "omp",
+    "model": "magpie/auto/gpt-6.1-sol",
+    "thinking": "high",
     "role": "agentroles.deploy"
   },
   {
     "name": "copywriter",
     "agent": "omp",
-    "model": "pay/gpt-6.1-sol",
+    "model": "pay-copy/gpt-6.1-sol",
     "thinking": "xhigh",
     "role": "agentroles.copywriter"
   },
   {
     "name": "image",
     "agent": "omp",
-    "model": "pay/gpt-image-2.5-sunburst",
+    "model": "magpie/pay/gpt-image-2.5-sunburst",
     "thinking": "high",
     "role": "agentroles.image"
+  },
+  {
+    "name": "fixer",
+    "agent": "omp",
+    "model": "magpie/pay/gpt-6.1-sol",
+    "thinking": "xhigh",
+    "role": "agentroles.coder"
   }
 ]

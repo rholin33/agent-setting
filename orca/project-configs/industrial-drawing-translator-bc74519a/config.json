@@ -53,6 +53,12 @@
       "agents": [
         "simple"
       ]
+    },
+    {
+      "title": "fixer",
+      "agents": [
+        "fixer"
+      ]
     }
   ],
   "sourceSidebar": {
