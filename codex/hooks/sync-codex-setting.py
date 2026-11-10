@@ -51,7 +51,7 @@ ORCA_HOME = Path(os.environ.get("ORCA_TEAM_HOME", str(Path.home() / ".orca/roles
 ORCA_PACKAGE_DIRECTORIES = {"roles"}
 MAGIC_CONTEXT_RELATIVE = Path("cortexkit/magic-context.jsonc")
 MAGIC_CONTEXT_HOME = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))).expanduser() / "cortexkit"
-ORCA_PACKAGE_FILES = {"team.json", "layout.json", "omp-context.json"}
+ORCA_PACKAGE_FILES = {"team.json", "layout.json", "omp-context.json", "sp-team.json", "sp-layout.json"}
 
 
 def orca_runtime_module():

@@ -1,0 +1,9 @@
+{
+  "entry": "master",
+  "pinTabs": true,
+  "tabs": [
+    { "title": "master", "agents": ["master"] },
+    { "title": "archi", "agents": ["archi"] },
+    { "title": "designer", "agents": ["designer"] }
+  ]
+}

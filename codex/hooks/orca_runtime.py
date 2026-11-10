@@ -44,7 +44,7 @@ def runtime_path(name):
         return False
     if path.name.lower() in {'.ds_store', '.env', 'auth.json', 'credentials.json', 'state.json', 'token.json'} or path.suffix in {'.pyc', '.log', '.lock', '.db', '.sqlite'}:
         return False
-    if path.as_posix() in {'bin/orca-team', 'bin/orca-team.ps1'}:
+    if path.as_posix() in {'bin/orca-team', 'bin/orca-team.ps1', 'bin/orca-sp', 'bin/orca-sp.ps1'}:
         return False
     if path.parts[0] == 'remote-master' and path.suffix not in {'.py', '.ts'}:
         return path.as_posix() in {'remote-master/device-preview/' + p for p in ('README.md', 'role.md', 'policy.json')}

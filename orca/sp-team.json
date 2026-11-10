@@ -1,0 +1,24 @@
+[
+  {
+    "name": "master",
+    "agent": "omp",
+    "model": "omp-default",
+    "modelSource": "omp-default",
+    "prompt": "sp-master",
+    "role": "agentroles.ccb_self"
+  },
+  {
+    "name": "archi",
+    "agent": "omp",
+    "model": "omp-default",
+    "modelSource": "omp-default",
+    "role": "agentroles.archi"
+  },
+  {
+    "name": "designer",
+    "agent": "omp",
+    "model": "gemini-4-argon",
+    "modelSource": "omp-gemini-4-argon",
+    "role": "agentroles.frontend_engineer"
+  }
+]
