@@ -1,7 +1,5 @@
 {
   "compaction": {
-    "enabled": true,
-    "asyncEnabled": true,
-    "midTurnEnabled": true
+    "enabled": false
   }
 }

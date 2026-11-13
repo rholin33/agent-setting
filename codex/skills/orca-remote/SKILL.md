@@ -2,7 +2,7 @@
 name: orca-remote
 description: >-
   通过 Orca 与 Tailscale 复用或建立远端角色会话，分别选择运行程序和团队角色。
-  用户输入 "$orca-remote -codex master"、"$orca-remote -omp designer"，
+  用户输入 "$orca-remote -codex master"、"$orca-remote -omp designer"、"$orca-remote -grok master"，
   或要求在本机与远端之间、远端与已有 agent 之间接续同一工作时使用。
   支持 --environment、--worktree 和 --to-agent；默认双向交接最新任务上下文，
   保留各端完整历史，不迁移原始会话，不复制模型凭据，不将窗口聚焦冒充交接完成。
@@ -22,11 +22,12 @@ description: >-
 $orca-remote -codex <role> [--environment <name>] [--worktree <path>] [--no-handoff]
 $orca-remote -omp <role> [--environment <name>] [--worktree <path>] [--no-handoff]
 $orca-remote -claude <role> [--environment <name>] [--worktree <path>] [--no-handoff]
+$orca-remote -grok <role> [--environment <name>] [--worktree <path>] [--no-handoff]
 $orca-remote --to-agent <existing-terminal-handle> [--environment <terminal-host>] [--worktree <path>] [--no-handoff]
 ```
 
-- 远端角色调用解析成独立的 runtime、role、environment、worktree；仅 `-codex` / `-omp` / `-claude` 调用要求 `<role>`。`--to-agent` 从该实际 agent 核对运行程序和角色，不另要求 role 参数。路径/名称可用引号包住空格；只解析参数，不用 eval 或拼成 shell 程序。
-- 目标选择必须是且仅是 `-codex <role>`、`-omp <role>`、`-claude <role>`、`--to-agent <handle>` 四者之一。前三者按运行程序和角色发现/建立远端入口；`--to-agent` 只连接已存在的 agent，默认在本机 Orca 查找，显式 environment 指其终端承载主机，不创建、不改角色。拒绝混用目标选择、未知/重复参数、缺失值和额外位置参数。`--no-handoff` 是显式仅打开/聚焦，不改变任务负责人，也不声称工作接续。
+- 远端角色调用解析成独立的 runtime、role、environment、worktree；仅 `-codex` / `-omp` / `-claude` / `-grok` 调用要求 `<role>`。`--to-agent` 从该实际 agent 核对运行程序和角色，不另要求 role 参数。路径/名称可用引号包住空格；只解析参数，不用 eval 或拼成 shell 程序。
+- 目标选择必须是且仅是 `-codex <role>`、`-omp <role>`、`-claude <role>`、`-grok <role>`、`--to-agent <handle>` 五者之一。前四者按运行程序和角色发现/建立远端入口；`--to-agent` 只连接已存在的 agent，默认在本机 Orca 查找，显式 environment 指其终端承载主机，不创建、不改角色。拒绝混用目标选择、未知/重复参数、缺失值和额外位置参数。`--no-handoff` 是显式仅打开/聚焦，不改变任务负责人，也不声称工作接续。
 - `--worktree` 缺省时使用当前会话所处的实际 Orca worktree。核对规范路径与 Orca worktree 身份；不因名称相似而选择另一个工作区。无法确定当前工作区时只询问这个必要问题。
 - 显式 `--environment` 必须对应 Orca 已配置且可核对身份的 environment。缺省时优先使用该 runtime + role + worktree 已绑定的远端 environment；没有有效绑定时仅在存在唯一已连接的合格远端主机时选它。多个候选只问一个问题。已有绑定离线时报告状态，不悄悄切到另一主机。
 - `environment` 是 Orca 远端环境名称，不是运行程序或模型 provider。名为 `claude` 的主机可以运行 Codex 或 OMP；`-omp designer` 不得复用 Codex master 的会话。
@@ -51,11 +52,15 @@ $orca-remote --to-agent <existing-terminal-handle> [--environment <terminal-host
 2. 定位当前项目生效的团队配置及其引用的团队包。读取 `team.json`、`layout.json` 中所选角色相关段落，并解析真实 `source/<角色资源>/role.toml`、适配 prompt 及必要资源。共享包默认位置为 `~/.orca/roles/ccb-team/`；项目覆盖配置优先，不把共享包列表硬当作项目角色列表。
 3. 用团队成员 `name` 精确匹配 `<role>`，再解析它的 `role` 引用。例如当前共享包 `master → agentroles.ccb_self`、`coder1 → agentroles.coder`。这些是已观察示例，不是技能允许列表。名称相近、共享同一个角色资源或同一个模型，都不意味着同一会话身份。
 4. 角色不存在、引用缺失或 prompt 无法解析时，列出当前可用的真实角色并停止。不得造一个同名 role stub、用 master prompt 代替其他角色、修改团队成员的常规 provider，或覆盖原来的本机角色。
-5. `-codex` / `-omp` / `-claude` 只选择本次远端会话运行程序，不修改团队角色的常规程序、模型或会话。模型/provider 另从真实角色要求及远端已配置能力核对；例如 designer 的模型不能从 master 会话抄来。
+5. `-codex` / `-omp` / `-claude` / `-grok` 只选择本次远端会话运行程序，不修改团队角色的常规程序、模型或会话。模型/provider 另从真实角色要求及远端已配置能力核对；例如 designer 的模型不能从 master 会话抄来。
 
 ### Claude 远程终端分支
 
 `runtime=claude` 使用 Orca 远程终端，跳过 Codex app-server 和 OMP host/join 专用流程。先读 references/claude.md；依照其环境、工作区、会话与助手回执校验完成创建/复用和双向交接。
+
+### Grok 远程终端分支
+
+`runtime=grok` 使用 Orca 远程终端，跳过 Codex app-server 和 OMP host/join 专用流程。先读 references/grok.md；用 `orca agent launch --agent grok` 在配对环境的远端项目中创建或复用 Grok Build，再完成双向交接。远端必须已安装并登录 `grok`。
 
 ### 按运行程序分流
 
@@ -146,6 +151,7 @@ OMP 流程：
    ```text
    $orca-remote -codex master
    $orca-remote -omp designer
+   $orca-remote -grok master --environment claude
    $orca-remote --to-agent <实际存在的本机agent句柄>
    $orca-remote -codex master --environment claude --worktree /path/to/worktree
    ```

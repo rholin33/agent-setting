@@ -1,0 +1,4 @@
+interface:
+  display_name: "Show GitHub"
+  short_description: "按需求联网检索开源项目与产品网站，提取功能清单并建议最小可行范围"
+  default_prompt: "使用 $show-github，根据我的需求检索 5～8 个相关开源项目或产品网站，提取带来源的功能清单，整理共有功能、特色功能和建议的 MVP 范围。"
