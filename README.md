@@ -63,6 +63,17 @@ Installation applies files from this checkout without Git commits or pushes.
 It preserves local files absent from the package. It does not configure provider
 accounts or model services. CCB role resources may be installed with --skip-tools.
 
+For an Orca dispatch-rule-only update, run
+`python scripts/install-config.py --target orca --rules-only`. This backs up and
+installs the shared `Orca 任务派发约束` section from `codex/AGENTS.orca.md` and
+`pi/AGENTS.md` into native Codex, Pi and OMP rule files, preserving other rules,
+and updates the corresponding Agent Settings Sync skills (including Claude).
+It does not install runtime code, change settings/model catalogs or start agents.
+Native homes respect `CODEX_HOME`, `PI_CODING_AGENT_DIR`, `OMP_AGENT_DIR` (default
+`~/.omp/agent`) and `CLAUDE_CONFIG_DIR`. Other install flags cannot be combined
+with `--rules-only`; it is not a bypass for runtime installation checks.
+
+
 ## Portable And Local Files
 
 | Repository | Purpose |

@@ -57,6 +57,18 @@ codex/AGENTS.orca.md (each run syncs only its own variant to the global
 and caches; pi/AGENTS.md, pi/settings.json, pi/skills/, pi/bin/; claude/CLAUDE.md and
 claude/skills/ excluding skills/synced (claude.ai-managed). Claude settings.json
 is local-only (machine hooks) and is never exported.
+
+For Orca task wording, keep the `Orca 任务派发约束` section in both
+`codex/AGENTS.orca.md` and `pi/AGENTS.md`; never write it to the CCB variant.
+These are source files, not generated home-file edits. Install checkout edits
+with `python scripts/install-config.py --target orca --rules-only`, not the pull
+hook (which fetches before applying). This scoped entry backs up and installs
+the rule section into native Codex, Pi and OMP AGENTS.md, plus this sync skill,
+without installing runtime code or unrelated configuration. Verify all three.
+Keep the section category-only: no individual prohibited terms or examples.
+Do not export unrelated local settings or change the runtime pin for a scoped
+rule-source edit. Publish only the explicitly authorized reviewed paths.
+
 CCB scope: ccb/ccb.config and the current project's ccb/projects configuration
 and pi/projects settings. CCB role bootstrap in roles/ and ccb/roles.json belongs
 only to CCB. Orca mode must not apply CCB config, install CCB roles, or touch

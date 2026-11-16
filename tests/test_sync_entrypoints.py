@@ -50,5 +50,47 @@ class EntrypointTests(unittest.TestCase):
             self.assertFalse((home / '.ccb').exists())
 
 
+class OrcaRulesInstallTests(unittest.TestCase):
+    def test_rules_install_preserves_native_content_and_unrelated_configuration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = pathlib.Path(directory)
+            homes = {name: home / name for name in ('codex', 'pi', 'omp', 'claude')}
+            for name in ('codex', 'pi', 'omp'):
+                homes[name].mkdir()
+                (homes[name] / 'AGENTS.md').write_text('# Local instructions\n\nKeep this local rule.\n', encoding='utf-8')
+                (homes[name] / 'settings.json').write_bytes(b'{"local":true}\n')
+            env = dict(os.environ, CODEX_HOME=str(homes['codex']), PI_CODING_AGENT_DIR=str(homes['pi']),
+                       OMP_AGENT_DIR=str(homes['omp']), CLAUDE_CONFIG_DIR=str(homes['claude']),
+                       ORCA_TEAM_HOME=str(home / 'orca'), CCB_HOME=str(home / 'ccb'), PYTHONUTF8='1')
+            command = [sys.executable, '-B', str(ROOT / 'scripts/install-config.py'), '--target', 'orca', '--rules-only']
+            first = subprocess.run(command, env=env, capture_output=True, text=True, encoding='utf-8')
+            self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+            installed = {}
+            for name in ('codex', 'pi', 'omp'):
+                target = homes[name] / 'AGENTS.md'
+                installed[name] = target.read_bytes()
+                self.assertIn(b'Keep this local rule.', installed[name])
+                self.assertIn('## Orca 任务派发约束', installed[name].decode('utf-8'))
+                self.assertEqual((homes[name] / 'settings.json').read_bytes(), b'{"local":true}\n')
+            second = subprocess.run(command, env=env, capture_output=True, text=True, encoding='utf-8')
+            self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+            for name in installed:
+                self.assertEqual((homes[name] / 'AGENTS.md').read_bytes(), installed[name])
+            backups = list((homes['codex'] / '.sync/codex-setting/backups').glob('orca-rules-*/*-AGENTS.md'))
+            self.assertEqual(len(backups), 3)
+            self.assertTrue(all(p.read_text() == '# Local instructions\n\nKeep this local rule.\n' for p in backups))
+            self.assertFalse((home / 'orca').exists())
+            self.assertFalse((home / 'ccb').exists())
+
+    def test_rules_install_rejects_other_targets_before_changes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = pathlib.Path(directory)
+            result = subprocess.run([sys.executable, '-B', str(ROOT / 'scripts/install-config.py'),
+                                     '--target', 'ccb', '--rules-only'], env=dict(os.environ, CODEX_HOME=str(home / 'codex')),
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 2)
+            self.assertFalse((home / 'codex').exists())
+
+
 if __name__ == '__main__':
     unittest.main()
