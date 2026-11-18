@@ -1,24 +1,24 @@
 {
+  "theme": "dark",
   "hideThinkingBlock": false,
-  "defaultProvider": "magpie",
-  "tuiMode": "fullscreen",
-  "skills": [
-    "skills"
-  ],
   "packages": [
     "npm:@cortexkit/pi-magic-context",
     "npm:@narumitw/pi-statusline",
     "npm:pi-tool-display",
     "npm:pi-mcp-adapter@2.33.0"
   ],
+  "defaultProvider": "magpie",
+  "skills": [
+    "skills"
+  ],
   "modelThinkingLevels": {
     "local/deepseek-v4.1-flash": "medium"
   },
-  "theme": "dark",
   "lastChangelogVersion": "1.1.0",
-  "defaultModel": "workbuddy/hy4free",
   "extensions": [
     "-builtin:mcp"
   ],
+  "tuiMode": "fullscreen",
+  "defaultModel": "workbuddy/hy4free",
   "defaultThinkingLevel": "xhigh"
 }
