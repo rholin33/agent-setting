@@ -56,6 +56,13 @@ OMP 中存在旧 `models.json` 时，检查它是否仍被辅助工具使用。�
 OMP 的 `/hook/omp`、`ORCA_OMP_PREFILL` 及专用生命周期逻辑必须保留。
 Pi 相对路径如 `skills` 应按来源目录解释，再映射到目标目录，不能照抄错误路径。
 
+用户明确选择“仅使用原生压缩”时，除开启原生 `compaction.enabled` 外，还要检查
+Pi 的 `packages` 和 OMP 插件启用状态，不能仅凭原生开关判定完成。
+移除 Pi 中 Magic Context 的加载项，使用 `omp plugin disable @cortexkit/pi-magic-context`
+停用已安装的 OMP 插件，保留安装文件和历史。共享配置中的 `enabled: false`
+可阻止其注册；若该配置由远端仓库管理，只有用户同时授权远端同步时才发布。
+不要通过本技能改写 Orca 团队配置，也不要自动重启现有会话。
+
 MCP 先比较有效配置及共享来源，如 `~/.config/mcp/mcp.json`。
 共享配置已一致则跳过；有实际差异时核对两种客户端的字段语义再转换，
 例如 `requestTimeoutMs` 与 `timeout` 的单位需查明。不要复制 `mcp-cache.json`。

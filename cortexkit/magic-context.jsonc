@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/cortexkit/magic-context/master/assets/magic-context.schema.json",
-  "enabled": true,
+  "enabled": false,
   "historian": {
     "opencode": {
       "model": "local/hy4"

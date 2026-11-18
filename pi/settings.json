@@ -2,12 +2,11 @@
   "theme": "dark",
   "hideThinkingBlock": false,
   "packages": [
-    "npm:@cortexkit/pi-magic-context",
     "npm:@narumitw/pi-statusline",
     "npm:pi-tool-display",
     "npm:pi-mcp-adapter@2.33.0"
   ],
-  "defaultProvider": "magpie",
+  "defaultProvider": "pay",
   "skills": [
     "skills"
   ],
@@ -19,6 +18,9 @@
     "-builtin:mcp"
   ],
   "tuiMode": "fullscreen",
-  "defaultModel": "workbuddy/hy4free",
-  "defaultThinkingLevel": "xhigh"
+  "defaultModel": "gpt-6.2-sol",
+  "defaultThinkingLevel": "xhigh",
+  "compaction": {
+    "enabled": true
+  }
 }
