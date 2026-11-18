@@ -30,18 +30,21 @@ This SP bootstrap does not synchronize model catalogs or credentials.
 
 The SP master may create a needed functional seat and dispatch through the live
 Orca orchestration API without asking again for delegation permission. It must
-inspect/reuse existing seats first and preserve active tasks, histories and
-service terminals. Other approval rules continue to apply.
+decide whether to add a role, define its responsibility and choose how to divide
+the work. There is no required preference for reuse and no fixed specialist
+roster. 如非必要，勿增实体。Preserve active tasks, histories and service terminals.
+Other approval rules continue to apply.
 
 ```text
-orca-sp add-seat coder1 --role coder --thinking high
-orca-sp start --group coder1 --no-pick
+orca-sp add-seat api_audit --role "Review API compatibility" --thinking high
+orca-sp start --group api_audit --no-pick
 orca-sp remote --remote claude:archi --environment <paired-name>
 ```
 
 Thinking is selected by master for task complexity. A new seat uses the current
-OMP default model and its existing packaged specialty. Supported specialties:
-coder, reviewer, test, simple, loader, deploy, copywriter, designer and archi.
+OMP default model. `--role` is optional free-form responsibility text, defaulting
+to the seat name; the helper does not load a full-team role package. The SP master
+also uses its own prompt without the CCB maintainer skills overlay.
 
 ## Persistence and publication
 
@@ -58,7 +61,12 @@ neither publication nor synchronization transfers them.
 
 ## Verification (2026-11-11)
 
-Runtime tests: 759 total, 749 passed, 10 platform skips, no failures. Native OMP
+The later runtime release `e83de8d244cdea2f633f4646645c280171fd32c3` includes the
+autonomous-seat and startup-update changes. Runtime verification passed 839 tests
+with 10 platform skips. Configuration verification passed all 52 tests.
+New prompts load on the next launch or exact-session resume.
+
+Published-runtime tests: 759 total, 749 passed, 10 platform skips, no failures. Native OMP
 smoke resolved master/archi to `magpie/pay/gpt-6.1-sol` / high and designer to
 `magpie/local/gemini-4-argon-high` / high. Profile initialization, seat registration
 and configuration export passed without launching any real agent.

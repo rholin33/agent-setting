@@ -4,8 +4,7 @@
     "agent": "omp",
     "model": "omp-default",
     "modelSource": "omp-default",
-    "prompt": "sp-master",
-    "role": "agentroles.ccb_self"
+    "prompt": "sp-master"
   },
   {
     "name": "archi",

@@ -1,6 +1,6 @@
 ---
 name: orca-agent-repair
-description: 诊断并恢复 Orca 管理的单个 OMP、Codex 或 Claude 角色的工具卡死、运行异常或原会话恢复失败。支持从三种客户端执行，保留原窗格与完整会话；OMP pending-action 死锁优先调用 orca-team repair。用于“修复 simple/designer 等角色”或显式调用 orca-agent-repair；不是业务报错修复或整队更新。
+description: 诊断并恢复 Orca 管理的 OMP、Codex、Claude 角色工具卡死、运行异常、原会话恢复失败，以及远端工作区 MCP 的 Connection refused。支持 orca-repair 故障排查意图；实际入口为 orca-agent-repair。保留原窗格与会话，OMP pending-action 死锁优先调用 orca-team repair；不处理业务报错或整队更新。
 ---
 
 # Orca Agent Repair
@@ -62,6 +62,23 @@ await restartRole({ home, project, role, forceExit: true, cli: orca, snapshot })
 ```
 
 `home/project/role` 必须使用已核对的绝对目录与单个角色名；不要把示例直接作为未赋值脚本执行。调用前检查远端保护、原生 session 归属和角色配置未变化。使用 `restartRole` 的项目锁，不直接调用无锁内部函数。它可以中断目标角色当前回合，必须在确认是本次待修复的异常角色后才执行。退出未确认时保留 restartIntent，不额外发送 exit/resume。
+
+### 远端 Claude 工作区 MCP：Connection refused
+
+当 workspace_info 与 list_roles 同时报 Connection refused，先查共同传输，不重启业务前后端或健康角色。用户说“orca-repair”时可按本技能处理此故障；实际技能入口名仍为 orca-agent-repair。
+
+1. 分开验证 Orca 主控制面、Tailnet 与专用工作区桥接。固定同一 Orca 可执行文件，执行 status、worktree current，以及 status --environment 已登记远端；单向可达不代表反向 MCP 可达。environment list 是本机配置，不使用 --environment 试图读取另一台机器的登记。
+2. 在远端读取该角色实际加载的 mcp.json，并跟随 stdio mcp_cache_proxy 的 --upstream 到 upstream-mcp.json；只输出去掉查询参数的 scheme/host/port/path，不输出 Authorization、token 或完整配置。以实际上游为准，不把 Orca 主端口、业务 API 端口、另一个 profile 的待交接桥接混为一谈。
+3. 从实际远端对上游 host:port 作有界 TCP 连接；在本机核同端口监听、真实进程命令及所属配置。ECONNREFUSED + 无监听/无原桥接进程可判为桥接未运行；超时、HTTP403、工具返回 stale handle 是不同故障，分别查路由/鉴权/绑定。旧日志不证明本次退出原因，pid 文件也不证明进程存活。
+4. 查找并脱敏核对原 workspace.json 的 root/role/bind/peer/port/orca，必须与实际远端上游和项目一致。旧 projects 与 profiles 下同项目可能有不同端口的 pending handoff，不能凭目录新旧选择。先检查 task-routes 及原账本；bridge 启动会创建 router 并 reconcile，若可能恢复未结算任务或派发历史步骤，先明确授权边界，不清账本、不伪造结算、不改 owner 来强行启动。
+5. 仅在用户已授权恢复、精确原配置匹配且任务重放风险已排除时，由当前运行规则允许的宿主维护者恢复缺失服务。使用已安装解释器执行受维护的 remote-master/bridge.py local --config 原workspace.json；优先包内已支持的恢复入口，否则在 Orca 管理的持久服务终端启动并记录终端、PID、日志。先读终端确认是空闲shell且没有待提交输入；健康实例不重复启动，端口被其他进程占用则停止并报告。保留原 token、peer 限制、bind、权限、会话与配置；不新建配对、不扩大到 0.0.0.0、不开放 Orca 主控制端口、不顺带部署或重启应用。
+6. 验收必须从实际远端使用原认证，依次读取 /health 并执行 /mcp 的 tools/call workspace_info、list_roles。检查 HTTP/JSON-RPC/工具 isError、项目根路径、目标角色与真实当前 handles；两项都成功才称查询恢复。凭据仅内存使用。/health 的 router 状态另行记录，查询成功不等于任务派发可用；不要用业务 task_submit 验证。
+7. Orca 重启后旧 .orca-team/roles.json、local-terminal 缓存与 binding 可能仍含旧 handle。以当前 terminal list/show 的工作区、tab/leaf、incarnation、原生角色身份交叉核对，通过管理包已有正式协调/刷新路径恢复；不凭标题手填绑定，也不把 Connection refused 与后续 stale handle 合并为同一根因。不得提交远端终端现有草稿或发送“好了”触发业务。
+
+已验证的受维护桥接支持 local --config 原workspace.json --pause-task-router 时，可在协调者明确GO后用它恢复有历史任务的桥接：不创建后台router线程，health显示paused/alive=false，原认证/工具声明/显式任务权限不变，task_status仍可查。它不禁止显式任务写入，不是只读权限模式；不执行 task_submit/task_ack 等作为探针。禁止与 --supersede 混用，也不用于remote/bootstrap/console。去掉暂停重启前必须先获准对原Run/Task/Dispatch结算；不把旧任务自动重放当网络修复。实际MCP helper若自带ProxyHandler({})直连，应沿原Upstream.call验证，不能用继承系统代理的临时探针502否定生产路径，也不能仅靠临时绕代理宣称生产成功。
+
+参考实证：一次 Windows 本机 Orca 主控制面正常，远端 master/archi 的 MCP 实际分别使用 Tailnet 上的 18981/18982；两个本机独立 bridge 进程未运行，远端均 ConnectionRefusedError。端口和路径只是该次实例，后续必须重新发现。恢复运行与永久修复分开报告：仅拉起原服务不能声称已实现开机/Orca重启自愈；没有启动管理缺陷的代码及触发验证，不新增自启动/计划任务。
+
 
 ## 验证与报告
 
