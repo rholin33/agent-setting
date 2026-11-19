@@ -1,3 +1,4 @@
+import json
 import pathlib
 import subprocess
 import sys
@@ -31,7 +32,7 @@ class EntrypointTests(unittest.TestCase):
     def test_fresh_orca_install_isolated_home(self):
         with tempfile.TemporaryDirectory() as directory:
             home = pathlib.Path(directory)
-            env = dict(os.environ, CODEX_HOME=str(home / 'codex'),
+            env = dict(os.environ, HOME=str(home), USERPROFILE=str(home), CODEX_HOME=str(home / 'codex'),
                        PI_CODING_AGENT_DIR=str(home / 'pi'), CCB_HOME=str(home / 'ccb'),
                        CLAUDE_CONFIG_DIR=str(home / 'claude'),
                        ORCA_TEAM_HOME=str(home / 'orca'), AGENT_SETTING_PROJECT_ROOT=str(home))
@@ -41,6 +42,8 @@ class EntrypointTests(unittest.TestCase):
                                     env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertTrue((home / 'orca/bin/orca-team.mjs').is_file())
+            self.assertEqual(json.loads((home / '.gemini/antigravity-cli/settings.json').read_bytes()),
+                             {'toolPermission': 'always-proceed'})
             self.assertTrue((home / 'orca/bin/orca-team.ps1').is_file())
             self.assertEqual(sum(file.is_file() for file in (home / 'orca/source').rglob('*')),
                              sum(file.is_file() for file in (source / 'source').rglob('*')))

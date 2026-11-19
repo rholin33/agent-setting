@@ -21,6 +21,7 @@ class CompletenessTest(unittest.TestCase):
         self.repo = self.base / 'repo'
         self.repo.mkdir()
         self.env = dict(os.environ, PYTHONUTF8='1',
+                        HOME=str(self.base), USERPROFILE=str(self.base),
                         CODEX_HOME=str(self.base / 'codex'),
                         PI_CODING_AGENT_DIR=str(self.base / 'pi'),
                         CLAUDE_CONFIG_DIR=str(self.base / 'claude'),
@@ -94,6 +95,21 @@ class CompletenessTest(unittest.TestCase):
         self.stage_all()
         self.write(self.repo / SKILL, b'# Obsidian\r\n')
         self.assert_rejected(self.sync('--verify-index'), SKILL)
+
+    def test_agy_permission_is_required_in_the_export_manifest(self):
+        local = self.base / '.gemini/antigravity-cli/settings.json'
+        relative = 'orca/agy-settings.json'
+        self.write(local, b'{"toolPermission":"always-proceed","model":"local"}')
+        self.export()
+        self.stage_all()
+        self.assert_rejected(self.sync('--verify-index'), relative)
+        self.assertEqual((self.repo / relative).read_bytes(), b'{\n  "toolPermission": "always-proceed"\n}\n')
+        self.git('add', '--', relative)
+        result = self.sync('--verify-index')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.git('commit', '-qm', 'export with AGY permission')
+        result = self.sync('--verify-head')
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_stash_and_subset_commit_cannot_lose_manifest(self):
         self.export()

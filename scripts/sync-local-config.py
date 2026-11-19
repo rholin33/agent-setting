@@ -52,6 +52,7 @@ def export_candidates():
             yield project_pi / 'settings.json', sync.get_project_root() / 'pi/settings.json'
     else:
         yield sync.MAGIC_CONTEXT_RELATIVE, sync.MAGIC_CONTEXT_HOME / "magic-context.jsonc"
+        yield sync.AGY_SETTINGS_RELATIVE, sync.get_local_managed_path(sync.AGY_SETTINGS_RELATIVE)
         for name in sync.ORCA_PACKAGE_FILES:
             yield Path('orca') / name, sync.ORCA_HOME / name
         for name in sync.ORCA_PACKAGE_DIRECTORIES:
@@ -75,7 +76,12 @@ def collect_configuration(destination: Path) -> dict[Path, bytes]:
         target = destination / relative
         if target.is_symlink() or any(parent.is_symlink() for parent in target.parents):
             raise ValueError(f'export destination contains a symlink: {target}')
-        if relative.parts[:2] == ('orca', 'project-configs'):
+        if relative == sync.AGY_SETTINGS_RELATIVE:
+            settings = sync.load_json_object(source, encoding='utf-8-sig')
+            if 'toolPermission' not in settings:
+                continue
+            content = (json.dumps({'toolPermission': settings['toolPermission']}, indent=2) + '\n').encode('utf-8')
+        elif relative.parts[:2] == ('orca', 'project-configs'):
             config = sync.load_json_object(source)
             for key in ('workspace', 'project', 'projectPath', 'state', 'sessions'):
                 config.pop(key, None)

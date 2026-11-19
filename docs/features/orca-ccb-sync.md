@@ -10,6 +10,14 @@ is applied or exported. Provider installation and credentials are out of scope.
 Default operation pulls and merges into the current machine. Only explicit
 `push` permits export, staging, committing and pushing after review.
 
+## AGY Tool Permission
+
+`orca/agy-settings.json` carries the Orca setting
+`"toolPermission": "always-proceed"`. Ordinary sync, force sync and checkout
+installation merge that key into `~/.gemini/antigravity-cli/settings.json`,
+backing up an existing file before changing it and preserving its other keys.
+Orca export includes only the specified AGY key. CCB sync excludes the file.
+
 ## Implementation Plan
 
 - [x] Gate sync/export and legacy entry points on one target.

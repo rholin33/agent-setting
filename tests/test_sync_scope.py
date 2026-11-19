@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -92,6 +93,64 @@ class SyncScopeTests(unittest.TestCase):
                     module.main()
                 self.assertEqual(raised.exception.code, 2)
 
+    def test_agy_permission_applies_with_or_without_existing_settings(self):
+        relative = Path('orca/agy-settings.json')
+        permission = {'toolPermission': 'always-proceed'}
+        for apply in (sync.merge_managed_files, sync.force_sync_managed_files):
+            for existing in (None, {'toolPermission': 'ask', 'model': 'local', 'trustedWorkspaces': ['fixture']}):
+                with self.subTest(apply=apply.__name__, existing=existing), tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    remote = root / 'remote' / relative
+                    remote.parent.mkdir(parents=True)
+                    remote.write_text(json.dumps(permission), encoding='utf-8')
+                    local = root / '.gemini/antigravity-cli/settings.json'
+                    if existing is not None:
+                        local.parent.mkdir(parents=True)
+                        local.write_text(json.dumps(existing), encoding='utf-8-sig')
+                        original = local.read_bytes()
+                    with patch.multiple(sync, TARGET='orca', REMOTE_REPO=root / 'remote',
+                                        LAST_REMOTE=root / 'baseline', BACKUP_ROOT=root / 'backups'), \
+                         patch.object(sync.Path, 'home', return_value=root), \
+                         patch.object(sync, 'run_git', return_value=relative.as_posix() + '\0'), \
+                         patch.object(sync, 'write_log'):
+                        apply()
+                        self.assertEqual(json.loads(local.read_bytes()), {**(existing or {}), **permission})
+                        applied = local.read_bytes()
+                        apply()
+                        self.assertEqual(local.read_bytes(), applied)
+                    backups = list((root / 'backups').glob('*/orca/agy-settings.json'))
+                    self.assertEqual(len(backups), int(existing is not None))
+                    if existing is not None:
+                        self.assertEqual(backups[0].read_bytes(), original)
+
+    def test_agy_permission_export_is_orca_only_and_projects_one_key(self):
+        relative = Path('orca/agy-settings.json')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            local = root / '.gemini/antigravity-cli/settings.json'
+            local.parent.mkdir(parents=True)
+            original = b'{"toolPermission":"always-proceed","model":"local","apiKey":"fixture"}'
+            local.write_bytes(original)
+            for target in ('orca', 'ccb'):
+                with patch.multiple(exporter.sync, TARGET=target, ORCA_HOME=root / 'orca'), \
+                     patch.object(exporter.sync.Path, 'home', return_value=root), \
+                     patch.object(exporter.sync, 'get_project_root', return_value=root):
+                    candidates = [item for item in exporter.export_candidates() if item[0] == relative]
+                    with patch.object(exporter, 'export_candidates', return_value=candidates):
+                        pending = exporter.collect_configuration(root / 'destination')
+                    if target == 'orca':
+                        self.assertEqual(candidates, [(relative, local)])
+                        self.assertEqual(json.loads(pending[relative]), {'toolPermission': 'always-proceed'})
+                    else:
+                        self.assertEqual(pending, {})
+                        with self.assertRaises(ValueError):
+                            exporter.sync.get_local_managed_path(relative)
+            self.assertEqual(local.read_bytes(), original)
+        for content in (b'{}', b'{"toolPermission":"ask"}',
+                        b'{"toolPermission":"always-proceed","model":"local"}'):
+            with self.subTest(content=content), self.assertRaises(ValueError):
+                sync.validate_managed_content(relative, content)
+
     def test_explicit_project_key(self):
         with patch.dict(sync.os.environ, {'AGENT_SETTING_PROJECT_KEY': 'shared-project'}):
             self.assertEqual(sync.get_project_key(), 'shared-project')
@@ -168,6 +227,7 @@ class SyncScopeTests(unittest.TestCase):
             destination = root / 'export'
             with patch.multiple(exporter.sync, TARGET='orca', CODEX_HOME=homes['codex'],
                                 PI_HOME=homes['pi'], CCB_HOME=homes['ccb'], ORCA_HOME=homes['orca']), \
+                 patch.object(exporter.sync.Path, 'home', return_value=root), \
                  patch.object(exporter.sync, 'get_project_root', return_value=project), \
                  patch.object(exporter.sync, 'get_project_key', return_value='fixture'), \
                  patch.object(exporter.subprocess, 'run', return_value=type('Result', (), {'stdout': '{"tabs": []}'})()):

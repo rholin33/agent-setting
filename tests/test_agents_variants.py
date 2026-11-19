@@ -62,6 +62,7 @@ class AgentsVariantTests(unittest.TestCase):
             home.mkdir()
             (home / "AGENTS.md").write_bytes(b"ccb content")
             with patch.object(sync, "TARGET", "orca"), \
+                    patch.object(sync.Path, "home", return_value=home), \
                     patch.object(sync, "CODEX_HOME", home), \
                     patch.object(sync, "CODEX_MANAGED_DIRECTORIES", ()), \
                     patch.object(sync, "PI_MANAGED_FILES", ()), \

@@ -51,6 +51,8 @@ ORCA_HOME = Path(os.environ.get("ORCA_TEAM_HOME", str(Path.home() / ".orca/roles
 ORCA_PACKAGE_DIRECTORIES = {"roles"}
 MAGIC_CONTEXT_RELATIVE = Path("cortexkit/magic-context.jsonc")
 MAGIC_CONTEXT_HOME = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))).expanduser() / "cortexkit"
+AGY_SETTINGS_RELATIVE = Path("orca/agy-settings.json")
+AGY_TOOL_PERMISSION = "always-proceed"
 ORCA_PACKAGE_FILES = {"team.json", "layout.json", "omp-context.json", "sp-team.json", "sp-layout.json"}
 
 
@@ -290,7 +292,7 @@ def is_portable_path(relative_path: Path) -> bool:
         if parts in {("orca", "bin", "orca-team"), ("orca", "bin", "orca-team.ps1")}:
             return False
         if len(parts) == 2:
-            return parts[1] in ORCA_PACKAGE_FILES
+            return relative_path == AGY_SETTINGS_RELATIVE or parts[1] in ORCA_PACKAGE_FILES
         if len(parts) >= 3 and parts[1] in ORCA_PACKAGE_DIRECTORIES:
             return True
         return parts == ("orca", "project-configs", get_project_key(), "config.json")
@@ -344,6 +346,8 @@ def get_local_managed_path(relative_path: Path) -> Path:
     if relative_path.parts[0] == "orca":
         if TARGET != "orca":
             raise ValueError("Orca path outside selected target")
+        if relative_path == AGY_SETTINGS_RELATIVE:
+            return Path.home() / ".gemini/antigravity-cli/settings.json"
         if relative_path.parts[1] == "project-configs":
             # 项目布局保存在全局团队目录，不写入项目工作区。
             return get_orca_project_directory() / "team.json"
@@ -678,6 +682,9 @@ def validate_magic_context(content: bytes) -> None:
 def validate_managed_content(relative_path: Path, content: bytes) -> None:
     if relative_path == MAGIC_CONTEXT_RELATIVE:
         validate_magic_context(content)
+    elif relative_path == AGY_SETTINGS_RELATIVE:
+        if json.loads(content) != {"toolPermission": AGY_TOOL_PERMISSION}:
+            raise ValueError(f"{relative_path} must contain only toolPermission set to {AGY_TOOL_PERMISSION}")
     elif relative_path.suffix.lower() == ".py":
         compile(content, str(relative_path), "exec")
     elif relative_path.suffix.lower() == ".json":
@@ -736,12 +743,42 @@ def merge_text_file(
         return True
 
 
-def load_json_object(path: Path) -> dict[str, Any]:
-    with path.open(encoding="utf-8") as settings_file:
+def load_json_object(path: Path, *, encoding: str = "utf-8") -> dict[str, Any]:
+    with path.open(encoding=encoding) as settings_file:
         settings = json.load(settings_file)
     if not isinstance(settings, dict):
         raise ValueError(f"{path} must contain a JSON object")
     return settings
+
+
+def apply_agy_settings(local_path: Path, remote_path: Path, backup_directory: Path) -> bool:
+    validate_managed_content(AGY_SETTINGS_RELATIVE, remote_path.read_bytes())
+    if any(path.is_symlink() or getattr(path, "is_junction", lambda: False)()
+           for path in (local_path, *local_path.parents)):
+        raise ValueError(f"AGY settings path contains a link: {local_path}")
+
+    exists = local_path.exists()
+    settings = load_json_object(local_path, encoding="utf-8-sig") if exists else {}
+    if settings.get("toolPermission") == AGY_TOOL_PERMISSION:
+        return False
+    settings["toolPermission"] = AGY_TOOL_PERMISSION
+    ensure_directory(local_path.parent)
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=local_path.parent,
+                                         prefix=".settings-", suffix=".tmp", delete=False) as file:
+            temporary_path = Path(file.name)
+            json.dump(settings, file, indent=2, ensure_ascii=False)
+            file.write("\n")
+        if exists:
+            backup_local_file(AGY_SETTINGS_RELATIVE, backup_directory)
+            shutil.copymode(local_path, temporary_path)
+        temporary_path.replace(local_path)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+    write_log(f"updated AGY tool permission: {AGY_SETTINGS_RELATIVE}")
+    return True
 
 
 def get_pi_package_sources(settings: dict[str, Any], path: Path) -> list[str]:
@@ -945,6 +982,10 @@ def merge_managed_files() -> None:
             conflicts.append(str(relative_path))
             continue
 
+        if relative_path == AGY_SETTINGS_RELATIVE:
+            changed_count += apply_agy_settings(local_path, remote_file, backup_directory)
+            continue
+
         if is_pi_settings_path(relative_path):
             if merge_pi_settings_file(relative_path, local_path, base_path, remote_file, backup_directory):
                 changed_count += 1
@@ -1020,6 +1061,10 @@ def force_sync_managed_files() -> None:
 
         if local_path.is_dir():
             raise RuntimeError(f"force sync cannot replace local directory with file: {relative_path}")
+
+        if relative_path == AGY_SETTINGS_RELATIVE:
+            changed_count += apply_agy_settings(local_path, remote_file, backup_directory)
+            continue
 
         if local_path.is_file() and hash_file(local_path) == hash_file(remote_file):
             if is_ccb_config_path(relative_path) and local_path.stat().st_mode & 0o777 != 0o600:
