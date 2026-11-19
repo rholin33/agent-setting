@@ -16,10 +16,11 @@ description: >-
 
 ## 1. 严格解析请求
 
-支持的调用形式（运行程序标志三选一）：
+支持的调用形式：
 
 ```text
 $orca-remote -codex <role> [--environment <name>] [--worktree <path>] [--no-handoff]
+$orca-remote -pi <role> [--environment <name>] [--worktree <path>] [--no-handoff]
 $orca-remote -omp <role> [--environment <name>] [--worktree <path>] [--no-handoff]
 $orca-remote -claude <role> [--environment <name>] [--worktree <path>] [--no-handoff]
 $orca-remote -grok <role> [--environment <name>] [--worktree <path>] [--no-handoff]
@@ -27,8 +28,8 @@ $orca-remote -agy <role> [--environment <name>] [--worktree <path>] [--no-handof
 $orca-remote --to-agent <existing-terminal-handle> [--environment <terminal-host>] [--worktree <path>] [--no-handoff]
 ```
 
-- 远端角色调用解析成独立的 runtime、role、environment、worktree；仅 `-codex` / `-omp` / `-claude` / `-grok` / `-agy` 调用要求 `<role>`。`--to-agent` 从该实际 agent 核对运行程序和角色，不另要求 role 参数。路径/名称可用引号包住空格；只解析参数，不用 eval 或拼成 shell 程序。
-- 目标选择必须是且仅是 `-codex <role>`、`-omp <role>`、`-claude <role>`、`-grok <role>`、`-agy <role>`、`--to-agent <handle>` 六者之一。前五者按运行程序和角色发现/建立远端入口；`--to-agent` 只连接已存在的 agent，默认在本机 Orca 查找，显式 environment 指其终端承载主机，不创建、不改角色。拒绝混用目标选择、未知/重复参数、缺失值和额外位置参数。`--no-handoff` 是显式仅打开/聚焦，不改变任务负责人，也不声称工作接续。
+- 远端角色调用解析成独立的 runtime、role、environment、worktree。六种运行程序选择都要求 `<role>`。`--to-agent` 从实际 agent 核对运行程序和角色。路径或名称可用引号包住空格。参数解析不得执行输入。
+- 每次只接受一种目标选择。运行程序选择按运行程序和角色发现或建立远端入口。`--to-agent` 只连接现有 agent，默认在本机查找，显式 environment 指其终端承载主机。拒绝混用、未知或重复参数、缺失值和额外位置参数。`--no-handoff` 仅核验并聚焦。
 - `--worktree` 缺省时使用当前会话所处的实际 Orca worktree。核对规范路径与 Orca worktree 身份；不因名称相似而选择另一个工作区。无法确定当前工作区时只询问这个必要问题。
 - 显式 `--environment` 必须对应 Orca 已配置且可核对身份的 environment。缺省时优先使用该 runtime + role + worktree 已绑定的远端 environment；没有有效绑定时仅在存在唯一已连接的合格远端主机时选它。多个候选只问一个问题。已有绑定离线时报告状态，不悄悄切到另一主机。
 - `environment` 是 Orca 远端环境名称，不是运行程序或模型 provider。名为 `claude` 的主机可以运行 Codex 或 OMP；`-omp designer` 不得复用 Codex master 的会话。
@@ -54,6 +55,10 @@ $orca-remote --to-agent <existing-terminal-handle> [--environment <terminal-host
 3. 用团队成员 `name` 精确匹配 `<role>`，再解析它的 `role` 引用。例如当前共享包 `master → agentroles.ccb_self`、`coder1 → agentroles.coder`。这些是已观察示例，不是技能允许列表。名称相近、共享同一个角色资源或同一个模型，都不意味着同一会话身份。
 4. 角色不存在、引用缺失或 prompt 无法解析时，列出当前可用的真实角色并停止。不得造一个同名 role stub、用 master prompt 代替其他角色、修改团队成员的常规 provider，或覆盖原来的本机角色。
 5. `-codex` / `-omp` / `-claude` / `-grok` / `-agy` 只选择本次远端会话运行程序，不修改团队角色的常规程序、模型或会话。模型/provider 另从真实角色要求及远端已配置能力核对；例如 designer 的模型不能从 master 会话抄来。
+
+### Pi 远程终端分支
+
+`runtime=pi` 使用 [Pi 配对终端与任务工具](references/pi.md)。需要切换任务归属时，通过 `orca-team remote --remote pi:ROLE` 建立并结算管理意图。已在该意图的协调会话中时继续当前意图。
 
 ### Claude 远程终端分支
 

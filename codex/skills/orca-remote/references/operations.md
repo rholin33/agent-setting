@@ -365,6 +365,8 @@ cfg.update(server_fields)
 private_json(engine_path, cfg)
 ```
 
+菜单意图已准备工作区时，使用 `native_codex.py server --worktree-upstream <directory>/upstream-mcp.json` 附加该角色的任务工具。在真实 Codex 会话核对 `workspace_info` 与 `task_status`。本机呈现终端的绑定使用 `environment=local`、`runtimeId=local` 和意图的 `modelEnvironment`。
+
 不要运行 `bridge.py bootstrap` 来创建 Codex 实例：该历史命令会创建固定 Claude 控制目录并启动 Claude transport，不是通用的原生 Codex 初始化器。若 bootstrap 响应丢失，先查本机是否已标记完成及远端文件是否已创建，不盲重置或重发；无法恢复秘密交付时，按明确授权对这一实例重新配给，不能触碰其他角色。
 
 ### 7.4 启动远端原生 app-server
