@@ -19,6 +19,7 @@ REMOTE_URL = "https://github.com/rholin33/agent-setting.git"
 CODEX_CONFIG_DIR = Path("codex")
 PI_CONFIG_DIR = Path("pi")
 CLAUDE_CONFIG_DIR = Path("claude")
+AGY_CONFIG_DIR = Path("agy")
 CCB_CONFIG_RELATIVE_PATH = Path("ccb/ccb.config")
 PROJECT_CCB_CONFIG_ROOT = Path("ccb/projects")
 PROJECT_PI_CONFIG_ROOT = Path("pi/projects")
@@ -29,6 +30,8 @@ PI_MANAGED_FILES = ("AGENTS.md", "settings.json")
 PI_MANAGED_DIRECTORIES = ("skills", "bin")
 CLAUDE_MANAGED_FILES = ("CLAUDE.md",)
 CLAUDE_MANAGED_DIRECTORIES = ("skills",)
+AGY_MANAGED_FILES = ("GEMINI.md",)
+AGY_MANAGED_DIRECTORIES = ("skills",)
 ROLE_SOURCES_RELATIVE_PATH = Path("roles")
 TARGET: str | None = None
 CODEX_AGENTS_VARIANTS = ("ccb", "orca")
@@ -102,6 +105,13 @@ def get_claude_home() -> Path:
     if configured_home:
         return Path(configured_home).expanduser()
     return Path.home() / ".claude"
+
+
+def get_agy_home() -> Path:
+    configured_home = os.environ.get("GEMINI_HOME")
+    if configured_home:
+        return Path(configured_home).expanduser()
+    return Path.home() / ".gemini"
 
 
 def get_ccb_home() -> Path:
@@ -183,6 +193,7 @@ def get_project_pi_relative_root() -> Path | None:
 CODEX_HOME = get_codex_home()
 PI_HOME = get_pi_home()
 CLAUDE_HOME = get_claude_home()
+AGY_HOME = get_agy_home()
 CCB_HOME = get_ccb_home()
 SYNC_ROOT = CODEX_HOME / ".sync" / "codex-setting"
 REMOTE_REPO = SYNC_ROOT / "remote"
@@ -237,6 +248,8 @@ def get_managed_remote_pathspecs() -> list[str]:
         *[str(PI_CONFIG_DIR / name) for name in PI_MANAGED_DIRECTORIES],
         *[str(CLAUDE_CONFIG_DIR / name) for name in CLAUDE_MANAGED_FILES],
         *[str(CLAUDE_CONFIG_DIR / name) for name in CLAUDE_MANAGED_DIRECTORIES],
+        *[str(AGY_CONFIG_DIR / name) for name in AGY_MANAGED_FILES],
+        *[str(AGY_CONFIG_DIR / name) for name in AGY_MANAGED_DIRECTORIES],
     ]
     if TARGET == "orca":
         return [*pathspecs, "orca", MAGIC_CONTEXT_RELATIVE.as_posix()]
@@ -254,13 +267,18 @@ def is_portable_path(relative_path: Path) -> bool:
     parts = relative_path.parts
     if not parts or relative_path.is_absolute() or ".." in parts:
         return False
-    if parts[:3] in {("codex", "skills", "cad-fill-dimension-report"), ("pi", "skills", "cad-fill-dimension-report")}:
+    if parts[:3] in {("codex", "skills", "cad-fill-dimension-report"), ("pi", "skills", "cad-fill-dimension-report"), ("agy", "skills", "cad-fill-dimension-report")}:
         return False
     if parts[:2] == ("pi", "projects") and not is_project_pi_settings_path(relative_path):
         return False
     # synced/ 是 claude.ai 账号同步的技能，.trash 等隐藏目录是 Claude Code 自身的管理数据，都不能跨机器复制。
     if parts[:2] == ("claude", "skills") and len(parts) > 2 and (parts[2] == "synced" or parts[2].startswith(".")):
         return False
+    if parts[0] == AGY_CONFIG_DIR.name:
+        if parts[1:] == ("GEMINI.md",):
+            return True
+        if len(parts) < 3 or parts[1] != "skills" or parts[2].startswith("."):
+            return False
     excluded = {".git", ".system", "__pycache__", "node_modules", ".cache", "sessions", "credentials", "logs", "log", "shell_snapshots", "tmp", ".tmp", "runtime", "backups"}
     if any(part.lower() in excluded for part in parts):
         return False
@@ -384,6 +402,13 @@ def get_local_managed_path(relative_path: Path) -> Path:
 
     if relative_path.parts and relative_path.parts[0] == CLAUDE_CONFIG_DIR.name:
         return CLAUDE_HOME.joinpath(*relative_path.parts[1:])
+
+    if relative_path.parts and relative_path.parts[0] == AGY_CONFIG_DIR.name:
+        if relative_path.parts[1:] == ("GEMINI.md",):
+            return AGY_HOME / "GEMINI.md"
+        if len(relative_path.parts) >= 3 and relative_path.parts[1] == "skills":
+            return AGY_HOME / "config" / Path(*relative_path.parts[1:])
+        raise ValueError(f"unsupported AGY managed path: {relative_path}")
 
     raise ValueError(f"unsupported managed path: {relative_path}")
 

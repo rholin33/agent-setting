@@ -338,6 +338,69 @@ class SyncScopeTests(unittest.TestCase):
                               for path in (root / 'destination').rglob('*') if path.is_file())
             self.assertEqual(exported, ['claude/CLAUDE.md', 'claude/skills/demo/SKILL.md'])
 
+    def test_agy_global_rules_and_skills_scope(self):
+        for target in ('ccb', 'orca'):
+            with patch.object(sync, 'TARGET', target):
+                pathspecs = [Path(path).as_posix() for path in sync.get_managed_remote_pathspecs()]
+                self.assertIn('agy/GEMINI.md', pathspecs)
+                self.assertIn('agy/skills', pathspecs)
+                self.assertEqual(sync.get_local_managed_path(Path('agy/GEMINI.md')), sync.AGY_HOME / 'GEMINI.md')
+                self.assertEqual(sync.get_local_managed_path(Path('agy/skills/demo/SKILL.md')),
+                                 sync.AGY_HOME / 'config/skills/demo/SKILL.md')
+        self.assertFalse(sync.is_portable_path(Path('agy/settings.json')))
+        self.assertFalse(sync.is_portable_path(Path('agy/skills/.trash/docs/SKILL.md')))
+        self.assertFalse(sync.is_portable_path(Path('agy/skills/cad-fill-dimension-report/SKILL.md')))
+        with patch.object(sync, 'TARGET', 'orca'), self.assertRaises(ValueError):
+            sync.get_local_managed_path(Path('agy/settings.json'))
+
+    def test_agy_home_follows_gemini_home_override(self):
+        with patch.dict(sync.os.environ, {'GEMINI_HOME': '/tmp/gemini-home'}):
+            self.assertEqual(sync.get_agy_home(), Path('/tmp/gemini-home'))
+        with patch.dict(sync.os.environ, {}, clear=True), patch.object(sync.Path, 'home', return_value=Path('/home/user')):
+            self.assertEqual(sync.get_agy_home(), Path('/home/user/.gemini'))
+
+    def test_agy_export_copies_gemini_md_and_skills_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            agy_home = root / 'gemini-home'
+            (agy_home / 'config/skills/demo').mkdir(parents=True)
+            (agy_home / 'config/skills/.hidden/docs').mkdir(parents=True)
+            (agy_home / 'config/skills/cad-fill-dimension-report').mkdir(parents=True)
+            (agy_home / 'GEMINI.md').write_text('# Global AGY rules\n', encoding='utf-8')
+            (agy_home / 'config/skills/demo/SKILL.md').write_text('---\nname: demo\n---\n', encoding='utf-8')
+            (agy_home / 'config/skills/.hidden/docs/SKILL.md').write_text('---\nname: docs\n---\n', encoding='utf-8')
+            (agy_home / 'config/skills/cad-fill-dimension-report/SKILL.md').write_text('---\nname: cad\n---\n', encoding='utf-8')
+            (agy_home / '.env').write_text('SECRET=1\n', encoding='utf-8')
+            (agy_home / 'settings.json').write_text('{"local": true}\n', encoding='utf-8')
+            (agy_home / 'config/mcp_config.json').write_text('{}\n', encoding='utf-8')
+            with patch.object(exporter.sync, 'TARGET', 'orca'), \
+                 patch.object(exporter.sync, 'AGY_HOME', agy_home), \
+                 patch.object(exporter.sync, 'get_project_root', return_value=root), \
+                 patch.object(exporter.sync, 'ORCA_HOME', root / 'orca'):
+                agy = [item for item in exporter.export_candidates() if item[0].parts[0] == 'agy']
+                with patch.object(exporter, 'export_candidates', return_value=agy):
+                    self.assertEqual(exporter.export_configuration(root / 'destination'), 2)
+            exported = sorted(path.relative_to(root / 'destination').as_posix()
+                              for path in (root / 'destination').rglob('*') if path.is_file())
+            self.assertEqual(exported, ['agy/GEMINI.md', 'agy/skills/demo/SKILL.md'])
+
+    def test_agy_merge_applies_gemini_md_and_skills(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            agy_home = root / 'gemini-home'
+            remote_root = root / 'remote'
+            (remote_root / 'agy/skills/demo').mkdir(parents=True)
+            (remote_root / 'agy/GEMINI.md').write_text('# Remote AGY rules\n', encoding='utf-8')
+            (remote_root / 'agy/skills/demo/SKILL.md').write_text('---\nname: demo\n---\n', encoding='utf-8')
+            with patch.multiple(sync, TARGET='orca', REMOTE_REPO=remote_root, AGY_HOME=agy_home,
+                                LAST_REMOTE=root / 'baseline', BACKUP_ROOT=root / 'backups',
+                                MERGE_ROOT=root / 'merge'), \
+                 patch.object(sync, 'run_git', return_value='agy/GEMINI.md\0agy/skills/demo/SKILL.md\0'), \
+                 patch.object(sync, 'write_log'):
+                sync.merge_managed_files()
+            self.assertEqual((agy_home / 'GEMINI.md').read_text(encoding='utf-8'), '# Remote AGY rules\n')
+            self.assertEqual((agy_home / 'config/skills/demo/SKILL.md').read_text(encoding='utf-8'), '---\nname: demo\n---\n')
+
 
 if __name__ == '__main__':
     unittest.main()

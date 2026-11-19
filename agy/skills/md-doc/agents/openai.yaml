@@ -1,0 +1,3 @@
+interface:
+  display_name: "MD Doc"
+  short_description: "Create and refresh feature markdown docs during planning and before handoff"

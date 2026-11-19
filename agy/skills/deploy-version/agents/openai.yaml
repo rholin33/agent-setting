@@ -1,0 +1,4 @@
+interface:
+  display_name: "Deploy Version"
+  short_description: "Draft concise release notes with roadmap."
+  default_prompt: "Use $deploy-version to inspect local code changes, draft concise release notes with 当前更新内容 and Roadmap, revise them with me, and save the confirmed version to data/release-notes."

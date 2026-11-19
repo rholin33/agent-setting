@@ -42,6 +42,14 @@ def export_candidates():
                 continue
             for source in root.rglob('*'):
                 yield prefix / source.relative_to(home), source
+    for name in sync.AGY_MANAGED_FILES:
+        yield sync.AGY_CONFIG_DIR / name, sync.AGY_HOME / name
+    for directory in sync.AGY_MANAGED_DIRECTORIES:
+        root = sync.AGY_HOME / 'config' / directory
+        if root.is_symlink():
+            continue
+        for source in root.rglob('*'):
+            yield sync.AGY_CONFIG_DIR / directory / source.relative_to(root), source
     if sync.TARGET == 'ccb':
         yield sync.CCB_CONFIG_RELATIVE_PATH, sync.CCB_HOME / 'ccb.config'
         project_ccb = sync.get_project_ccb_relative_path()

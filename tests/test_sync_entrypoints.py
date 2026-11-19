@@ -34,7 +34,7 @@ class EntrypointTests(unittest.TestCase):
             home = pathlib.Path(directory)
             env = dict(os.environ, HOME=str(home), USERPROFILE=str(home), CODEX_HOME=str(home / 'codex'),
                        PI_CODING_AGENT_DIR=str(home / 'pi'), CCB_HOME=str(home / 'ccb'),
-                       CLAUDE_CONFIG_DIR=str(home / 'claude'),
+                       CLAUDE_CONFIG_DIR=str(home / 'claude'), GEMINI_HOME=str(home / 'gemini'),
                        ORCA_TEAM_HOME=str(home / 'orca'), AGENT_SETTING_PROJECT_ROOT=str(home))
             source = pathlib.Path(os.environ.get('ORCA_SOURCE_REPO', str(pathlib.Path.home() / '.codex/.sync/orca-team/source')))
             env['ORCA_SOURCE_REPO'] = str(source)
@@ -64,6 +64,7 @@ class OrcaRulesInstallTests(unittest.TestCase):
                 (homes[name] / 'settings.json').write_bytes(b'{"local":true}\n')
             env = dict(os.environ, CODEX_HOME=str(homes['codex']), PI_CODING_AGENT_DIR=str(homes['pi']),
                        OMP_AGENT_DIR=str(homes['omp']), CLAUDE_CONFIG_DIR=str(homes['claude']),
+                       GEMINI_HOME=str(home / 'gemini'),
                        ORCA_TEAM_HOME=str(home / 'orca'), CCB_HOME=str(home / 'ccb'), PYTHONUTF8='1')
             command = [sys.executable, '-B', str(ROOT / 'scripts/install-config.py'), '--target', 'orca', '--rules-only']
             first = subprocess.run(command, env=env, capture_output=True, text=True, encoding='utf-8')

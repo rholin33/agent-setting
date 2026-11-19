@@ -25,18 +25,23 @@ def install_orca_rules(root, sync):
     if rule_section((root / 'pi/AGENTS.md').read_text(encoding='utf-8')) != section:
         raise ValueError('Codex and Pi Orca dispatch rules differ')
     omp = Path(os.environ.get('OMP_AGENT_DIR', str(Path.home() / '.omp/agent'))).expanduser()
-    homes = [(sync.CODEX_HOME, 'codex'), (sync.PI_HOME, 'pi'), (omp, 'pi'),
-             (sync.CLAUDE_HOME, 'claude')]
+    homes = [(sync.CODEX_HOME, 'codex', 'AGENTS.md', 'skills'),
+             (sync.PI_HOME, 'pi', 'AGENTS.md', 'skills'),
+             (omp, 'pi', 'AGENTS.md', 'skills'),
+             (sync.CLAUDE_HOME, 'claude', None, 'skills'),
+             (sync.AGY_HOME, 'agy', 'GEMINI.md', 'config/skills')]
     pending = {}
-    for home, source in homes:
-        if source != 'claude':
-            target = home / 'AGENTS.md'
+    for home, source, rule_name, skills_sub in homes:
+        if rule_name:
+            target = home / rule_name
             text = target.read_text(encoding='utf-8-sig') if target.exists() else ''
             pattern = r'^' + re.escape(RULE_HEADING) + r'\n.*?(?=^#{1,2} |\Z)'
             updated = re.sub(pattern, lambda _: section + '\n', text, flags=re.M | re.S) if RULE_HEADING in text else section + '\n' + text
             pending[target] = updated.encode('utf-8')
         skill = root / source / 'skills/agent-setting-sync/SKILL.md'
-        pending[home / 'skills/agent-setting-sync/SKILL.md'] = skill.read_bytes()
+        if not skill.is_file():
+            skill = root / 'codex/skills/agent-setting-sync/SKILL.md'
+        pending[home / skills_sub / 'agent-setting-sync/SKILL.md'] = skill.read_bytes()
     for target in pending:
         if any(p.is_symlink() or getattr(p, 'is_junction', lambda: False)() for p in (target, *target.parents)):
             raise ValueError('Linked rule destination refused: ' + str(target))

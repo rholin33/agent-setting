@@ -1,0 +1,7 @@
+interface:
+  display_name: "EasyPM"
+  short_description: "绑定项目、创建任务并记录工时"
+  default_prompt: "使用 $easypm 绑定当前仓库到 EasyPM 项目，并把当前工作在 push 时记录为任务和工时。"
+
+policy:
+  allow_implicit_invocation: true

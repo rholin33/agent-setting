@@ -25,6 +25,7 @@ class CompletenessTest(unittest.TestCase):
                         CODEX_HOME=str(self.base / 'codex'),
                         PI_CODING_AGENT_DIR=str(self.base / 'pi'),
                         CLAUDE_CONFIG_DIR=str(self.base / 'claude'),
+                        GEMINI_HOME=str(self.base / 'gemini'),
                         CCB_HOME=str(self.base / 'ccb'),
                         ORCA_TEAM_HOME=str(self.base / 'orca'),
                         XDG_CONFIG_HOME=str(self.base / 'config'),
