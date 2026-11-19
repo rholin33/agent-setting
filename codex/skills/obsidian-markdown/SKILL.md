@@ -1,11 +1,29 @@
 ---
 name: obsidian-markdown
-description: Create and edit Obsidian Flavored Markdown with wikilinks, embeds, callouts, properties, and other Obsidian-specific syntax. Use when working with .md files in Obsidian, or when the user mentions wikilinks, callouts, frontmatter, tags, embeds, or Obsidian notes.
+description: Create and edit Obsidian Flavored Markdown with wikilinks, embeds, callouts, properties, and other Obsidian-specific syntax. Use when working with .md files in Obsidian, or when the user mentions wikilinks, callouts, frontmatter, tags, embeds, or Obsidian notes. Also use after a substantive explanation of a project's implementation, architecture, features, or technical workflow to offer saving the explanation to Obsidian (OB/ob).
 ---
 
 # Obsidian Flavored Markdown Skill
 
 Create and edit valid Obsidian Flavored Markdown. Obsidian extends CommonMark and GFM with wikilinks, embeds, callouts, properties, comments, and other syntax. This skill covers only Obsidian-specific extensions -- standard Markdown (headings, bold, italic, lists, quotes, code blocks, tables) is assumed knowledge.
+
+## Proactively Offer Knowledge Capture
+
+After completing a substantive explanation of a project's implementation principles, architecture, features, data flow, or a reusable technical workflow, offer once to save it to Obsidian, even when the user did not mention Obsidian. A detailed follow-up such as “说详细一点” is a useful checkpoint; wait until the explanation is complete instead of interrupting it.
+
+- Use a short optional question, preferably the available asynchronous question tool: “需要把这份说明整理到 Obsidian 吗？” Suggest a concrete note title when helpful.
+- Offer for explanations with lasting reference value. Skip simple factual answers, routine status reports, short command help, and intermediate progress updates.
+- Ask at most once per topic. Do not repeat after refusal, while the question is pending, or after an unanswered offer unless the user brings it up again. Respect requests to stop offering.
+- An offer does not authorize a vault write. Save after the user accepts; if they already requested saving, proceed without asking again.
+- Do not require a configured vault merely to offer. After acceptance, use `obsidian-cli` when available to discover the active vault. If the app/CLI is unavailable, use a verified filesystem vault path. Ask only for a missing target that cannot be discovered; never guess a vault or claim a note was saved before verifying the write.
+- Capture the useful explanation with frontmatter, suitable headings, callouts, and diagrams. Include source/version/date and separate verified behavior from estimates or unresolved points. Link existing related notes when verified; avoid invented links. Do not copy credentials or unrelated conversation history.
+- “保存到 OB” means writing to the selected vault. Do not imply cloud upload or enable synchronization without the user's instruction.
+
+## Resolve the User's Existing Vault Before Writing
+
+For requests to save or upload notes to OB, check `obsidian-troubleshooting/references/local-vault.md` when that installed skill is available. Its confirmed vault and sync preferences apply to knowledge notes as well as incident notes. Resolve the target in this order: the user's explicit current destination, confirmed saved preferences, then registered Obsidian vault candidates. A recently opened or newly created vault must not override an existing confirmed destination.
+
+Treat saved paths, tools, account access, and client versions as device-specific observations: verify them on the current machine. If the preferred local path belongs to another OS but a remote repository is specified, retain that repository as the intended destination and check access before preparing a local checkout. Do not switch to an unrelated empty vault or propose official Sync when saved preferences choose GitHub. Follow the saved Git sync workflow and authorization scope; report local save and remote upload separately. If authentication blocks access, preserve the prepared note and identify the required account/repository access without claiming an upload succeeded.
 
 ## Workflow: Creating an Obsidian Note
 
