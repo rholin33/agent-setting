@@ -259,3 +259,24 @@ The pre-commit hook validates staged whitespace only. It must never export or
 stage local settings automatically, even during an unrelated development commit.
 
 Orca sync also manages `orca/omp-context.json` and `cortexkit/magic-context.jsonc` → `${XDG_CONFIG_HOME:-~/.config}/cortexkit/magic-context.jsonc`. The repository's current policy is native Pi/OMP compaction: Pi `compaction.enabled` is true without the Magic Context package in `packages`; OMP native compaction is enabled and shared Magic Context `enabled` is false. Enabling native compaction alone does not disable a loaded extension. Verify these settings together, including existing Orca SP profile overlays. If Magic Context is installed in OMP, disable it with `omp plugin disable @cortexkit/pi-magic-context`; preserve the installed files and history, and never export the plugin lockfile. Do not re-enable Magic Context unless the user changes this policy. Credentials, service URLs, absolute paths and runtime databases remain excluded. CCB sync excludes the Orca and CortexKit files. Existing sessions may retain loaded extensions until reloaded or resumed; sync does not restart agents.
+
+## AGY Account Sync Helper (macOS)
+
+`$CODEX_HOME/skills/agent-setting-sync/scripts/agy_account_sync.py` restarts every local
+`agy` process after Cockpit switches the Antigravity account, so running processes
+cannot write the old refresh token back to the keychain. It is synced with the Codex
+skill (common scope); the Claude, Pi and OMP copies of this skill use that path.
+
+- Install per machine only when the user asks:
+  `/usr/bin/python3 "$CODEX_HOME/skills/agent-setting-sync/scripts/agy_account_sync.py" --install`.
+  It writes `~/Library/LaunchAgents/com.agent-setting.agy-account-sync.plist` with
+  this machine's PATH (node, orca), watches `~/.cockpit_tools/current_account.json`,
+  checks every 5 minutes, and backs up and replaces legacy `com.gs.agy-account-sync`.
+  Use `--status`, `--dry-run` or `--uninstall`; non-macOS hosts exit with code 2.
+- Orca seats are recovered with `orca-sp` or `orca-team` from `ORCA_TEAM_HOME`,
+  chosen by the project's registration; Terminal.app tabs are reopened with their
+  conversation. Other hosts are stopped and reported with a resume command.
+- State and logs stay local in `~/.local/share/agy-account-sync/`; never export them.
+  The generated plist contains absolute paths and is never synchronized.
+- Sync and install never run the helper's restart path. A failed switch is recorded
+  once; the next Cockpit switch to the same account restarts immediately.
