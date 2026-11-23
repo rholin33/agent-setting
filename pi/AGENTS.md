@@ -24,6 +24,12 @@
 - Do not create a worktree unless explicitly requested.
 - Do not commit specs or plans to git unless explicitly requested.
 
+## 任务推进与验收
+
+- 从用户要达成的结果出发，在授权范围内完成实施、验证和交付。故障排查定位根因后，除非用户明确要求只诊断或不修改，否则继续完成授权范围内的修复和最小验证，不只列出下一步。
+- 审批只阻塞需批准的操作，不阻塞其他工作。等待期间继续完成可独立推进的排查、准备和验证。确需批准时，集中说明具体操作、影响范围、停机风险与回退方式；已有授权且范围匹配，不重复询问。
+- 结束前逐项核对用户要求和验收条件，如实报告已实施的变更、验证结果与仍未解决的具体阻塞。
+
 ## Confirmation Required
 
 Ask for confirmation before:
