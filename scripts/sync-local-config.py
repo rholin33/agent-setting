@@ -8,7 +8,7 @@ import importlib.util
 import json
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -71,6 +71,25 @@ def export_candidates():
                 yield Path('orca') / source.relative_to(sync.ORCA_HOME), source
 
 
+def portable_pi_settings(source: Path) -> bytes:
+    content = source.read_bytes()
+    settings = json.loads(content)
+    extensions = settings.get('extensions')
+    if not isinstance(extensions, list):
+        return content
+    portable = []
+    for entry in extensions:
+        if isinstance(entry, str):
+            name = entry.removeprefix('-')
+            if Path(name).is_absolute() or PureWindowsPath(name).is_absolute():
+                continue
+        portable.append(entry)
+    if portable == extensions:
+        return content
+    settings['extensions'] = portable
+    return (json.dumps(settings, indent=2, ensure_ascii=False) + '\n').encode('utf-8')
+
+
 def collect_configuration(destination: Path) -> dict[Path, bytes]:
     """Collect and validate the complete live scope without writing anything."""
     pending = {}
@@ -84,7 +103,9 @@ def collect_configuration(destination: Path) -> dict[Path, bytes]:
         target = destination / relative
         if target.is_symlink() or any(parent.is_symlink() for parent in target.parents):
             raise ValueError(f'export destination contains a symlink: {target}')
-        if relative == sync.AGY_SETTINGS_RELATIVE:
+        if relative == sync.PI_SETTINGS_RELATIVE_PATH:
+            content = portable_pi_settings(source)
+        elif relative == sync.AGY_SETTINGS_RELATIVE:
             settings = sync.load_json_object(source, encoding='utf-8-sig')
             if 'toolPermission' not in settings:
                 continue

@@ -16,6 +16,19 @@ export_spec.loader.exec_module(exporter)
 
 
 class SyncScopeTests(unittest.TestCase):
+    def test_export_keeps_absolute_pi_extensions_local(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'settings.json'
+            settings = {'extensions': ['-builtin:mcp', './shared', '/Users/example/local.js',
+                                       r'-C:\Users\example\local.js'], 'compaction': {'enabled': True}}
+            content = json.dumps(settings).encode()
+            source.write_bytes(content)
+            with patch.object(exporter, 'export_candidates', return_value=[(Path('pi/settings.json'), source)]):
+                result = exporter.collect_configuration(Path(directory))
+            self.assertEqual(json.loads(result[Path('pi/settings.json')]),
+                             {**settings, 'extensions': ['-builtin:mcp', './shared']})
+            self.assertEqual(source.read_bytes(), content)
+
     def test_model_catalogs_and_saved_presets_are_local_only(self):
         with patch.object(sync, 'TARGET', 'orca'):
             for name in ['orca/omp-models.json', 'orca/pi-models.json',
