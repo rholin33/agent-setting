@@ -6,7 +6,7 @@
     "npm:pi-tool-display",
     "npm:pi-mcp-adapter@2.33.0"
   ],
-  "defaultProvider": "pay",
+  "defaultProvider": "magpie",
   "skills": [
     "skills"
   ],
@@ -18,7 +18,7 @@
     "-builtin:mcp"
   ],
   "tuiMode": "fullscreen",
-  "defaultModel": "gpt-6.2-sol",
+  "defaultModel": "pay/gpt-6.2-astra",
   "defaultThinkingLevel": "xhigh",
   "compaction": {
     "enabled": true
